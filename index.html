@@ -289,7 +289,7 @@ button:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
     <div class="status" id="pStatus"></div>
     <div class="ctx" id="prevLine"></div>
     <div class="lyric" id="lyric"></div>
-    <input type="text" id="typeInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="다 치고 Enter나 스페이스바를 누르면 다음 줄 (틀려도 넘어가요)">
+    <input type="text" id="typeInput" enterkeyhint="next" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="다 치고 Enter나 스페이스바를 누르면 다음 줄 (틀려도 넘어가요)">
     <div class="ctx" id="nextLine" style="margin-top:10px"></div>
     <div class="dim" id="lastHint" style="min-height:22px"></div>
     <div class="row" style="margin-top:8px"><button class="small" id="skipBtn" hidden>간주 건너뛰기</button></div>
@@ -584,7 +584,7 @@ document.addEventListener('keydown', e => {
 
 /* ---------- 연습 ---------- */
 let G = null, timer = null;
-const inp = $('#typeInput');
+let inp = $('#typeInput');   // 휴대폰에서는 줄마다 새 입력 칸으로 바뀌므로 let
 const T = i => G.song.times[i] + (G.song.offset || 0);
 function deadline(i){
   const n = G.song.lines.length;
@@ -685,22 +685,47 @@ function updateHud(){
 }
 const kpm = () => G.typeMs > 0 ? Math.round(G.strokes / (G.typeMs / 60000)) : 0;
 
-inp.addEventListener('input', () => {
-  if (!G || G.done || G.lock || !G.active) return;
+function onType(e){
+  if (e.target !== inp || !G || G.done || G.lock || !G.active) return;
   if (!G.lineStart && inp.value) G.lineStart = performance.now();
   // 줄을 끝까지 친 뒤에 스페이스바를 누르면 다음 줄로
   const tg = target(), ty = inp.value.normalize('NFC');
   // (틀린 글자나 더 친 글자가 있어도 글자 수만 채웠으면 넘어감)
   if (ty.length > tg.length && ty.endsWith(' ')) return finalizeLine(ty.trimEnd());
   renderLine();
-});
-inp.addEventListener('paste', e => e.preventDefault());   // 붙여넣기로 치는 건 반칙!
-inp.addEventListener('keydown', e => {
+}
+function onKey(e){
   if (e.key !== 'Enter' && e.code !== 'Enter' && e.code !== 'NumpadEnter') return;
   e.preventDefault();
   // Enter는 틀렸거나 덜 쳤어도 넘어감 (한 글자도 안 쳤을 때만 막음)
-  if (G && !G.done && !G.lock && G.active && inp.value) finalizeLine();
-});
+  if (e.target === inp && G && !G.done && !G.lock && G.active && inp.value) finalizeLine();
+}
+function bindInput(el){
+  el.addEventListener('input', onType);
+  el.addEventListener('paste', e => e.preventDefault());   // 붙여넣기로 치는 건 반칙!
+  el.addEventListener('keydown', onKey);
+}
+bindInput(inp);
+
+/* 줄이 넘어갈 때 입력 칸 비우기.
+   휴대폰 키보드는 "조립 중이던 글자"를 기억하고 있다가 다음 줄 맨 앞에 다시 넣어 버린다.
+   그래서 휴대폰에서는 입력 칸을 아예 새것으로 바꿔 끼워서, 키보드가 기억을 버리고 새로 시작하게 한다. */
+const isTouch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+function clearInput(){
+  G.lock = true;
+  if (isTouch){
+    const old = inp, fresh = old.cloneNode(false);
+    fresh.value = '';
+    bindInput(fresh);
+    old.after(fresh);
+    inp = fresh;
+    fresh.focus();          // 포커스를 새 칸으로 바로 옮겨서 키보드가 내려가지 않게 함
+    old.remove();
+  } else {
+    inp.blur(); inp.value = '';
+  }
+  G.lock = false;
+}
 
 function finalizeLine(typed){
   const tg = target(), ty = typeof typed === 'string' ? typed : inp.value.normalize('NFC');
@@ -714,8 +739,8 @@ function finalizeLine(typed){
   if (perfect){ G.combo++; G.perfect++; G.maxCombo = Math.max(G.maxCombo, G.combo); } else G.combo = 0;
   G.score += c * 10 + (perfect ? 50 + Math.min(G.combo, 10) * 10 : 0);
 
-  // 한글 조립 중인 글자가 다음 줄로 넘어가지 않게: 포커스를 뺐다가 비우고 다시 넣음
-  G.lock = true; inp.blur(); inp.value = ''; G.lock = false;
+  // 한글 조립 중인 글자가 다음 줄로 넘어가지 않게 입력 칸을 비움
+  clearInput();
   G.idx++;
   if (G.idx >= G.song.lines.length) return finish();
   if (G.mode !== 'free'){
@@ -723,7 +748,7 @@ function finalizeLine(typed){
     if (G.paused){ G.paused = false; try { player.playVideo(); } catch (e) {} }
   }
   renderLine();
-  if (G.active) setTimeout(() => inp.focus(), 0);
+  if (G.active && !isTouch) setTimeout(() => inp.focus(), 0);
   tick();
 }
 
