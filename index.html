@@ -93,7 +93,8 @@ label{display:block;margin:14px 0 6px;font-weight:700}
 .cue.flash{animation:cueflash .5s ease-out}
 @keyframes cueflash{from{border-color:var(--ok);background:var(--ok-bg)}to{border-color:var(--line);background:var(--panel)}}
 /* 화면 높이에 맞추기: 영상과 가사·입력 칸이 스크롤 없이 한 화면에 보이도록 영상 크기를 화면 높이에 맞춰 줄임 */
-#playBox{margin:0 auto;max-width:max(300px,calc((100vh - 500px) * 16 / 9))}
+#playBox{margin:0 auto;max-width:max(300px,calc((100vh - 530px) * 16 / 9))}
+body[data-view="play"] main{padding-bottom:6px}
 #syncBox{margin:0 auto;max-width:min(600px,max(280px,calc((100vh - 460px) * 16 / 9)))}
 /* 노트북처럼 화면이 낮으면: 연습 중에는 맨 위 제목 줄을 숨기고 칸들을 납작하게 해서 영상 자리를 더 확보 */
 @media(max-height:820px){
@@ -109,7 +110,7 @@ label{display:block;margin:14px 0 6px;font-weight:700}
   #typing .ctx{min-height:26px}
   #lastHint{min-height:0 !important;margin-top:0 !important}
   #typing > .row{margin-top:0 !important}
-  #playBox{max-width:max(300px,calc((100vh - 345px) * 16 / 9))}
+  #playBox{max-width:max(300px,calc((100vh - 352px) * 16 / 9))}
 }
 .synclist{position:relative}
 ol.steps.big{font-size:15px;color:var(--text);line-height:1.9;margin:10px 0 12px}
