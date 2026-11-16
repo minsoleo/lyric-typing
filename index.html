@@ -1,0 +1,627 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>가사 타자연습</title>
+<style>
+:root{
+  --bg:#0e0f1c; --panel:#191b30; --panel2:#22254a; --line:#2e3160;
+  --text:#eef0ff; --dim:#9aa0c8; --accent:#8b5cf6; --accent2:#22d3ee;
+  --ok:#4ade80; --bad:#f87171; --pend:#fbbf24;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font-family:"Pretendard","Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;line-height:1.6}
+header{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-bottom:1px solid var(--line)}
+header h1{font-size:20px;margin:0;cursor:pointer}
+header h1 span{color:var(--accent2)}
+main{max-width:920px;margin:0 auto;padding:20px 16px 60px}
+section[hidden]{display:none}
+h2{font-size:22px;margin:0 0 12px}
+h3{font-size:16px;margin:22px 0 8px;color:var(--dim)}
+p{margin:6px 0}
+.dim{color:var(--dim);font-size:14px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.space{justify-content:space-between}
+button,.btn{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 16px;cursor:pointer;transition:background .15s,transform .05s}
+button:hover:not(:disabled){background:#2d3163}
+button:active:not(:disabled){transform:translateY(1px)}
+button:disabled{opacity:.4;cursor:not-allowed}
+button.primary{background:var(--accent);border-color:var(--accent);font-weight:700}
+button.primary:hover:not(:disabled){background:#7c4df0}
+button.danger{color:var(--bad)}
+button.small{padding:5px 10px;font-size:14px}
+input[type=text],textarea{font:inherit;color:var(--text);background:#10122a;border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+input[type=text]:focus,textarea:focus{outline:2px solid var(--accent);border-color:transparent}
+textarea{min-height:220px;resize:vertical}
+label{display:block;margin:14px 0 6px;font-weight:700}
+.songs{display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;margin-top:14px}
+.song{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;cursor:pointer;text-align:left;display:block;width:100%}
+.song:hover{border-color:var(--accent)}
+.song b{display:block;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tag{display:inline-block;font-size:12px;padding:1px 8px;border-radius:99px;background:var(--panel2);color:var(--dim);margin-right:4px}
+.tag.on{background:#143d2c;color:var(--ok)}
+.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:10px}
+.mode{text-align:left;padding:16px;border-radius:14px}
+.mode b{display:block;font-size:17px;margin-bottom:4px}
+.mode span{font-size:14px;color:var(--dim)}
+.mode em{display:block;font-style:normal;font-size:13px;color:var(--accent2);margin-top:6px;min-height:20px}
+.video{position:relative;width:100%;aspect-ratio:16/9;background:#000;border-radius:14px;overflow:hidden;border:1px solid var(--line)}
+.video iframe,.video>div{position:absolute;inset:0;width:100%;height:100%}
+.vmsg{display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;color:var(--dim)}
+.hud{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:12px 0}
+.hud div{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 10px;text-align:center}
+.hud small{display:block;color:var(--dim);font-size:12px}
+.hud b{font-size:20px;font-variant-numeric:tabular-nums}
+.bar{height:6px;background:var(--panel2);border-radius:99px;overflow:hidden;margin-bottom:10px}
+.bar i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent2),var(--accent))}
+.ctx{color:var(--dim);opacity:.5;font-size:17px;min-height:28px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lyric{font-size:26px;font-weight:700;min-height:44px;margin:6px 0;white-space:pre-wrap;word-break:keep-all;letter-spacing:.5px}
+.lyric.waiting{opacity:.35}
+.lyric span{border-bottom:3px solid transparent}
+.lyric .ok{color:var(--ok)}
+.lyric .bad{color:var(--bad);border-bottom-color:var(--bad)}
+.lyric .pend{color:var(--pend)}
+.lyric .rest{color:var(--text)}
+.lyric .cur{border-bottom-color:var(--accent2)}
+.status{min-height:26px;color:var(--accent2);font-size:14px}
+.next{color:var(--dim);font-size:15px;margin-top:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#typeInput{font-size:22px;margin-top:8px}
+#typeInput:disabled{opacity:.4}
+.result{text-align:center}
+.result .big{font-size:44px;font-weight:800;color:var(--accent2)}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}
+.grid3 div{background:var(--panel2);border-radius:12px;padding:12px}
+.grid3 small{display:block;color:var(--dim)}
+.grid3 b{font-size:22px}
+.stamp{width:100%;padding:22px;font-size:20px;font-weight:800;background:var(--accent);border-color:var(--accent);margin:12px 0;user-select:none;touch-action:manipulation}
+.synclist{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:12px}
+.synclist div{display:flex;gap:10px;padding:6px 12px;border-bottom:1px solid var(--line);font-size:15px}
+.synclist div:last-child{border-bottom:0}
+.synclist time{width:64px;flex:none;color:var(--ok);font-variant-numeric:tabular-nums}
+.synclist .now{background:var(--panel2);font-weight:700}
+.synclist .todo time{color:var(--dim)}
+ol.steps{padding-left:20px;margin:6px 0;color:var(--dim);font-size:14px}
+@media(max-width:560px){.lyric{font-size:20px}.hud b{font-size:16px}.grid3{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="logo">🎵 가사 <span>타자연습</span></h1>
+  <button id="homeBtn" class="small">곡 목록</button>
+</header>
+<main>
+
+<!-- 곡 목록 -->
+<section id="v-home">
+  <div class="row space">
+    <h2>내 곡</h2>
+    <button class="primary" id="addBtn">+ 새 곡 추가</button>
+  </div>
+  <div id="songList" class="songs"></div>
+  <div id="emptyMsg" class="panel" hidden>
+    <p><b>아직 곡이 없어요.</b> 이렇게 시작해요.</p>
+    <ol class="steps">
+      <li><b>+ 새 곡 추가</b>를 눌러요.</li>
+      <li>유튜브에서 뮤비 주소를 복사해서 붙여넣어요.</li>
+      <li>가사를 직접 복사해서 붙여넣어요. (가사는 이 브라우저에만 저장돼요)</li>
+      <li>노래를 들으며 스페이스바로 줄마다 박자를 맞추면 모든 모드를 쓸 수 있어요.</li>
+    </ol>
+  </div>
+
+  <h3>곡 옮기기 (집 ↔ 학교)</h3>
+  <div class="panel">
+    <p class="dim">학교 컴퓨터는 껐다 켜면 저장한 곡이 지워질 수 있어요. 집에서 만든 곡을 <b>파일이나 코드</b>로 내보내서 가져가세요. (구글 드라이브나 구글 문서에 넣어 두면 편해요)</p>
+    <div class="row" style="margin-top:10px">
+      <button id="exportFile">전체 곡 파일로 저장</button>
+      <button id="exportCopy">전체 곡 코드 복사</button>
+      <button id="importFileBtn">파일에서 가져오기</button>
+      <input type="file" id="importFile" accept=".json,application/json" hidden>
+    </div>
+    <label for="importText">코드 붙여넣어서 가져오기</label>
+    <textarea id="importText" style="min-height:70px" placeholder="'코드 복사'로 복사한 내용을 여기에 붙여넣으세요"></textarea>
+    <div class="row" style="margin-top:8px"><button id="importTextBtn">코드 가져오기</button><span id="ioMsg" class="dim"></span></div>
+  </div>
+</section>
+
+<!-- 곡 추가/수정 -->
+<section id="v-edit" hidden>
+  <h2 id="editTitle">새 곡 추가</h2>
+  <div class="panel">
+    <label for="fTitle">곡 제목</label>
+    <input type="text" id="fTitle" placeholder="예: 노래 제목 - 가수" maxlength="80">
+    <label for="fUrl">유튜브 주소 <span class="dim">(비워 두면 영상 없이 가사만 연습)</span></label>
+    <input type="text" id="fUrl" placeholder="https://www.youtube.com/watch?v=...">
+    <label for="fLyrics">가사 <span class="dim">(한 줄에 한 소절씩, 직접 붙여넣기)</span></label>
+    <textarea id="fLyrics" placeholder="가사를 여기에 붙여넣으세요. 빈 줄은 자동으로 빠져요."></textarea>
+    <p class="dim">가사는 이 컴퓨터의 브라우저에만 저장되고 인터넷에 올라가지 않아요.</p>
+    <p id="editErr" style="color:var(--bad)"></p>
+    <div class="row"><button class="primary" id="saveSong">저장</button><button id="cancelEdit">취소</button></div>
+  </div>
+</section>
+
+<!-- 곡 상세 -->
+<section id="v-detail" hidden>
+  <div class="row space"><h2 id="dTitle"></h2>
+    <div class="row"><button class="small" id="dEdit">수정</button><button class="small" id="dExport">이 곡 코드 복사</button><button class="small danger" id="dDelete">삭제</button></div>
+  </div>
+  <p class="dim" id="dInfo"></p>
+  <h3>모드 고르기</h3>
+  <div class="modes">
+    <button class="mode" data-mode="free"><b>🎧 자유 모드</b><span>영상은 배경으로 틀어 두고 내 속도대로 쳐요.</span><em id="bFree"></em></button>
+    <button class="mode" data-mode="wait"><b>⏸ 기다려 주는 모드</b><span>노래에 맞춰 가사가 나오고, 다 칠 때까지 영상이 멈춰요.</span><em id="bWait"></em></button>
+    <button class="mode" data-mode="rhythm"><b>⚡ 리듬게임 모드</b><span>영상은 멈추지 않아요. 다음 줄이 오기 전에 쳐야 점수!</span><em id="bRhythm"></em></button>
+  </div>
+  <h3>박자(싱크) 맞추기</h3>
+  <div class="panel">
+    <p id="dSync"></p>
+    <div class="row" style="margin-top:8px">
+      <button class="primary" id="dSyncBtn">박자 맞추기 시작</button>
+      <span id="offsetBox" class="row"><span class="dim">가사가</span>
+        <button class="small" id="offMinus">더 일찍 나오게</button>
+        <b id="offVal">0.0초</b>
+        <button class="small" id="offPlus">더 늦게 나오게</button></span>
+    </div>
+  </div>
+</section>
+
+<!-- 박자 맞추기 -->
+<section id="v-sync" hidden>
+  <h2>박자 맞추기</h2>
+  <p class="dim">노래를 들으면서, <b>각 줄이 시작되는 순간</b>에 스페이스바(또는 아래 큰 버튼)를 눌러요. 틀리면 '한 줄 되돌리기'를 눌러요.</p>
+  <div class="video" id="syncBox"></div>
+  <button class="stamp" id="stampBtn">이 줄 시작! (스페이스바)</button>
+  <div class="row" style="margin-bottom:10px">
+    <button id="undoStamp">한 줄 되돌리기</button>
+    <button id="resetStamp">처음부터 다시</button>
+    <button class="primary" id="saveSync" disabled>저장</button>
+    <span id="syncCount" class="dim"></span>
+  </div>
+  <div class="synclist" id="syncList"></div>
+</section>
+
+<!-- 연습 -->
+<section id="v-play" hidden>
+  <div class="row space" style="margin-bottom:10px"><b id="pTitle"></b><button class="small" id="quitBtn">그만하기</button></div>
+  <div class="video" id="playBox"></div>
+  <div class="hud">
+    <div><small>타수</small><b id="hKpm">0</b></div>
+    <div><small>정확도</small><b id="hAcc">-</b></div>
+    <div><small>진행</small><b id="hProg">0/0</b></div>
+    <div><small id="hXLabel">콤보</small><b id="hX">0</b></div>
+  </div>
+  <div class="panel" id="typing">
+    <div class="bar" id="timeBar" hidden><i></i></div>
+    <div class="status" id="pStatus"></div>
+    <div class="ctx" id="prevLine"></div>
+    <div class="lyric" id="lyric"></div>
+    <div class="ctx" id="nextLine"></div>
+    <input type="text" id="typeInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="다 치고 Enter나 스페이스바를 누르면 다음 줄 (틀려도 넘어가요)">
+    <div class="dim" id="lastHint" style="margin-top:6px;min-height:22px"></div>
+    <div class="row" style="margin-top:8px"><button class="small" id="skipBtn" hidden>간주 건너뛰기</button></div>
+  </div>
+  <div class="panel result" id="result" hidden>
+    <p class="dim" id="rMode"></p>
+    <div class="big" id="rBig"></div>
+    <div class="grid3">
+      <div><small>타수</small><b id="rKpm"></b></div>
+      <div><small>정확도</small><b id="rAcc"></b></div>
+      <div><small>완벽한 줄</small><b id="rPerfect"></b></div>
+    </div>
+    <p id="rBest" class="dim"></p>
+    <div class="row" style="justify-content:center"><button class="primary" id="againBtn">다시 하기</button><button id="backBtn">곡으로 돌아가기</button></div>
+  </div>
+</section>
+
+</main>
+<script>
+'use strict';
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const KEY = 'lyricTyping.songs.v1';
+const MODE_NAME = {free:'자유 모드', wait:'기다려 주는 모드', rhythm:'리듬게임 모드'};
+
+/* ---------- 저장 ---------- */
+let songs = [];
+try { songs = JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) { songs = []; }
+function save(){ try { localStorage.setItem(KEY, JSON.stringify(songs)); } catch (e) {} }
+
+/* ---------- 한글 자모 분해 ---------- */
+const CHO = ['ㄱ','ㄲ','ㄴ','ㄷ','ㄸ','ㄹ','ㅁ','ㅂ','ㅃ','ㅅ','ㅆ','ㅇ','ㅈ','ㅉ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+const JUNG = ['ㅏ','ㅐ','ㅑ','ㅒ','ㅓ','ㅔ','ㅕ','ㅖ','ㅗ','ㅗㅏ','ㅗㅐ','ㅗㅣ','ㅛ','ㅜ','ㅜㅓ','ㅜㅔ','ㅜㅣ','ㅠ','ㅡ','ㅡㅣ','ㅣ'];
+const JONG = ['','ㄱ','ㄲ','ㄱㅅ','ㄴ','ㄴㅈ','ㄴㅎ','ㄷ','ㄹ','ㄹㄱ','ㄹㅁ','ㄹㅂ','ㄹㅅ','ㄹㅌ','ㄹㅍ','ㄹㅎ','ㅁ','ㅂ','ㅂㅅ','ㅅ','ㅆ','ㅇ','ㅈ','ㅊ','ㅋ','ㅌ','ㅍ','ㅎ'];
+const COMPAT = {'ㅘ':'ㅗㅏ','ㅙ':'ㅗㅐ','ㅚ':'ㅗㅣ','ㅝ':'ㅜㅓ','ㅞ':'ㅜㅔ','ㅟ':'ㅜㅣ','ㅢ':'ㅡㅣ','ㄳ':'ㄱㅅ','ㄵ':'ㄴㅈ','ㄶ':'ㄴㅎ','ㄺ':'ㄹㄱ','ㄻ':'ㄹㅁ','ㄼ':'ㄹㅂ','ㄽ':'ㄹㅅ','ㄾ':'ㄹㅌ','ㄿ':'ㄹㅍ','ㅀ':'ㄹㅎ','ㅄ':'ㅂㅅ'};
+function jamo(str){
+  let out = '';
+  for (const ch of str){
+    const c = ch.charCodeAt(0);
+    if (c >= 0xAC00 && c <= 0xD7A3){
+      const n = c - 0xAC00;
+      out += CHO[Math.floor(n / 588)] + JUNG[Math.floor(n % 588 / 28)] + JONG[n % 28];
+    } else out += COMPAT[ch] || ch;
+  }
+  return out;
+}
+const isHangul = ch => { const c = ch.charCodeAt(0); return (c >= 0xAC00 && c <= 0xD7A3) || (c >= 0x3131 && c <= 0x3163); };
+/* 조립 중인 글자인지: 친 글자의 자모가 정답 자모의 앞부분과 같으면 아직 틀린 게 아님 */
+function inProgress(ch, target, i){ return isHangul(ch) && jamo(target.slice(i, i + 2)).startsWith(jamo(ch)); }
+
+/* ---------- 화면 전환 ---------- */
+let view = 'home', cur = null;
+function show(name){
+  if (view === 'play' || view === 'sync') stopAll();
+  view = name;
+  for (const s of document.querySelectorAll('main > section')) s.hidden = s.id !== 'v-' + name;
+  window.scrollTo(0, 0);
+}
+$('#logo').onclick = $('#homeBtn').onclick = () => openHome();
+
+/* ---------- 곡 목록 ---------- */
+function openHome(){
+  show('home');
+  $('#songList').innerHTML = songs.map(s =>
+    `<button class="song" data-id="${esc(s.id)}"><b>${esc(s.title)}</b>
+     <span class="tag">${s.lines.length}줄</span>
+     <span class="tag ${s.videoId ? 'on' : ''}">${s.videoId ? '영상 있음' : '영상 없음'}</span>
+     <span class="tag ${s.times ? 'on' : ''}">${s.times ? '박자 완료' : '박자 전'}</span></button>`).join('');
+  $('#emptyMsg').hidden = songs.length > 0;
+}
+$('#songList').onclick = e => { const b = e.target.closest('.song'); if (b) openDetail(b.dataset.id); };
+
+/* ---------- 곡 추가/수정 ---------- */
+let editing = null;
+function parseVideoId(url){
+  url = url.trim();
+  if (/^[\w-]{11}$/.test(url)) return url;
+  const m = url.match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/|\/live\/)([\w-]{11})/);
+  return m ? m[1] : null;
+}
+function cleanLines(text){
+  return text.normalize('NFC').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').split(/\r?\n/)
+    .map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean);
+}
+function openEdit(song){
+  editing = song || null;
+  show('edit');
+  $('#editTitle').textContent = song ? '곡 수정' : '새 곡 추가';
+  $('#fTitle').value = song ? song.title : '';
+  $('#fUrl').value = song && song.videoId ? 'https://www.youtube.com/watch?v=' + song.videoId : '';
+  $('#fLyrics').value = song ? song.lines.join('\n') : '';
+  $('#editErr').textContent = '';
+}
+$('#addBtn').onclick = () => openEdit(null);
+$('#cancelEdit').onclick = () => editing ? openDetail(editing.id) : openHome();
+$('#saveSong').onclick = () => {
+  const title = $('#fTitle').value.trim(), url = $('#fUrl').value.trim(), lines = cleanLines($('#fLyrics').value);
+  const err = m => { $('#editErr').textContent = m; };
+  if (!title) return err('곡 제목을 적어 주세요.');
+  let videoId = '';
+  if (url){ videoId = parseVideoId(url); if (!videoId) return err('유튜브 주소를 알아볼 수 없어요. 주소창의 주소를 그대로 붙여넣어 주세요.'); }
+  if (!lines.length) return err('가사를 붙여넣어 주세요.');
+  if (editing){
+    const changed = editing.lines.join('\n') !== lines.join('\n');
+    if (changed && editing.times && editing.lines.length !== lines.length){
+      if (!confirm('가사 줄 수가 바뀌어서 맞춰 둔 박자가 지워져요. 계속할까요?')) return;
+      editing.times = null; editing.offset = 0;
+    }
+    Object.assign(editing, {title, videoId, lines});
+    if (!videoId){ editing.times = null; }
+  } else {
+    editing = {id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title, videoId, lines, times: null, offset: 0, best: {}};
+    songs.unshift(editing);
+  }
+  save(); openDetail(editing.id);
+};
+
+/* ---------- 곡 상세 ---------- */
+function openDetail(id){
+  cur = songs.find(s => s.id === id);
+  if (!cur) return openHome();
+  show('detail');
+  const synced = !!cur.times;
+  $('#dTitle').textContent = cur.title;
+  $('#dInfo').textContent = `가사 ${cur.lines.length}줄 · ${cur.videoId ? '유튜브 영상 연결됨' : '영상 없음 (자유 모드만 가능)'}`;
+  const best = cur.best || {};
+  const bt = m => best[m] ? `최고 기록: ${m === 'rhythm' ? best[m].score + '점 · ' : ''}${best[m].kpm}타 · ${best[m].acc}%` : '';
+  $('#bFree').textContent = bt('free');
+  $('#bWait').textContent = synced ? bt('wait') : '박자를 먼저 맞춰야 해요';
+  $('#bRhythm').textContent = synced ? bt('rhythm') : '박자를 먼저 맞춰야 해요';
+  for (const b of document.querySelectorAll('.mode')) b.disabled = b.dataset.mode !== 'free' && !synced;
+  $('#dSync').textContent = !cur.videoId ? '영상이 없는 곡은 박자를 맞출 수 없어요. 수정에서 유튜브 주소를 넣어 주세요.'
+    : synced ? '박자를 맞춰 둔 곡이에요. 가사가 너무 빨리/늦게 나오면 아래 버튼으로 조금씩 조절해요.'
+    : '아직 박자를 안 맞췄어요. 노래를 한 번 들으면서 줄마다 스페이스바를 누르면 끝나요. (3~4분)';
+  $('#dSyncBtn').textContent = synced ? '박자 다시 맞추기' : '박자 맞추기 시작';
+  $('#dSyncBtn').disabled = !cur.videoId;
+  $('#offsetBox').hidden = !synced;
+  $('#offVal').textContent = ((cur.offset || 0) > 0 ? '+' : '') + (cur.offset || 0).toFixed(1) + '초';
+}
+document.querySelector('.modes').onclick = e => { const b = e.target.closest('.mode'); if (b && !b.disabled) startGame(cur, b.dataset.mode); };
+$('#dEdit').onclick = () => openEdit(cur);
+$('#dDelete').onclick = () => { if (confirm(`'${cur.title}' 곡을 지울까요? 되돌릴 수 없어요.`)){ songs = songs.filter(s => s !== cur); save(); openHome(); } };
+$('#dSyncBtn').onclick = () => startSync(cur);
+function nudge(d){ cur.offset = Math.round(((cur.offset || 0) + d) * 10) / 10; save(); openDetail(cur.id); }
+$('#offMinus').onclick = () => nudge(-0.1);
+$('#offPlus').onclick = () => nudge(0.1);
+$('#dExport').onclick = async e => { const ok = await copyText(JSON.stringify([cur])); e.target.textContent = ok ? '복사됨!' : '복사 실패'; setTimeout(() => e.target.textContent = '이 곡 코드 복사', 1500); };
+
+/* ---------- 내보내기 / 가져오기 ---------- */
+async function copyText(t){ try { await navigator.clipboard.writeText(t); return true; } catch (e) { return false; } }
+const ioMsg = m => { $('#ioMsg').textContent = m; };
+$('#exportFile').onclick = () => {
+  if (!songs.length) return ioMsg('내보낼 곡이 없어요.');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(songs)], {type: 'application/json'}));
+  a.download = '가사타자연습-곡.json'; a.click(); URL.revokeObjectURL(a.href);
+  ioMsg('파일을 저장했어요.');
+};
+$('#exportCopy').onclick = async () => { if (!songs.length) return ioMsg('내보낼 곡이 없어요.'); ioMsg(await copyText(JSON.stringify(songs)) ? '코드를 복사했어요. 구글 문서 등에 붙여넣어 두세요.' : '복사에 실패했어요. 파일로 저장해 보세요.'); };
+function importData(text){
+  let data;
+  try { data = JSON.parse(text); } catch (e) { return ioMsg('코드를 읽을 수 없어요. 전체를 빠짐없이 붙여넣었는지 확인해 주세요.'); }
+  if (!Array.isArray(data)) data = [data];
+  let n = 0;
+  for (const d of data){
+    if (!d || typeof d.title !== 'string' || !Array.isArray(d.lines)) continue;
+    const lines = cleanLines(d.lines.filter(x => typeof x === 'string').join('\n'));
+    if (!lines.length) continue;
+    const times = Array.isArray(d.times) && d.times.length === lines.length && d.times.every(t => typeof t === 'number' && isFinite(t)) ? d.times : null;
+    const s = {
+      id: typeof d.id === 'string' && /^[\w-]{1,40}$/.test(d.id) ? d.id : Date.now().toString(36) + n,
+      title: d.title.slice(0, 80), videoId: typeof d.videoId === 'string' && /^[\w-]{11}$/.test(d.videoId) ? d.videoId : '',
+      lines, times, offset: typeof d.offset === 'number' && isFinite(d.offset) ? d.offset : 0, best: {}
+    };
+    const i = songs.findIndex(x => x.id === s.id);
+    if (i >= 0){ s.best = songs[i].best || {}; songs[i] = s; } else songs.unshift(s);
+    n++;
+  }
+  save(); openHome();
+  ioMsg(n ? `${n}곡을 가져왔어요.` : '가져올 수 있는 곡이 없어요.');
+}
+$('#importFileBtn').onclick = () => $('#importFile').click();
+$('#importFile').onchange = async e => { const f = e.target.files[0]; if (f) importData(await f.text()); e.target.value = ''; };
+$('#importTextBtn').onclick = () => { const t = $('#importText').value.trim(); if (!t) return ioMsg('코드를 먼저 붙여넣어 주세요.'); importData(t); $('#importText').value = ''; };
+
+/* ---------- 유튜브 플레이어 ---------- */
+let ytPromise = null, player = null, playerOK = false, playerToken = 0;
+function loadYT(){
+  if (ytPromise) return ytPromise;
+  ytPromise = new Promise((res, rej) => {
+    if (window.YT && YT.Player) return res();
+    const fail = () => { ytPromise = null; rej(new Error('youtube blocked')); };
+    window.onYouTubeIframeAPIReady = () => res();
+    const s = document.createElement('script');
+    s.src = 'https://www.youtube.com/iframe_api'; s.onerror = fail;
+    document.head.appendChild(s);
+    setTimeout(() => { if (!(window.YT && YT.Player)) fail(); }, 8000);
+  });
+  return ytPromise;
+}
+function videoMsg(box, msg){ box.innerHTML = `<div class="vmsg">${msg}</div>`; }
+function destroyPlayer(){
+  playerToken++; playerOK = false;
+  if (player){ try { player.destroy(); } catch (e) {} player = null; }
+}
+async function makePlayer(boxId, videoId){
+  destroyPlayer();
+  const token = playerToken, box = $('#' + boxId);
+  if (!videoId){ videoMsg(box, '영상 없이 가사만 연습하는 곡이에요.'); return false; }
+  videoMsg(box, '영상을 불러오는 중…');
+  try { await loadYT(); } catch (e) {
+    if (token === playerToken) videoMsg(box, '유튜브에 연결할 수 없어요.<br>학교처럼 유튜브가 막힌 곳일 수 있어요. 자유 모드는 영상 없이도 할 수 있어요.');
+    return false;
+  }
+  if (token !== playerToken) return false;
+  box.innerHTML = `<div id="${boxId}-yt"></div>`;
+  return new Promise(res => {
+    player = new YT.Player(boxId + '-yt', {
+      videoId, width: '100%', height: '100%',
+      playerVars: {playsinline: 1, rel: 0, autoplay: 1},
+      events: {
+        onReady: () => { if (token !== playerToken) return res(false); playerOK = true; try { player.playVideo(); } catch (e) {} res(true); },
+        onError: () => { if (token !== playerToken) return res(false); destroyPlayer(); videoMsg(box, '이 영상은 여기서 재생할 수 없어요.<br>올린 사람이 다른 사이트 재생을 막았거나, 주소가 잘못됐을 수 있어요. 같은 곡의 다른 영상 주소로 바꿔 보세요.'); res(false); }
+      }
+    });
+  });
+}
+const vtime = () => { try { return playerOK ? player.getCurrentTime() : 0; } catch (e) { return 0; } };
+function stopAll(){ clearInterval(timer); timer = null; G = null; S = null; destroyPlayer(); }
+
+/* ---------- 박자 맞추기 ---------- */
+let S = null;
+async function startSync(song){
+  show('sync');
+  S = {song, times: []};
+  renderSync();
+  await makePlayer('syncBox', song.videoId);
+}
+function renderSync(){
+  const n = S.song.lines.length, k = S.times.length;
+  $('#syncList').innerHTML = S.song.lines.map((l, i) =>
+    `<div class="${i === k ? 'now' : i > k ? 'todo' : ''}"><time>${i < k ? fmt(S.times[i]) : '--:--'}</time><span>${esc(l)}</span></div>`).join('');
+  const now = $('#syncList .now'); if (now) now.scrollIntoView({block: 'nearest'});
+  $('#syncCount').textContent = `${k} / ${n}줄`;
+  $('#saveSync').disabled = k < n;
+  $('#stampBtn').textContent = k < n ? '이 줄 시작! (스페이스바)' : '다 맞췄어요! 저장을 눌러요';
+}
+const fmt = t => Math.floor(t / 60) + ':' + (t % 60).toFixed(1).padStart(4, '0');
+function stamp(){
+  if (!S || !playerOK || S.times.length >= S.song.lines.length) return;
+  S.times.push(Math.max(0, Math.round((vtime() - 0.15) * 100) / 100));   // 손이 조금 늦게 눌리는 만큼 당김
+  renderSync();
+}
+$('#stampBtn').onpointerdown = e => { e.preventDefault(); stamp(); };
+$('#undoStamp').onclick = () => { if (!S || !S.times.length) return; const t = S.times.pop(); if (playerOK) player.seekTo(Math.max(0, t - 3), true); renderSync(); };
+$('#resetStamp').onclick = () => { if (!S) return; S.times = []; if (playerOK){ player.seekTo(0, true); player.playVideo(); } renderSync(); };
+$('#saveSync').onclick = () => { const song = S.song; song.times = S.times.slice(); song.offset = 0; save(); openDetail(song.id); };
+document.addEventListener('keydown', e => {
+  if (view === 'sync' && e.code === 'Space'){ e.preventDefault(); if (!e.repeat) stamp(); }
+});
+
+/* ---------- 연습 ---------- */
+let G = null, timer = null;
+const inp = $('#typeInput');
+const T = i => G.song.times[i] + (G.song.offset || 0);
+function deadline(i){
+  const n = G.song.lines.length;
+  if (i + 1 < n) return T(i + 1);
+  const avg = n > 1 ? (T(n - 1) - T(0)) / (n - 1) : 6;
+  return T(i) + Math.min(10, Math.max(4, avg));
+}
+const target = () => G.song.lines[G.idx] || '';
+
+async function startGame(song, mode){
+  show('play');
+  G = {song, mode, idx: 0, active: mode === 'free', strokes: 0, correct: 0, total: 0, typeMs: 0, lineStart: 0,
+       score: 0, combo: 0, maxCombo: 0, perfect: 0, done: false, paused: false, lock: false};
+  const g = G;
+  $('#pTitle').textContent = `${song.title} · ${MODE_NAME[mode]}`;
+  $('#hXLabel').textContent = mode === 'rhythm' ? '점수' : '콤보';
+  $('#result').hidden = true; $('#typing').hidden = false;
+  $('#timeBar').hidden = mode !== 'rhythm';
+  inp.value = '';
+  renderLine(); updateHud();
+  const ok = await makePlayer('playBox', song.videoId);
+  if (G !== g) return;
+  if (!ok && mode !== 'free'){
+    $('#pStatus').textContent = '영상을 재생할 수 없어서 이 모드는 할 수 없어요. 자유 모드를 이용해 주세요.';
+    return;
+  }
+  timer = setInterval(tick, 80);
+  if (G.active) inp.focus();
+}
+
+function tick(){
+  if (!G || G.done) return;
+  updateHud();
+  if (G.mode === 'free' || !playerOK) return;
+  const t = vtime(), n = G.song.lines.length;
+  if (!G.active){
+    const left = T(G.idx) - t;
+    if (left <= 0.25){ G.active = true; renderLine(); }
+    else {
+      $('#pStatus').textContent = `♪ 다음 가사까지 ${Math.ceil(left)}초`;
+      $('#skipBtn').hidden = left < 6;
+    }
+  }
+  if (G.active){
+    const dl = deadline(G.idx);
+    if (G.mode === 'rhythm'){
+      const st = T(G.idx);
+      $('#timeBar i').style.width = Math.max(0, Math.min(100, (t - st) / (dl - st) * 100)) + '%';
+      if (t >= dl) finalizeLine();
+    } else if (G.idx + 1 < n && t >= dl - 0.05 && !G.paused){
+      G.paused = true; try { player.pauseVideo(); } catch (e) {}
+      $('#pStatus').textContent = '⏸ 이 줄을 다 치면 노래가 이어져요';
+    }
+  }
+}
+$('#skipBtn').onclick = () => { if (G && playerOK && !G.active) player.seekTo(Math.max(0, T(G.idx) - 1.5), true); inp.focus(); };
+
+function renderLine(){
+  const tg = target(), ty = G.active ? inp.value.normalize('NFC') : '';
+  let h = '';
+  for (let i = 0; i < tg.length; i++){
+    let cls = 'rest';
+    if (i < ty.length){
+      if (ty[i] === tg[i]) cls = 'ok';
+      else if (i === ty.length - 1 && inProgress(ty[i], tg, i)) cls = 'pend';
+      else cls = 'bad';
+    } else if (i === ty.length) cls = 'rest cur';
+    h += `<span class="${cls}">${esc(tg[i])}</span>`;
+  }
+  if (ty.length > tg.length) h += `<span class="bad">${esc(ty.slice(tg.length))}</span>`;
+  const box = $('#lyric');
+  box.innerHTML = h;
+  box.classList.toggle('waiting', !G.active);
+  const nx = G.song.lines[G.idx + 1];
+  $('#prevLine').textContent = G.idx > 0 ? G.song.lines[G.idx - 1] : '';
+  $('#nextLine').textContent = nx || '';
+  $('#lastHint').textContent = nx ? '' : '마지막 줄이에요!';
+  if (G.active){
+    $('#pStatus').textContent = ty.length >= tg.length ? '✔ Enter나 스페이스바를 누르면 다음 줄로 넘어가요'
+      : G.paused ? '⏸ 이 줄을 다 치면 노래가 이어져요' : '';
+    $('#skipBtn').hidden = true;
+    if (inp.disabled){ inp.disabled = false; inp.focus(); }
+  } else inp.disabled = true;
+}
+
+function updateHud(){
+  // 지금 치고 있는 줄도 포함해서 실시간으로 계산
+  let strokes = G.strokes, ms = G.typeMs;
+  if (G.active && G.lineStart){
+    const tg = target(), ty = inp.value.normalize('NFC');
+    for (let i = 0; i < Math.min(tg.length, ty.length); i++) if (ty[i] === tg[i]) strokes += jamo(tg[i]).length;
+    ms += Math.max(performance.now() - G.lineStart, (strokes - G.strokes) * 40);
+  }
+  $('#hKpm').textContent = ms > 1500 ? Math.round(strokes / (ms / 60000)) : (G.total ? kpm() : 0);
+  $('#hAcc').textContent = G.total ? Math.round(G.correct / G.total * 100) + '%' : '-';
+  $('#hProg').textContent = `${Math.min(G.idx + 1, G.song.lines.length)}/${G.song.lines.length}`;
+  $('#hX').textContent = G.mode === 'rhythm' ? G.score : G.combo;
+}
+const kpm = () => G.typeMs > 0 ? Math.round(G.strokes / (G.typeMs / 60000)) : 0;
+
+inp.addEventListener('input', () => {
+  if (!G || G.done || G.lock || !G.active) return;
+  if (!G.lineStart && inp.value) G.lineStart = performance.now();
+  // 줄을 끝까지 친 뒤에 스페이스바를 누르면 다음 줄로
+  const tg = target(), ty = inp.value.normalize('NFC');
+  // (틀린 글자나 더 친 글자가 있어도 글자 수만 채웠으면 넘어감)
+  if (ty.length > tg.length && ty.endsWith(' ')) return finalizeLine(ty.trimEnd());
+  renderLine();
+});
+inp.addEventListener('paste', e => e.preventDefault());   // 붙여넣기로 치는 건 반칙!
+inp.addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.code !== 'Enter' && e.code !== 'NumpadEnter') return;
+  e.preventDefault();
+  // Enter는 틀렸거나 덜 쳤어도 넘어감 (한 글자도 안 쳤을 때만 막음)
+  if (G && !G.done && !G.lock && G.active && inp.value) finalizeLine();
+});
+
+function finalizeLine(typed){
+  const tg = target(), ty = typeof typed === 'string' ? typed : inp.value.normalize('NFC');
+  let c = 0, st = 0;
+  for (let i = 0; i < tg.length; i++) if (ty[i] === tg[i]){ c++; st += jamo(tg[i]).length; }
+  G.strokes += st; G.correct += c; G.total += tg.length;
+  // 한 타에 최소 0.04초는 걸린 것으로 계산 (말도 안 되게 높은 타수 방지)
+  if (G.lineStart) G.typeMs += Math.max(performance.now() - G.lineStart, st * 40);
+  G.lineStart = 0;
+  const perfect = c === tg.length && ty.length === tg.length;
+  if (perfect){ G.combo++; G.perfect++; G.maxCombo = Math.max(G.maxCombo, G.combo); } else G.combo = 0;
+  G.score += c * 10 + (perfect ? 50 + Math.min(G.combo, 10) * 10 : 0);
+
+  // 한글 조립 중인 글자가 다음 줄로 넘어가지 않게: 포커스를 뺐다가 비우고 다시 넣음
+  G.lock = true; inp.blur(); inp.value = ''; G.lock = false;
+  G.idx++;
+  if (G.idx >= G.song.lines.length) return finish();
+  if (G.mode !== 'free'){
+    G.active = false;
+    if (G.paused){ G.paused = false; try { player.playVideo(); } catch (e) {} }
+  }
+  renderLine();
+  if (G.active) setTimeout(() => inp.focus(), 0);
+  tick();
+}
+
+function finish(){
+  G.done = true; clearInterval(timer); timer = null;
+  const k = kpm(), acc = G.total ? Math.round(G.correct / G.total * 100) : 0, song = G.song, mode = G.mode;
+  updateHud();
+  $('#typing').hidden = true; $('#result').hidden = false;
+  $('#rMode').textContent = `${song.title} · ${MODE_NAME[mode]} 완료!`;
+  $('#rBig').textContent = mode === 'rhythm' ? G.score + '점' : k + '타';
+  $('#rKpm').textContent = k + '타'; $('#rAcc').textContent = acc + '%';
+  $('#rPerfect').textContent = `${G.perfect}/${song.lines.length}줄`;
+  song.best = song.best || {};
+  const old = song.best[mode], val = mode === 'rhythm' ? G.score : k, oldVal = old ? (mode === 'rhythm' ? old.score : old.kpm) : -1;
+  if (val > oldVal){ song.best[mode] = {kpm: k, acc, score: G.score}; save(); $('#rBest').textContent = '🎉 새 최고 기록이에요!'; }
+  else $('#rBest').textContent = `최고 기록: ${mode === 'rhythm' ? old.score + '점 · ' : ''}${old.kpm}타 · ${old.acc}%`;
+}
+$('#againBtn').onclick = () => { const g = G; if (g) startGame(g.song, g.mode); };
+$('#backBtn').onclick = $('#quitBtn').onclick = () => { const id = G ? G.song.id : cur && cur.id; id ? openDetail(id) : openHome(); };
+
+openHome();
+</script>
+</body>
+</html>
