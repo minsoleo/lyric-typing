@@ -86,7 +86,7 @@ label{display:block;margin:14px 0 6px;font-weight:700}
 .status.hold{color:var(--pend);font-weight:700}
 /* 박자 맞추기: 지금 누를 가사를 크게 보여주는 칸 */
 .cue{background:var(--panel);border:2px solid var(--line);border-radius:16px;padding:16px 18px 14px;margin-top:12px;box-shadow:var(--shadow);text-align:center}
-.cue-label{color:var(--accent2);font-size:15px;font-weight:700;margin:12px 0 4px}
+.cue-label{color:var(--accent2);font-size:21px;font-weight:800;margin:12px 0 6px;word-break:keep-all}
 .cue-label.warn{color:var(--pend)}
 .cue-line{font-size:32px;font-weight:800;margin:0;word-break:keep-all;line-height:1.35}
 .cue-next{color:var(--dim);font-size:15px;margin:8px 0 0;min-height:24px}
@@ -114,7 +114,7 @@ body[data-view="play"] main{padding-bottom:6px}
 }
 .synclist{position:relative}
 ol.steps.big{font-size:15px;color:var(--text);line-height:1.9;margin:10px 0 12px}
-@media(max-width:560px){.cue-line{font-size:24px}}
+@media(max-width:560px){.cue-line{font-size:24px}.cue-label{font-size:17px}}
 .next{color:var(--dim);font-size:15px;margin-top:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 #typeInput{font-size:26px;font-weight:700;letter-spacing:.5px;margin-top:8px}
 #typeInput::placeholder{font-size:16px;font-weight:400;letter-spacing:0}
