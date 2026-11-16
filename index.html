@@ -5,10 +5,19 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>가사 타자연습</title>
 <style>
+/* 어두운 버전: 남색 */
 :root{
-  --bg:#0e0f1c; --panel:#191b30; --panel2:#22254a; --line:#2e3160;
-  --text:#eef0ff; --dim:#9aa0c8; --accent:#8b5cf6; --accent2:#22d3ee;
-  --ok:#4ade80; --bad:#f87171; --pend:#fbbf24;
+  color-scheme:dark;
+  --bg:#0b1533; --panel:#122046; --panel2:#1b2d5e; --line:#2a3f7a; --hover:#24397a; --field:#0a1230;
+  --text:#eef2ff; --dim:#9fb0d8; --accent:#4f7cff; --accent-hover:#3d69ea; --accent2:#38d6f5;
+  --ok:#4ade80; --ok-bg:#123d33; --bad:#f87171; --pend:#fbbf24;
+}
+/* 밝은 버전: 흰색 */
+:root[data-theme="light"]{
+  color-scheme:light;
+  --bg:#ffffff; --panel:#f4f6fb; --panel2:#e6ebf7; --line:#d3dbee; --hover:#d8e0f3; --field:#ffffff;
+  --text:#111a33; --dim:#5b6785; --accent:#2f5fe0; --accent-hover:#234fc8; --accent2:#0e7fa8;
+  --ok:#15803d; --ok-bg:#dcf5e3; --bad:#dc2626; --pend:#b45309;
 }
 *{box-sizing:border-box}
 html,body{margin:0}
@@ -26,14 +35,14 @@ p{margin:6px 0}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .space{justify-content:space-between}
 button,.btn{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 16px;cursor:pointer;transition:background .15s,transform .05s}
-button:hover:not(:disabled){background:#2d3163}
+button:hover:not(:disabled){background:var(--hover)}
 button:active:not(:disabled){transform:translateY(1px)}
 button:disabled{opacity:.4;cursor:not-allowed}
-button.primary{background:var(--accent);border-color:var(--accent);font-weight:700}
-button.primary:hover:not(:disabled){background:#7c4df0}
+button.primary{background:var(--accent);border-color:var(--accent);font-weight:700;color:#fff}
+button.primary:hover:not(:disabled),.stamp:hover:not(:disabled){background:var(--accent-hover)}
 button.danger{color:var(--bad)}
 button.small{padding:5px 10px;font-size:14px}
-input[type=text],textarea{font:inherit;color:var(--text);background:#10122a;border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
+input[type=text],textarea{font:inherit;color:var(--text);background:var(--field);border:1px solid var(--line);border-radius:10px;padding:10px 12px;width:100%}
 input[type=text]:focus,textarea:focus{outline:2px solid var(--accent);border-color:transparent}
 textarea{min-height:220px;resize:vertical}
 label{display:block;margin:14px 0 6px;font-weight:700}
@@ -42,7 +51,7 @@ label{display:block;margin:14px 0 6px;font-weight:700}
 .song:hover{border-color:var(--accent)}
 .song b{display:block;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tag{display:inline-block;font-size:12px;padding:1px 8px;border-radius:99px;background:var(--panel2);color:var(--dim);margin-right:4px}
-.tag.on{background:#143d2c;color:var(--ok)}
+.tag.on{background:var(--ok-bg);color:var(--ok)}
 .modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:10px}
 .mode{text-align:left;padding:16px;border-radius:14px}
 .mode b{display:block;font-size:17px;margin-bottom:4px}
@@ -78,7 +87,7 @@ label{display:block;margin:14px 0 6px;font-weight:700}
 .grid3 div{background:var(--panel2);border-radius:12px;padding:12px}
 .grid3 small{display:block;color:var(--dim)}
 .grid3 b{font-size:22px}
-.stamp{width:100%;padding:22px;font-size:20px;font-weight:800;background:var(--accent);border-color:var(--accent);margin:12px 0;user-select:none;touch-action:manipulation}
+.stamp{width:100%;padding:22px;font-size:20px;font-weight:800;color:#fff;background:var(--accent);border-color:var(--accent);margin:12px 0;user-select:none;touch-action:manipulation}
 .synclist{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:12px}
 .synclist div{display:flex;gap:10px;padding:6px 12px;border-bottom:1px solid var(--line);font-size:15px}
 .synclist div:last-child{border-bottom:0}
@@ -88,11 +97,23 @@ label{display:block;margin:14px 0 6px;font-weight:700}
 ol.steps{padding-left:20px;margin:6px 0;color:var(--dim);font-size:14px}
 @media(max-width:560px){.lyric,#typeInput{font-size:20px}.hud b{font-size:16px}.grid3{grid-template-columns:1fr}}
 </style>
+<script>
+/* 화면이 그려지기 전에 밝은/어두운 버전을 먼저 정함 (깜빡임 방지) */
+(function(){
+  var t = null;
+  try { t = localStorage.getItem('lyricTyping.theme'); } catch (e) {}
+  if (t !== 'light' && t !== 'dark') t = window.matchMedia && matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+  document.documentElement.dataset.theme = t;
+})();
+</script>
 </head>
 <body>
 <header>
   <h1 id="logo">🎵 가사 <span>타자연습</span></h1>
-  <button id="homeBtn" class="small">곡 목록</button>
+  <div class="row">
+    <button id="themeBtn" class="small" title="화면 색 바꾸기"></button>
+    <button id="homeBtn" class="small">곡 목록</button>
+  </div>
 </header>
 <main>
 
@@ -100,8 +121,9 @@ ol.steps{padding-left:20px;margin:6px 0;color:var(--dim);font-size:14px}
 <section id="v-home">
   <div class="row space">
     <h2>내 곡</h2>
-    <button class="primary" id="addBtn">+ 새 곡 추가</button>
+    <div class="row"><button class="small" id="transferBtn">곡 옮기기</button><button class="primary" id="addBtn">+ 새 곡 추가</button></div>
   </div>
+  <p class="dim" id="homeMsg"></p>
   <div id="songList" class="songs"></div>
   <div id="emptyMsg" class="panel" hidden>
     <p><b>아직 곡이 없어요.</b> 이렇게 시작해요.</p>
@@ -113,7 +135,11 @@ ol.steps{padding-left:20px;margin:6px 0;color:var(--dim);font-size:14px}
     </ol>
   </div>
 
-  <h3>곡 옮기기 (집 ↔ 학교)</h3>
+</section>
+
+<!-- 곡 옮기기 -->
+<section id="v-transfer" hidden>
+  <h2>곡 옮기기 (집 ↔ 학교)</h2>
   <div class="panel">
     <p class="dim">학교 컴퓨터는 껐다 켜면 저장한 곡이 지워질 수 있어요. 집에서 만든 곡을 <b>파일이나 코드</b>로 내보내서 가져가세요. (구글 드라이브나 구글 문서에 넣어 두면 편해요)</p>
     <div class="row" style="margin-top:10px">
@@ -259,10 +285,25 @@ function show(name){
   window.scrollTo(0, 0);
 }
 $('#logo').onclick = $('#homeBtn').onclick = () => openHome();
+$('#transferBtn').onclick = () => { show('transfer'); ioMsg(''); };
+
+/* ---------- 밝은 버전 / 어두운 버전 ---------- */
+let theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+function applyTheme(){
+  document.documentElement.dataset.theme = theme;
+  $('#themeBtn').textContent = theme === 'light' ? '🌙 어둡게' : '☀️ 밝게';
+}
+$('#themeBtn').onclick = () => {
+  theme = theme === 'light' ? 'dark' : 'light';
+  applyTheme();
+  try { localStorage.setItem('lyricTyping.theme', theme); } catch (e) {}
+};
+applyTheme();
 
 /* ---------- 곡 목록 ---------- */
 function openHome(){
   show('home');
+  $('#homeMsg').textContent = '';
   $('#songList').innerHTML = songs.map(s =>
     `<button class="song" data-id="${esc(s.id)}"><b>${esc(s.title)}</b>
      <span class="tag">${s.lines.length}줄</span>
@@ -378,8 +419,9 @@ function importData(text){
     if (i >= 0){ s.best = songs[i].best || {}; songs[i] = s; } else songs.unshift(s);
     n++;
   }
+  if (!n) return ioMsg('가져올 수 있는 곡이 없어요.');
   save(); openHome();
-  ioMsg(n ? `${n}곡을 가져왔어요.` : '가져올 수 있는 곡이 없어요.');
+  $('#homeMsg').textContent = `✔ ${n}곡을 가져왔어요.`;
 }
 $('#importFileBtn').onclick = () => $('#importFile').click();
 $('#importFile').onchange = async e => { const f = e.target.files[0]; if (f) importData(await f.text()); e.target.value = ''; };
