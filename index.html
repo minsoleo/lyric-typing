@@ -68,7 +68,9 @@ label{display:block;margin:14px 0 6px;font-weight:700}
 .lyric .cur{border-bottom-color:var(--accent2)}
 .status{min-height:26px;color:var(--accent2);font-size:14px}
 .next{color:var(--dim);font-size:15px;margin-top:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#typeInput{font-size:22px;margin-top:8px}
+#typeInput{font-size:26px;font-weight:700;letter-spacing:.5px;margin-top:8px}
+#typeInput::placeholder{font-size:16px;font-weight:400;letter-spacing:0}
+.ctx,.lyric{padding:0 13px}
 #typeInput:disabled{opacity:.4}
 .result{text-align:center}
 .result .big{font-size:44px;font-weight:800;color:var(--accent2)}
@@ -84,7 +86,7 @@ label{display:block;margin:14px 0 6px;font-weight:700}
 .synclist .now{background:var(--panel2);font-weight:700}
 .synclist .todo time{color:var(--dim)}
 ol.steps{padding-left:20px;margin:6px 0;color:var(--dim);font-size:14px}
-@media(max-width:560px){.lyric{font-size:20px}.hud b{font-size:16px}.grid3{grid-template-columns:1fr}}
+@media(max-width:560px){.lyric,#typeInput{font-size:20px}.hud b{font-size:16px}.grid3{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
