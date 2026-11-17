@@ -67,16 +67,16 @@ t('문장 목록: 100개, 중복 없음, 10~18자', () => {
   return s.length === 100 && new Set(s.map(L.norm)).size === 100;
 });
 
-t('밈 목록: 46개, 중복 없음, 5~30자, 기본 문장과 안 겹침', () => {
+t('밈 목록: 59개, 중복 없음, 5~30자, 기본 문장과 안 겹침', () => {
   const m = W.meme || [], s = new Set((W.sentence || []).map(L.norm));
   const bad = m.filter(x => L.norm(x).length < 5 || L.norm(x).length > 30);
   if (bad.length) throw new Error('길이 밖: ' + bad.join(' / '));
-  return m.length === 46 && new Set(m.map(L.norm)).size === 46 && m.every(x => !s.has(L.norm(x)));
+  return m.length === 59 && new Set(m.map(L.norm)).size === 59 && m.every(x => !s.has(L.norm(x)));
 });
-t('mixBoard: 긴 문장 판 = 기본 29 + 밈 20, 49개 중복 없음', () => {
-  const b = L.mixBoard(W.sentence || [], W.meme || [], 49, 20, seeded(11));
+t('mixBoard: 긴 문장 판 = 밈 44 + 기본 5, 49개 중복 없음', () => {
+  const b = L.mixBoard(W.sentence || [], W.meme || [], 49, 44, seeded(11));
   const m = new Set((W.meme || []).map(L.norm));
-  return b.length === 49 && new Set(b).size === 49 && b.filter(x => m.has(x)).length === 20;
+  return b.length === 49 && new Set(b).size === 49 && b.filter(x => m.has(x)).length === 44;
 });
 t('mixBoard: 밈이 모자라면 있는 만큼만', () => {
   const b = L.mixBoard(W.sentence || [], ['밈 하나 둘', '밈 셋 넷 다섯'], 49, 20, seeded(2));

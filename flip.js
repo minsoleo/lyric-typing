@@ -3,7 +3,7 @@
 'use strict';
 const $ = s => document.querySelector(s);
 const L = window.FlipLogic;
-const MAX_PLAYERS = 16, BOARD = 49, MEME_PER_BOARD = 20, OLD_ROOM_MS = 6 * 3600 * 1000;
+const MAX_PLAYERS = 16, BOARD = 49, MEME_PER_BOARD = 44, OLD_ROOM_MS = 6 * 3600 * 1000;
 const TEAM_NAME = {red: '빨강', blue: '파랑'};
 
 /* ---------- 밝은/어두운 버전 (타자연습과 같은 설정 공유) ---------- */
@@ -254,7 +254,7 @@ function startRound(){
   if (!isHost()) return;
   const s = room.settings || {mode: 'word', seconds: 90};
   const W = window.FLIP_WORDS;
-  // 긴 문장 판: 기본 문장 29개 + 밈 20개를 섞음 (기본 문장 비율을 더 높게)
+  // 긴 문장 판: 민솔님이 모은 밈 44개 + 기본 문장 5개 (기본 문장은 거의 안 보이게)
   const texts = s.mode === 'sentence'
     ? L.mixBoard(W.sentence, W.meme, BOARD, MEME_PER_BOARD, Math.random)
     : L.pickCards(W.word, BOARD, Math.random);
