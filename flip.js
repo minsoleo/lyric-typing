@@ -186,6 +186,12 @@ function fillList(ul, list, withFlips){
     n.textContent = (id === room.host ? '👑 ' : '') + p.name + (id === pid ? ' (나)' : '');
     li.appendChild(n);
     if (withFlips){ const f = document.createElement('span'); f.textContent = (p.flips || 0) + '장'; li.appendChild(f); }
+    else {   // 대기실: 방장 / 준비 완료 / 준비 중
+      const b = document.createElement('span');
+      b.className = 'state ' + (id === room.host ? 'host' : p.ready ? 'ready' : 'wait');
+      b.textContent = id === room.host ? '방장' : p.ready ? '✅ 준비' : '준비 중…';
+      li.appendChild(b);
+    }
     ul.appendChild(li);
   }
 }
@@ -204,8 +210,30 @@ function renderLobby(){
   $('#toBlue').disabled = myTeam() === 'blue';
   $('#shuffleBtn').hidden = !host;
   $('#startBtn').hidden = !host;
-  $('#lobbyMsg').textContent = host ? (!red.length || !blue.length ? '한 팀이 비어 있어요. 그래도 시작할 수 있어요.' : '') : '방장이 시작하면 바로 게임이 열려요.';
+  // 준비: 방장 빼고 모두 준비해야 시작 버튼이 노랗게 켜짐
+  const r = readyCount(), meReady = !!(players()[pid] || {}).ready;
+  const rb = $('#readyBtn');
+  rb.hidden = host;
+  rb.textContent = meReady ? '✅ 준비 완료! (누르면 취소)' : '✋ 준비';
+  rb.classList.toggle('primary', !meReady);
+  rb.classList.toggle('done', meReady);
+  const sb = $('#startBtn');
+  sb.textContent = r.all ? '▶ 경기 시작' : `▶ 경기 시작 (준비 ${r.ready}/${r.total})`;
+  sb.classList.toggle('primary', r.all);
+  $('#lobbyMsg').textContent = host
+    ? (!r.all ? '친구들이 모두 준비하면 시작할 수 있어요.' : !red.length || !blue.length ? '한 팀이 비어 있어요. 그래도 시작할 수 있어요.' : '모두 준비 완료! 시작하세요.')
+    : meReady ? '준비 완료! 방장이 시작하면 바로 경기가 열려요.' : '준비 버튼을 눌러 주세요.';
 }
+// 방장을 뺀 사람 중 준비한 사람 수
+function readyCount(){
+  const others = Object.entries(players()).filter(([id]) => id !== room.host);
+  const ready = others.filter(([, p]) => p.ready).length;
+  return {ready, total: others.length, all: ready === others.length};
+}
+$('#readyBtn').onclick = () => {
+  if (!roomRef || isHost()) return;
+  roomRef.child(`players/${pid}/ready`).set(!(players()[pid] || {}).ready);
+};
 $('#modeSeg').onclick = e => { const b = e.target.closest('button'); if (b && isHost()) roomRef.child('settings/mode').set(b.dataset.mode); };
 $('#secSeg').onclick = e => { const b = e.target.closest('button'); if (b && isHost()) roomRef.child('settings/seconds').set(+b.dataset.sec); };
 $('#toRed').onclick = () => roomRef && roomRef.child(`players/${pid}/team`).set('red');
@@ -233,12 +261,23 @@ function startRound(){
   const cards = texts.map(t => ({t, o: '', by: ''}));
   const startsAt = now() + 7000;   // 팀 소개 3.5초 + 3·2·1 3.5초
   const up = {state: 'playing', round: (room.round || 0) + 1, cards, startsAt, endsAt: startsAt + (s.seconds || 90) * 1000};
-  for (const id of Object.keys(players())) up[`players/${id}/flips`] = 0;
+  // 다음 판 대기실에서 다시 준비하도록 준비 상태는 꺼 둠
+  for (const id of Object.keys(players())){ up[`players/${id}/flips`] = 0; up[`players/${id}/ready`] = false; }
   roomRef.update(up);
 }
-$('#startBtn').onclick = startRound;
+$('#startBtn').onclick = () => {
+  if (!isHost()) return;
+  const r = readyCount();
+  if (!r.all && !confirm(`아직 준비 안 한 친구가 있어요 (준비 ${r.ready}/${r.total}).\n그래도 시작할까요?`)) return;
+  startRound();
+};
 $('#againBtn').onclick = startRound;
-$('#toLobbyBtn').onclick = () => { if (isHost()) roomRef.update({state: 'lobby', cards: null, startsAt: null, endsAt: null}); };
+$('#toLobbyBtn').onclick = () => {
+  if (!isHost()) return;
+  const up = {state: 'lobby', cards: null, startsAt: null, endsAt: null};
+  for (const id of Object.keys(players())) up[`players/${id}/ready`] = false;
+  roomRef.update(up);
+};
 
 /* ---------- 게임 ---------- */
 let builtRound = -1, lastOwners = [], timer = null, endAsked = false;
@@ -279,8 +318,62 @@ function renderGame(){
   $('#blueSide').classList.toggle('mine', team === 'blue');
   fillRoster($('#redRoster'), 'red'); fillRoster($('#blueRoster'), 'blue');
   $('#myFlips').textContent = ((players()[pid] || {}).flips || 0) + '장';
+  renderChat();
   highlight();
   startTimer();
+}
+
+/* ---------- 채팅 ---------- */
+const CHAT_KEEP = 50;            // 최근 50개만 보관
+let chatSig = '';
+function renderChat(){
+  const chat = (room && room.chat) || {};
+  const keys = Object.keys(chat).sort();          // push 키는 시간 순서로 정렬됨
+  const sig = keys.length + ':' + (keys[keys.length - 1] || '');
+  if (sig === chatSig) return;
+  chatSig = sig;
+  const log = $('#chatLog');
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 30;
+  log.textContent = '';
+  if (!keys.length){ const p = document.createElement('p'); p.className = 'empty'; p.textContent = '작전을 짜 보세요! 예) 오른쪽 줄 지켜!'; log.appendChild(p); }
+  for (const k of keys.slice(-CHAT_KEEP)){
+    const m = chat[k] || {}, p = document.createElement('p'), b = document.createElement('b');
+    b.className = m.team === 'blue' ? 'blue' : 'red';
+    b.textContent = (m.name || '?') + (m.pid === pid ? '(나)' : '');
+    p.append(b, document.createTextNode(String(m.text || '')));
+    log.appendChild(p);
+  }
+  if (atBottom || (chat[keys[keys.length - 1]] || {}).pid === pid) log.scrollTop = log.scrollHeight;
+}
+const chatInp = $('#chatInput');
+let chatPending = false;
+function sendChat(){
+  const text = chatInp.value.replace(/\s+/g, ' ').trim().slice(0, 60);
+  chatInp.value = '';
+  if (!text || !roomRef) return;
+  const p = players()[pid] || {};
+  roomRef.child('chat').push({pid, name: p.name || me.name, team: p.team || 'red', text, at: firebase.database.ServerValue.TIMESTAMP});
+  // 오래된 채팅 지우기 (방 데이터가 너무 커지지 않게)
+  const keys = Object.keys((room && room.chat) || {}).sort();
+  if (keys.length >= CHAT_KEEP + 10){
+    const up = {};
+    for (const k of keys.slice(0, keys.length - CHAT_KEEP)) up['chat/' + k] = null;
+    roomRef.update(up);
+  }
+}
+chatInp.addEventListener('keydown', e => {
+  if (e.key === 'Escape'){ e.preventDefault(); focusGame(true); return; }
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  if (e.isComposing){ chatPending = true; return; }
+  sendChat();
+});
+chatInp.addEventListener('compositionend', () => { if (chatPending){ chatPending = false; setTimeout(sendChat, 0); } });
+chatInp.addEventListener('paste', e => e.stopPropagation());   // 채팅은 붙여넣기 허용
+// 채팅 치는 중에는 게임 입력 칸이 포커스를 뺏지 않게
+function focusGame(force){
+  if (inp.disabled) return;
+  if (force || document.activeElement !== chatInp) inp.focus();
 }
 function fillRoster(ul, team){
   ul.textContent = '';
@@ -325,10 +418,10 @@ function tick(){
   } else if (until > -700){                 // 3) 출발!
     $('#intro').hidden = true;
     cd.hidden = false; num.className = 'count go'; num.textContent = '출발!';
-    if (inp.disabled){ inp.disabled = false; inp.focus(); }
+    if (inp.disabled){ inp.disabled = false; focusGame(); }
   } else {
     $('#intro').hidden = true; cd.hidden = true;
-    if (inp.disabled && t < room.endsAt){ inp.disabled = false; inp.focus(); }
+    if (inp.disabled && t < room.endsAt){ inp.disabled = false; focusGame(); }
   }
   const left = Math.max(0, Math.min(room.endsAt - room.startsAt, room.endsAt - t));
   const sec = Math.ceil(left / 1000);
@@ -426,7 +519,7 @@ function clearInput(){
     fresh.value = ''; bindInput(fresh);
     old.after(fresh); inp = fresh; fresh.focus(); old.remove();
   } else {
-    inp.blur(); inp.value = ''; if (!inp.disabled) inp.focus();
+    inp.blur(); inp.value = ''; focusGame();
   }
 }
 
