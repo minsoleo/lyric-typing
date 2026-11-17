@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>판 뒤집기</title>
+<title>판 뒤집기 운동회</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Do+Hyeon&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&display=swap" rel="stylesheet">
 <script>
 /* 타자연습과 같은 밝은/어두운 설정을 그대로 씀 */
 (function(){
@@ -17,147 +17,236 @@
 })();
 </script>
 <style>
+/* ================= 색 (어두운 버전 = 저녁 운동장 / 밝은 버전 = 맑은 날 운동장) ================= */
 :root{
   color-scheme:dark;
-  --bg:#050a1c; --panel:#0c1531; --panel2:#142046; --line:#213167; --hover:#1b2b5c; --field:#040817;
-  --text:#eef2ff; --dim:#9fb0d8; --accent:#4f7cff; --accent-hover:#3d69ea; --accent2:#38d6f5;
-  --ok:#4ade80; --bad:#f87171; --pend:#fbbf24;
-  --red:#e5484d; --red-soft:rgba(229,72,77,.18); --blue:#2f80ed; --blue-soft:rgba(47,128,237,.2);
-  --glow1:rgba(79,124,255,.22); --glow2:rgba(244,63,94,.10); --shadow:0 10px 28px rgba(0,0,0,.4);
+  --sky1:#060d26; --sky2:#14285e; --grass1:#123d27; --grass2:#164a2f; --chalk:rgba(255,255,255,.22);
+  --panel:rgba(9,17,42,.86); --panel2:#17275a; --line:#2b3f7d; --hover:#20356f; --field:#060c22;
+  --text:#f2f5ff; --dim:#a9b6dc; --accent:#ffc928; --accent-text:#2a1d00; --accent2:#5fe1ff;
+  --ok:#5ce08a; --bad:#ff7b7b; --pend:#ffd166;
+  --red:#ef4b4f; --red2:#ff7a6b; --red-edge:#a92a2f; --red-soft:rgba(239,75,79,.2);
+  --blue:#2f7cf0; --blue2:#62a8ff; --blue-edge:#1a4fa8; --blue-soft:rgba(47,124,240,.22);
+  --tile:#fbf5e6; --tile-text:#1d2340; --tile-edge:#c9bc98;
+  --shadow:0 10px 26px rgba(0,0,0,.45);
 }
 :root[data-theme="light"]{
   color-scheme:light;
-  --bg:#ffffff; --panel:#f4f6fb; --panel2:#e6ebf7; --line:#d3dbee; --hover:#d8e0f3; --field:#ffffff;
-  --text:#111a33; --dim:#5b6785; --accent:#2f5fe0; --accent-hover:#234fc8; --accent2:#0e7fa8;
-  --ok:#15803d; --bad:#dc2626; --pend:#b45309;
-  --red:#dc3545; --red-soft:rgba(220,53,69,.12); --blue:#1d64d8; --blue-soft:rgba(29,100,216,.12);
-  --glow1:rgba(47,95,224,.10); --glow2:rgba(244,63,94,.06); --shadow:0 8px 22px rgba(30,50,110,.09);
+  --sky1:#7cc8ff; --sky2:#d9f1ff; --grass1:#69bd57; --grass2:#77c865; --chalk:rgba(255,255,255,.7);
+  --panel:rgba(255,255,255,.93); --panel2:#eef3ff; --line:#cfd9f2; --hover:#dfe8ff; --field:#ffffff;
+  --text:#14193a; --dim:#56628a; --accent:#ffb800; --accent-text:#2a1d00; --accent2:#0c7fb0;
+  --ok:#14843f; --bad:#d42f2f; --pend:#b35c00;
+  --red:#e23b3f; --red2:#ff6a5c; --red-edge:#a5252a; --red-soft:rgba(226,59,63,.12);
+  --blue:#1f6fe6; --blue2:#4f98ff; --blue-edge:#154c9e; --blue-soft:rgba(31,111,230,.12);
+  --tile:#fffdf6; --tile-text:#1d2340; --tile-edge:#d8cba6;
+  --shadow:0 8px 20px rgba(20,40,90,.16);
 }
+
 *{box-sizing:border-box}
 html,body{margin:0}
 body{min-height:100vh;color:var(--text);font-family:"Pretendard","Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;line-height:1.55;
-  background:radial-gradient(900px 520px at 88% -8%,var(--glow1),transparent 62%),radial-gradient(760px 520px at -12% 38%,var(--glow2),transparent 62%),var(--bg);background-attachment:fixed}
-header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 18px;border-bottom:1px solid var(--line);background:var(--bg)}
-header h1{margin:0;font:400 24px "Do Hyeon","Malgun Gothic",sans-serif}
+  background:
+    linear-gradient(transparent calc(34vh - 3px), var(--chalk) calc(34vh - 3px), var(--chalk) 34vh, transparent 34vh),
+    linear-gradient(var(--sky1), var(--sky2)) top / 100% 34vh no-repeat,
+    repeating-linear-gradient(90deg, var(--grass1) 0 90px, var(--grass2) 90px 180px);
+  background-attachment:fixed;background-color:var(--grass1)}
+.display{font-family:"Black Han Sans","Do Hyeon","Malgun Gothic",sans-serif;font-weight:400;letter-spacing:.5px}
+
+/* 만국기 */
+.bunting{position:fixed;top:0;left:0;right:0;height:30px;display:flex;justify-content:space-between;padding:0 6px;z-index:2;pointer-events:none;
+  background:linear-gradient(var(--chalk),var(--chalk)) 0 2px / 100% 2px no-repeat}
+.bunting i{width:20px;height:24px;margin-top:3px;clip-path:polygon(0 0,100% 0,50% 100%);animation:sway 3s ease-in-out infinite alternate;transform-origin:top center}
+.bunting i:nth-child(5n+1){background:#ef4b4f}.bunting i:nth-child(5n+2){background:#ffc928}.bunting i:nth-child(5n+3){background:#2f7cf0}
+.bunting i:nth-child(5n+4){background:#3fbf6a}.bunting i:nth-child(5n){background:#ffffff}
+.bunting i:nth-child(odd){animation-delay:-1.4s}
+@keyframes sway{from{transform:rotate(-6deg)}to{transform:rotate(6deg)}}
+@media(prefers-reduced-motion:reduce){.bunting i,.eq,.confetti i{animation:none !important}}
+
+header{position:relative;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:34px 20px 6px}
+header h1{margin:0;font-size:22px;text-shadow:0 2px 0 rgba(0,0,0,.25);color:#fff}
 header h1 a{color:inherit;text-decoration:none}
-header h1 span{color:var(--accent2)}
-main{max-width:1180px;margin:0 auto;padding:16px 16px 20px}
-section[hidden]{display:none}
-h2{font:400 28px "Do Hyeon","Malgun Gothic",sans-serif;margin:0 0 10px}
-h3{font-size:15px;margin:18px 0 8px;color:var(--dim)}
+:root[data-theme="light"] header h1{color:#123}
+main{position:relative;z-index:3;max-width:1180px;margin:0 auto;padding:10px 16px 20px}
+[hidden]{display:none !important}
+h3{font-size:15px;margin:16px 0 8px;color:var(--dim)}
 p{margin:6px 0}
 .dim{color:var(--dim);font-size:14px}
 .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 .space{justify-content:space-between}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px;box-shadow:var(--shadow)}
-button,.btn{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:9px 16px;cursor:pointer;text-decoration:none;display:inline-block;transition:transform .05s}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:var(--shadow);backdrop-filter:blur(6px)}
+
+button,.btn{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:9px 16px;cursor:pointer;text-decoration:none;display:inline-block;
+  box-shadow:0 3px 0 var(--line);transition:transform .06s,box-shadow .06s;white-space:nowrap}
 button:hover:not(:disabled),.btn:hover{background:var(--hover)}
-button:active:not(:disabled){transform:translateY(1px)}
+button:active:not(:disabled){transform:translateY(2px);box-shadow:0 1px 0 var(--line)}
 button:disabled{opacity:.45;cursor:not-allowed}
-button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent2);outline-offset:2px}
-button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
-button.primary:hover:not(:disabled){background:var(--accent-hover)}
-button.small{padding:5px 11px;font-size:14px}
-#themeBtn{width:40px;height:40px;padding:0;border-radius:50%;font-size:19px;line-height:1}
-input[type=text],select{font:inherit;color:var(--text);background:var(--field);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
-input[type=text]{width:100%}
-label{display:block;font-weight:700;margin:12px 0 6px}
-.msg{min-height:24px;font-size:14px;color:var(--pend);font-weight:700}
+button:focus-visible,input:focus-visible,.btn:focus-visible{outline:3px solid var(--accent2);outline-offset:2px}
+button.primary{background:var(--accent);border-color:#d99c00;color:var(--accent-text);font-weight:800;box-shadow:0 4px 0 #c08a00}
+button.primary:hover:not(:disabled){background:#ffd451}
+button.small{padding:5px 12px;font-size:14px}
+#themeBtn{width:42px;height:42px;padding:0;border-radius:50%;font-size:19px;line-height:1}
+input[type=text]{font:inherit;color:var(--text);background:var(--field);border:2px solid var(--line);border-radius:12px;padding:10px 12px;width:100%}
+input[type=text]:focus{border-color:var(--accent)}
+label{display:block;font-weight:800;margin:12px 0 6px}
+.msg{min-height:24px;font-size:14px;color:var(--pend);font-weight:800}
 
-/* 입장 화면 */
-.entry{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:6px}
-.entry .panel h3{margin-top:0;color:var(--text);font-size:18px}
-.code-input{font-size:28px !important;letter-spacing:10px;text-align:center;font-weight:800}
-.how{margin-top:16px}
+/* ================= 입장 ================= */
+.title{text-align:center;margin:4px 0 18px;color:#fff;text-shadow:0 3px 0 rgba(0,0,0,.3)}
+:root[data-theme="light"] .title{color:#13214f;text-shadow:0 3px 0 rgba(255,255,255,.7)}
+.title small{display:block;font:800 14px "Malgun Gothic",sans-serif;letter-spacing:4px;color:var(--accent)}
+:root[data-theme="light"] .title small{color:#b35c00}
+.title b{font-size:52px;line-height:1.1}
+.entry{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:12px}
+.entry .panel h3{margin-top:0;color:var(--text);font-size:19px}
+.code-input{font:400 30px "Black Han Sans",sans-serif !important;letter-spacing:12px;text-align:center}
 .how ol{margin:6px 0;padding-left:20px;line-height:1.9}
-@media(max-width:700px){.entry{grid-template-columns:1fr}}
+.name-row{max-width:380px;margin:0 auto;text-align:center}
+@media(max-width:700px){.entry{grid-template-columns:1fr}.title b{font-size:40px}}
 
-/* 대기실 */
+/* ================= 대기실 ================= */
 .codebox{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
-.codebox b{font:400 52px/1 "Do Hyeon","Malgun Gothic",sans-serif;letter-spacing:8px;color:var(--accent2)}
-.teams{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
-.team{border-radius:16px;padding:14px;border:2px solid var(--line);min-height:180px}
-.team.red{border-color:var(--red);background:var(--red-soft)}
-.team.blue{border-color:var(--blue);background:var(--blue-soft)}
-.team h3{margin:0 0 8px;font-size:18px;color:var(--text)}
-.team ul{list-style:none;margin:0 0 10px;padding:0}
-.team li{padding:5px 10px;border-radius:8px;background:var(--panel);margin-bottom:5px;font-weight:700}
-.team li.me{outline:2px solid var(--accent2)}
+.codebox b{font-size:54px;line-height:1;letter-spacing:8px;color:var(--accent);text-shadow:0 3px 0 rgba(0,0,0,.25)}
+.teams{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:14px}
+.tent{position:relative;border-radius:18px;padding:0 0 14px;background:var(--panel);border:3px solid var(--line);box-shadow:var(--shadow);overflow:hidden}
+.tent.red{border-color:var(--red)}
+.tent.blue{border-color:var(--blue)}
+/* 천막 지붕 (줄무늬) */
+.tent .roof{height:34px;display:flex;align-items:center;justify-content:center;color:#fff;font:400 20px "Black Han Sans",sans-serif;letter-spacing:1px}
+.tent.red .roof{background:repeating-linear-gradient(90deg,var(--red) 0 26px,var(--red2) 26px 52px)}
+.tent.blue .roof{background:repeating-linear-gradient(90deg,var(--blue) 0 26px,var(--blue2) 26px 52px)}
+.tent ul{list-style:none;margin:12px 14px 10px;padding:0;min-height:110px}
+.tent li{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:6px 10px;border-radius:10px;background:var(--panel2);margin-bottom:6px;font-weight:800}
+.tent li.me{outline:3px solid var(--accent)}
+.tent button{margin:0 14px}
+.badge{font-size:12px;font-weight:800;padding:1px 8px;border-radius:99px;background:var(--accent);color:var(--accent-text)}
 .settings{display:flex;gap:18px;flex-wrap:wrap;align-items:flex-end;margin-top:14px}
-.seg{display:inline-flex;border:1px solid var(--line);border-radius:10px;overflow:hidden}
-.seg button{border:0;border-radius:0;background:var(--panel2)}
-.seg button.on{background:var(--accent);color:#fff;font-weight:700}
+.seg{display:inline-flex;gap:6px}
+.seg button.on{background:var(--accent);border-color:#d99c00;color:var(--accent-text);font-weight:800;box-shadow:0 3px 0 #c08a00}
 
-/* 게임 */
+/* ================= 게임 ================= */
 body[data-view="game"] header{display:none}
-body[data-view="game"] main{padding-top:10px;padding-bottom:8px}
-.scorebar{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:10px;margin-bottom:8px}
-.score{display:flex;align-items:center;gap:10px;font-weight:800;font-size:20px}
-.score.blue{justify-content:flex-end}
-.score i{display:inline-block;min-width:54px;text-align:center;padding:2px 10px;border-radius:10px;color:#fff;font-style:normal;font-size:24px}
-.score.red i{background:var(--red)}
-.score.blue i{background:var(--blue)}
-.timer{font:400 34px/1 "Do Hyeon","Malgun Gothic",sans-serif;font-variant-numeric:tabular-nums;text-align:center;min-width:90px}
-.timer.hurry{color:var(--bad)}
-.myteam{font-size:13px;color:var(--dim);text-align:center}
-#board{display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(7,1fr);gap:6px;height:calc(100vh - 205px);min-height:330px}
-.card{display:flex;align-items:center;justify-content:center;text-align:center;padding:3px 5px;border-radius:10px;background:var(--panel);border:1px solid var(--line);
-  font-weight:800;font-size:clamp(14px,1.55vw,21px);line-height:1.2;word-break:keep-all;overflow:hidden;user-select:none;transition:background .2s,color .2s}
-#board.sent .card{font-size:clamp(11px,1.02vw,15px);font-weight:700}
-.card.red{background:var(--red);border-color:var(--red);color:#fff}
-.card.blue{background:var(--blue);border-color:var(--blue);color:#fff}
-.card.hit{outline:3px solid var(--accent2);outline-offset:-3px}
-.card.flip{animation:flip .35s ease-out}
-@keyframes flip{0%{transform:rotateY(90deg) scale(.9)}100%{transform:rotateY(0) scale(1)}}
-.typebar{display:flex;gap:10px;align-items:center;margin-top:8px}
-#flipInput{font-size:20px;font-weight:700}
+body[data-view="game"] main{max-width:1560px;padding-top:30px;padding-bottom:8px}
+.arena{display:grid;grid-template-columns:190px minmax(0,1fr) 190px;gap:14px;align-items:start}
+.roster{background:var(--panel);border:3px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
+.roster.red{border-color:var(--red)}
+.roster.blue{border-color:var(--blue)}
+.roster .roof{height:30px;display:flex;align-items:center;justify-content:center;color:#fff;font:400 17px "Black Han Sans",sans-serif}
+.roster.red .roof{background:repeating-linear-gradient(90deg,var(--red) 0 20px,var(--red2) 20px 40px)}
+.roster.blue .roof{background:repeating-linear-gradient(90deg,var(--blue) 0 20px,var(--blue2) 20px 40px)}
+.roster .ours{display:none;text-align:center;font-weight:800;font-size:13px;padding:4px;background:var(--accent);color:var(--accent-text)}
+.roster.mine .ours{display:block}
+.roster.mine{box-shadow:0 0 0 4px rgba(255,201,40,.35),var(--shadow)}
+.roster ul{list-style:none;margin:0;padding:8px;max-height:calc(100vh - 140px);overflow:auto}
+.roster li{display:flex;justify-content:space-between;gap:6px;padding:6px 8px;border-radius:9px;font-weight:800;font-size:14px;background:var(--panel2);margin-bottom:5px}
+.roster li.me{outline:2px solid var(--accent)}
+.roster li b{font-variant-numeric:tabular-nums}
+
+.scoreboard{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:12px}
+.teamscore{display:flex;align-items:center;gap:12px;padding:6px 14px;border-radius:16px;color:#fff;box-shadow:0 4px 0 rgba(0,0,0,.25)}
+.teamscore.red{background:linear-gradient(90deg,var(--red),var(--red2))}
+.teamscore.blue{background:linear-gradient(270deg,var(--blue),var(--blue2));justify-content:flex-end}
+.teamscore span{font:400 18px "Black Han Sans",sans-serif;opacity:.95}
+.teamscore b{font:400 36px/1 "Black Han Sans",sans-serif;font-variant-numeric:tabular-nums}
+.watch{display:flex;flex-direction:column;align-items:center;justify-content:center;width:112px;height:56px;border-radius:30px;background:var(--panel);border:3px solid var(--accent);box-shadow:var(--shadow)}
+.watch b{font:400 28px/1 "Black Han Sans",sans-serif;font-variant-numeric:tabular-nums}
+.watch.hurry{border-color:var(--bad)}
+.watch.hurry b{color:var(--bad)}
+/* 줄다리기 점수 막대 */
+.rope{position:relative;height:14px;margin:10px 4px 10px;border-radius:99px;background:var(--blue);overflow:visible;box-shadow:inset 0 -3px 0 rgba(0,0,0,.2)}
+.rope .fill{position:absolute;left:0;top:0;bottom:0;width:50%;border-radius:99px;background:var(--red);transition:width .4s ease;box-shadow:inset 0 -3px 0 rgba(0,0,0,.2)}
+.rope .knot{position:absolute;top:50%;left:50%;width:22px;height:22px;margin:-11px 0 0 -11px;border-radius:50%;background:var(--accent);border:3px solid #fff;transition:left .4s ease}
+.rope .mid{position:absolute;left:50%;top:-6px;bottom:-6px;width:2px;background:#fff;opacity:.8}
+
+#board{display:grid;grid-template-columns:repeat(7,1fr);grid-template-rows:repeat(7,1fr);gap:7px;height:calc(100vh - 232px);min-height:330px;perspective:900px}
+.card{display:flex;align-items:center;justify-content:center;text-align:center;padding:3px 6px;border-radius:12px;
+  background:var(--tile);color:var(--tile-text);box-shadow:0 5px 0 var(--tile-edge);
+  font-weight:800;font-size:clamp(14px,1.35vw,22px);line-height:1.2;word-break:keep-all;overflow:hidden;user-select:none;transition:background .2s,color .2s,box-shadow .2s}
+#board.sent .card{font-size:clamp(11px,.92vw,15px)}
+.card.red{background:linear-gradient(var(--red2),var(--red));color:#fff;box-shadow:0 5px 0 var(--red-edge)}
+.card.blue{background:linear-gradient(var(--blue2),var(--blue));color:#fff;box-shadow:0 5px 0 var(--blue-edge)}
+.card.hit{outline:4px solid var(--accent);outline-offset:-2px}
+.card.flip{animation:flip .4s ease-out}
+@keyframes flip{0%{transform:rotateX(90deg)}60%{transform:rotateX(-12deg)}100%{transform:rotateX(0)}}
+
+.bottombar{display:grid;grid-template-columns:150px 1fr;gap:12px;margin-top:12px;align-items:stretch}
+.myflips{display:flex;flex-direction:column;align-items:center;justify-content:center;border-radius:14px;background:var(--panel);border:3px solid var(--accent);box-shadow:var(--shadow);line-height:1.1}
+.myflips small{font-size:12px;font-weight:800;color:var(--dim)}
+.myflips b{font:400 26px "Black Han Sans",sans-serif}
+.typebar{display:flex;gap:10px;align-items:center;padding:7px;border-radius:14px;background:var(--panel);border:3px solid var(--line);box-shadow:var(--shadow)}
+body[data-team="red"] .typebar{border-color:var(--red)}
+body[data-team="blue"] .typebar{border-color:var(--blue)}
+.typebar .tag{flex:none;padding:6px 10px;border-radius:10px;color:#fff;font:400 15px "Black Han Sans",sans-serif}
+body[data-team="red"] .typebar .tag{background:var(--red)}
+body[data-team="blue"] .typebar .tag{background:var(--blue)}
+#flipInput{font-size:19px;font-weight:800;border:0;background:transparent;padding:6px 4px}
+#flipInput:focus{outline:none}
 #flipInput:disabled{opacity:.5}
-#gameMsg{min-width:210px;text-align:right}
+#gameMsg{flex:none;min-width:150px;text-align:right}
 #gameMsg.good{color:var(--ok)}
 .shake{animation:shake .3s}
 @keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
-.countdown{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font:400 160px/1 "Do Hyeon","Malgun Gothic",sans-serif;color:var(--accent2);background:rgba(0,0,0,.35);z-index:10;pointer-events:none}
-.countdown[hidden]{display:none}
-@media(prefers-reduced-motion:reduce){.card.flip,.shake{animation:none}}
+@media(max-width:1000px){.arena{grid-template-columns:1fr}.roster{display:none}.bottombar{grid-template-columns:1fr}.myflips{flex-direction:row;gap:10px;padding:4px}}
 
-/* 결과 */
-.result{text-align:center}
-.result .big{font:400 46px/1.2 "Do Hyeon","Malgun Gothic",sans-serif;margin:6px 0}
+/* 시작 전 팀 소개 + 3·2·1 */
+.overlay{position:fixed;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:20px;background:rgba(3,8,24,.72);backdrop-filter:blur(3px)}
+.overlay[hidden]{display:none}
+.intro .headband{display:inline-block;padding:10px 46px;color:#fff;font:400 54px/1.1 "Black Han Sans",sans-serif;transform:rotate(-2deg);box-shadow:0 8px 0 rgba(0,0,0,.25);
+  clip-path:polygon(0 0,100% 0,96% 50%,100% 100%,0 100%,4% 50%)}
+.intro.red .headband{background:var(--red)}
+.intro.blue .headband{background:var(--blue)}
+.intro p{color:#fff;font-weight:800;font-size:18px;margin:18px 0 8px}
+.chips{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;max-width:760px}
+.chips span{padding:6px 14px;border-radius:99px;font-weight:800;font-size:17px;color:#fff}
+.chips.red span{background:var(--red)}
+.chips.blue span{background:var(--blue)}
+.chips span.me{background:var(--accent) !important;color:var(--accent-text)}
+.intro .vs{color:var(--accent);font:400 30px "Black Han Sans",sans-serif;margin:16px 0 4px}
+.intro .soon{color:#cfd8ff;font-size:15px;margin-top:18px}
+.count{font:400 170px/1 "Black Han Sans",sans-serif;color:var(--accent);text-shadow:0 8px 0 rgba(0,0,0,.35)}
+.count.go{font-size:120px;color:#fff}
+
+/* ================= 결과 ================= */
+.result{text-align:center;position:relative;overflow:hidden}
+.result .big{font-size:52px;line-height:1.2;margin:8px 0}
 .result .big.red{color:var(--red)}
 .result .big.blue{color:var(--blue)}
-.final{display:flex;justify-content:center;gap:16px;margin:12px 0;font-size:22px;font-weight:800}
-.final span{padding:6px 18px;border-radius:12px;color:#fff}
+.final{display:flex;justify-content:center;gap:14px;margin:10px 0;font:400 26px "Black Han Sans",sans-serif}
+.final span{padding:6px 22px;border-radius:14px;color:#fff;box-shadow:0 4px 0 rgba(0,0,0,.2)}
 .final .r{background:var(--red)}
 .final .b{background:var(--blue)}
-.mvp{font-size:18px;font-weight:800;color:var(--pend);margin:10px 0}
+.mvp{display:inline-flex;align-items:center;gap:10px;margin:12px 0;padding:8px 18px;border-radius:99px;background:var(--accent);color:var(--accent-text);font-weight:800;font-size:18px;box-shadow:0 4px 0 #c08a00}
+.mvp:empty{display:none}
 .result .teams{text-align:left}
-.result .team li{display:flex;justify-content:space-between}
+.confetti{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.confetti i{position:absolute;top:-20px;width:10px;height:16px;border-radius:2px;animation:fall 2.6s linear forwards}
+@keyframes fall{to{transform:translateY(560px) rotate(540deg);opacity:.2}}
 </style>
 </head>
 <body data-view="entry">
+<div class="bunting" aria-hidden="true" id="bunting"></div>
 <header>
-  <h1><a href="./">🎵 가사 <span>타자연습</span></a> · 🎮 판 뒤집기</h1>
+  <h1 class="display"><a href="./">🎵 가사 타자연습</a></h1>
   <div class="row">
     <button id="themeBtn" type="button"></button>
-    <a class="btn" href="./" style="padding:6px 12px;font-size:14px">타자연습으로</a>
+    <a class="btn small" href="./">타자연습으로</a>
   </div>
 </header>
 <main>
 
 <!-- 입장 -->
 <section id="v-entry">
-  <h2>판 뒤집기 (팀전)</h2>
-  <p class="dim">판에 있는 글을 똑같이 치면 그 카드가 우리 팀 색으로 뒤집혀요. 시간이 끝났을 때 카드가 많은 팀이 이겨요.</p>
-  <label for="nameInput">내 닉네임</label>
-  <input type="text" id="nameInput" maxlength="10" placeholder="예: 민솔" style="max-width:320px" autocomplete="off">
+  <div class="title display"><small>TYPING SPORTS DAY</small><b>판 뒤집기 대운동회</b></div>
+  <div class="name-row">
+    <label for="nameInput" style="margin-top:0;color:#fff;text-shadow:0 1px 2px rgba(0,0,0,.4)">내 닉네임</label>
+    <input type="text" id="nameInput" maxlength="10" placeholder="예: 민솔" autocomplete="off" style="text-align:center;font-weight:800">
+  </div>
   <div class="entry">
     <div class="panel">
-      <h3>방 만들기</h3>
+      <h3>🚩 방 만들기</h3>
       <p class="dim">내가 방장이 돼요. 방 코드를 친구들에게 알려 주세요.</p>
       <button class="primary" id="createBtn" style="margin-top:10px">새 방 만들기</button>
     </div>
     <div class="panel">
-      <h3>방 들어가기</h3>
+      <h3>🏃 방 들어가기</h3>
       <p class="dim">친구에게 받은 숫자 4자리를 넣어요.</p>
       <div class="row" style="margin-top:10px;flex-wrap:nowrap">
         <input type="text" id="codeInput" class="code-input" maxlength="4" inputmode="numeric" placeholder="0000" autocomplete="off">
@@ -165,81 +254,94 @@ body[data-view="game"] main{padding-top:10px;padding-bottom:8px}
       </div>
     </div>
   </div>
-  <p class="msg" id="entryMsg"></p>
+  <p class="msg" id="entryMsg" style="text-align:center"></p>
   <div class="panel how">
-    <b>이렇게 해요</b>
+    <b>경기 방법</b>
     <ol class="dim">
       <li>방장이 방을 만들고, 친구들은 방 코드로 들어와요.</li>
       <li>대기실에서 🟥 빨강 / 🟦 파랑 팀을 골라요.</li>
       <li>방장이 <b>짧은 단어</b> / <b>긴 문장</b>, 시간을 정하고 시작해요.</li>
-      <li>판에 있는 글을 똑같이 치고 <b>Enter</b>! 상대 팀 카드도 다시 뺏을 수 있어요.</li>
+      <li>판에 있는 글을 똑같이 치고 <b>Enter</b>! 상대 팀 판도 다시 뺏을 수 있어요.</li>
     </ol>
   </div>
 </section>
 
 <!-- 대기실 -->
 <section id="v-lobby" hidden>
-  <div class="row space">
-    <div class="codebox"><span class="dim">방 코드</span><b id="lobbyCode">----</b><button class="small" id="copyCode">코드 복사</button></div>
-    <button class="small" id="leaveBtn1">방 나가기</button>
-  </div>
-  <p class="dim" id="lobbyInfo"></p>
-
-  <div class="settings">
-    <div>
-      <label style="margin-top:0">판 종류</label>
-      <div class="seg" id="modeSeg">
-        <button data-mode="word">짧은 단어</button>
-        <button data-mode="sentence">긴 문장</button>
-      </div>
+  <div class="panel">
+    <div class="row space">
+      <div class="codebox"><span class="dim">방 코드</span><b class="display" id="lobbyCode">----</b><button class="small" id="copyCode">코드 복사</button></div>
+      <button class="small" id="leaveBtn1">방 나가기</button>
     </div>
-    <div>
-      <label style="margin-top:0">시간</label>
-      <div class="seg" id="secSeg">
-        <button data-sec="60">60초</button>
-        <button data-sec="90">90초</button>
-        <button data-sec="120">120초</button>
+    <p class="dim" id="lobbyInfo"></p>
+    <div class="settings">
+      <div>
+        <label style="margin-top:0">판 종류</label>
+        <div class="seg" id="modeSeg">
+          <button data-mode="word">짧은 단어</button>
+          <button data-mode="sentence">긴 문장</button>
+        </div>
       </div>
+      <div>
+        <label style="margin-top:0">경기 시간</label>
+        <div class="seg" id="secSeg">
+          <button data-sec="60">60초</button>
+          <button data-sec="90">90초</button>
+          <button data-sec="120">120초</button>
+        </div>
+      </div>
+      <span class="dim" id="hostNote"></span>
     </div>
-    <span class="dim" id="hostNote"></span>
   </div>
 
   <div class="teams">
-    <div class="team red"><h3>🟥 빨강 팀 <small id="redCount"></small></h3><ul id="redList"></ul><button id="toRed">빨강 팀으로</button></div>
-    <div class="team blue"><h3>🟦 파랑 팀 <small id="blueCount"></small></h3><ul id="blueList"></ul><button id="toBlue">파랑 팀으로</button></div>
+    <div class="tent red"><div class="roof">빨강 팀 <small id="redCount" style="margin-left:6px;font-size:15px"></small></div><ul id="redList"></ul><button id="toRed">빨강 팀으로</button></div>
+    <div class="tent blue"><div class="roof">파랑 팀 <small id="blueCount" style="margin-left:6px;font-size:15px"></small></div><ul id="blueList"></ul><button id="toBlue">파랑 팀으로</button></div>
   </div>
 
-  <div class="row" style="margin-top:16px">
+  <div class="row" style="margin-top:16px;justify-content:center">
     <button id="shuffleBtn">🔀 팀 섞기</button>
-    <button class="primary" id="startBtn">▶ 게임 시작</button>
-    <span class="msg" id="lobbyMsg"></span>
+    <button class="primary" id="startBtn" style="font-size:18px;padding:11px 28px">▶ 경기 시작</button>
   </div>
+  <p class="msg" id="lobbyMsg" style="text-align:center"></p>
 </section>
 
 <!-- 게임 -->
 <section id="v-game" hidden>
-  <div class="scorebar">
-    <div class="score red"><i id="redScore">0</i> 빨강</div>
-    <div><div class="timer" id="timer">0:00</div><div class="myteam" id="myTeamLabel"></div></div>
-    <div class="score blue">파랑 <i id="blueScore">0</i></div>
-  </div>
-  <div id="board"></div>
-  <div class="typebar">
-    <input type="text" id="flipInput" enterkeyhint="send" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="판에 있는 글을 똑같이 치고 Enter">
-    <span class="msg" id="gameMsg"></span>
+  <div class="arena">
+    <aside class="roster red" id="redSide"><div class="roof">빨강 팀</div><div class="ours">⭐ 우리 팀</div><ul id="redRoster"></ul></aside>
+    <div>
+      <div class="scoreboard">
+        <div class="teamscore red"><span>빨강</span><b id="redScore">0</b></div>
+        <div class="watch" id="watch"><b id="timer">0:00</b></div>
+        <div class="teamscore blue"><b id="blueScore">0</b><span>파랑</span></div>
+      </div>
+      <div class="rope" aria-hidden="true"><div class="fill" id="ropeFill"></div><div class="mid"></div><div class="knot" id="ropeKnot"></div></div>
+      <div id="board"></div>
+      <div class="bottombar">
+        <div class="myflips"><small>내가 뒤집은 판</small><b id="myFlips">0장</b></div>
+        <div class="typebar">
+          <span class="tag" id="myTeamLabel">빨강 팀</span>
+          <input type="text" id="flipInput" enterkeyhint="send" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" placeholder="뒤집을 판의 글을 똑같이 치고 Enter">
+          <span class="msg" id="gameMsg"></span>
+          <button class="primary small" id="sendBtn" type="button">입력 ↵</button>
+        </div>
+      </div>
+    </div>
+    <aside class="roster blue" id="blueSide"><div class="roof">파랑 팀</div><div class="ours">⭐ 우리 팀</div><ul id="blueRoster"></ul></aside>
   </div>
 </section>
-<div class="countdown" id="countdown" hidden></div>
 
 <!-- 결과 -->
 <section id="v-result" hidden>
   <div class="panel result">
-    <div class="big" id="winText"></div>
+    <div class="confetti" id="confetti"></div>
+    <div class="big display" id="winText"></div>
     <div class="final"><span class="r" id="finalRed"></span><span class="b" id="finalBlue"></span></div>
     <div class="mvp" id="mvpText"></div>
     <div class="teams">
-      <div class="team red"><h3>🟥 빨강 팀</h3><ul id="resRed"></ul></div>
-      <div class="team blue"><h3>🟦 파랑 팀</h3><ul id="resBlue"></ul></div>
+      <div class="tent red"><div class="roof">빨강 팀</div><ul id="resRed"></ul></div>
+      <div class="tent blue"><div class="roof">파랑 팀</div><ul id="resBlue"></ul></div>
     </div>
     <div class="row" style="justify-content:center;margin-top:16px">
       <button class="primary" id="againBtn">🔁 한 판 더</button>
@@ -251,6 +353,18 @@ body[data-view="game"] main{padding-top:10px;padding-bottom:8px}
 </section>
 
 </main>
+
+<!-- 시작 전: 내 팀 소개 → 3·2·1 → 출발! -->
+<div class="overlay intro" id="intro" hidden>
+  <div class="headband" id="introTeam">빨강 팀</div>
+  <p>우리 팀</p>
+  <div class="chips" id="introMates"></div>
+  <div class="vs">VS</div>
+  <div class="chips" id="introFoes"></div>
+  <div class="soon">잠시 후 경기가 시작돼요</div>
+</div>
+<div class="overlay" id="countdown" hidden><div class="count" id="countNum">3</div></div>
+
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="flip-logic.js"></script>

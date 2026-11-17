@@ -20,6 +20,12 @@ $('#themeBtn').onclick = () => {
 };
 applyTheme();
 
+/* 만국기 */
+(function(){
+  const b = $('#bunting'), n = Math.max(16, Math.round(window.innerWidth / 34));
+  for (let i = 0; i < n; i++) b.appendChild(document.createElement('i'));
+})();
+
 /* ---------- 저장 (닉네임은 계속, 내 번호·방은 이 탭에서만) ---------- */
 const store = {
   get(k, session){ try { return (session ? sessionStorage : localStorage).getItem(k); } catch (e) { return null; } },
@@ -92,7 +98,12 @@ async function joinRoom(c, silent){
     if (!r || !r.players){ entryMsg('그 코드의 방이 없어요. 숫자를 다시 확인해 주세요.'); store.del('flip.code', true); return; }
     const ps = r.players;
     if (!ps[pid] && Object.keys(ps).length >= MAX_PLAYERS){ entryMsg(`방이 꽉 찼어요. (최대 ${MAX_PLAYERS}명)`); return; }
-    const mine = ps[pid] ? Object.assign({}, ps[pid], {name}) : {name, team: L.smallerTeam(ps), joinedAt: now(), flips: 0};
+    // 새로고침으로 잠깐 빠졌던 거라면, 이 탭에 저장해 둔 내 팀·뒤집은 수를 되살림
+    let saved = null;
+    try { const s = JSON.parse(store.get('flip.me', true) || 'null'); if (s && s.code === c) saved = s.p; } catch (e) {}
+    const mine = ps[pid] ? Object.assign({}, ps[pid], {name})
+      : saved ? Object.assign({}, saved, {name})
+      : {name, team: L.smallerTeam(ps), joinedAt: now(), flips: 0};
     await db.ref(`rooms/${c}/players/${pid}`).set(mine);
     entryMsg('');
     enterRoom(c, name);
@@ -151,7 +162,7 @@ function onRoom(snap){
   room = snap.val();
   if (!room){ entryMsg('방이 사라졌어요.'); roomRef && roomRef.off('value', onRoom); roomRef = null; code = null; store.del('flip.code', true); stopTimer(); view('entry'); return; }
   const ps = players();
-  if (ps[pid]) me.saved = ps[pid];
+  if (ps[pid]){ me.saved = ps[pid]; store.set('flip.me', JSON.stringify({code, p: ps[pid]}), true); }
   else if (me.saved && !leaving){ roomRef.child('players/' + pid).transaction(cur => cur || me.saved); return; }
   // 방장이 나갔으면 가장 먼저 들어온 사람이 방장
   if (!ps[room.host] && L.nextHost(ps) === pid) roomRef.child('host').set(pid);
@@ -216,7 +227,7 @@ function startRound(){
   const s = room.settings || {mode: 'word', seconds: 90};
   const pool = window.FLIP_WORDS[s.mode] || window.FLIP_WORDS.word;
   const cards = L.pickCards(pool, BOARD, Math.random).map(t => ({t, o: '', by: ''}));
-  const startsAt = now() + 3500;
+  const startsAt = now() + 7000;   // 팀 소개 3.5초 + 3·2·1 3.5초
   const up = {state: 'playing', round: (room.round || 0) + 1, cards, startsAt, endsAt: startsAt + (s.seconds || 90) * 1000};
   for (const id of Object.keys(players())) up[`players/${id}/flips`] = 0;
   roomRef.update(up);
@@ -253,28 +264,72 @@ function renderGame(){
   });
   const t = L.tally(cards);
   $('#redScore').textContent = t.red; $('#blueScore').textContent = t.blue;
+  // 줄다리기 막대: 빨강 비율만큼 빨강이 차고, 가운데 매듭이 이기는 쪽으로 끌려감
+  const owned = t.red + t.blue, ratio = owned ? t.red / owned : 0.5;
+  $('#ropeFill').style.width = (ratio * 100) + '%';
+  $('#ropeKnot').style.left = (ratio * 100) + '%';
   const team = myTeam();
-  $('#myTeamLabel').textContent = `나는 ${team === 'red' ? '🟥' : '🟦'} ${TEAM_NAME[team]} 팀`;
+  document.body.dataset.team = team;
+  $('#myTeamLabel').textContent = `${TEAM_NAME[team]} 팀`;
+  $('#redSide').classList.toggle('mine', team === 'red');
+  $('#blueSide').classList.toggle('mine', team === 'blue');
+  fillRoster($('#redRoster'), 'red'); fillRoster($('#blueRoster'), 'blue');
+  $('#myFlips').textContent = ((players()[pid] || {}).flips || 0) + '장';
   highlight();
   startTimer();
 }
+function fillRoster(ul, team){
+  ul.textContent = '';
+  for (const [id, p] of listPlayers(team, true)){
+    const li = document.createElement('li');
+    if (id === pid) li.className = 'me';
+    const n = document.createElement('span'); n.textContent = p.name + (id === pid ? ' (나)' : '');
+    const f = document.createElement('b'); f.textContent = p.flips || 0;
+    li.append(n, f); ul.appendChild(li);
+  }
+}
+function chips(el, team){
+  el.textContent = ''; el.className = 'chips ' + team;
+  for (const [id, p] of listPlayers(team)){
+    const s = document.createElement('span');
+    s.textContent = p.name + (id === pid ? ' (나)' : '');
+    if (id === pid) s.className = 'me';
+    el.appendChild(s);
+  }
+  if (!el.children.length){ const s = document.createElement('span'); s.textContent = '아무도 없어요'; s.style.opacity = '.6'; el.appendChild(s); }
+}
+function showIntro(){
+  const team = myTeam(), foe = team === 'red' ? 'blue' : 'red', box = $('#intro');
+  box.className = 'overlay intro ' + team;
+  $('#introTeam').textContent = `나는 ${TEAM_NAME[team]} 팀!`;
+  chips($('#introMates'), team);
+  chips($('#introFoes'), foe);
+  box.hidden = false;
+}
 
 function startTimer(){ if (!timer){ tick(); timer = setInterval(tick, 200); } }
-function stopTimer(){ clearInterval(timer); timer = null; $('#countdown').hidden = true; }
+function stopTimer(){ clearInterval(timer); timer = null; $('#countdown').hidden = true; $('#intro').hidden = true; }
 function tick(){
   if (!room || room.state !== 'playing') return;
-  const t = now(), cd = $('#countdown');
-  if (t < room.startsAt){
-    cd.hidden = false; cd.textContent = Math.ceil((room.startsAt - t) / 1000);
+  const t = now(), cd = $('#countdown'), num = $('#countNum'), until = room.startsAt - t;
+  if (until > 3200){                       // 1) 팀 소개
+    showIntro(); cd.hidden = true; inp.disabled = true;
+  } else if (until > 0){                    // 2) 3·2·1
+    $('#intro').hidden = true;
+    cd.hidden = false; num.className = 'count'; num.textContent = Math.ceil(until / 1000);
     inp.disabled = true;
+  } else if (until > -700){                 // 3) 출발!
+    $('#intro').hidden = true;
+    cd.hidden = false; num.className = 'count go'; num.textContent = '출발!';
+    if (inp.disabled){ inp.disabled = false; inp.focus(); }
   } else {
-    if (!cd.hidden){ cd.hidden = true; inp.disabled = false; inp.focus(); }
+    $('#intro').hidden = true; cd.hidden = true;
     if (inp.disabled && t < room.endsAt){ inp.disabled = false; inp.focus(); }
   }
   const left = Math.max(0, Math.min(room.endsAt - room.startsAt, room.endsAt - t));
   const sec = Math.ceil(left / 1000);
   $('#timer').textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
-  $('#timer').classList.toggle('hurry', sec <= 10);
+  $('#watch').classList.toggle('hurry', sec <= 10);
   if (t >= room.endsAt){
     inp.disabled = true;
     // 시간이 끝나면 방장이 게임을 끝냄 (방장이 없으면 2초 뒤 누구든)
@@ -324,6 +379,7 @@ function submit(){
     } else gameMsg('한발 늦었어요');
   }, false);
 }
+$('#sendBtn').onclick = () => { submit(); if (!inp.disabled) inp.focus(); };
 function shake(){ inp.classList.remove('shake'); void inp.offsetWidth; inp.classList.add('shake'); }
 
 /* 한글 조립 중에 Enter를 누르면 글자가 확정된 뒤에 보내기 */
@@ -363,7 +419,21 @@ function renderResult(){
   const win = t.red === t.blue ? '' : t.red > t.blue ? 'red' : 'blue';
   const w = $('#winText');
   w.className = 'big ' + win;
-  w.textContent = !win ? '🤝 무승부!' : `${win === 'red' ? '🟥' : '🟦'} ${TEAM_NAME[win]} 팀 승리!` + (win === myTeam() ? ' 🎉' : '');
+  w.textContent = !win ? '🤝 무승부!' : `🏆 ${TEAM_NAME[win]} 팀 승리!` + (win === myTeam() ? ' 🎉' : '');
+  // 꽃가루 (결과 화면이 처음 열릴 때 한 번만)
+  const cf = $('#confetti');
+  if (cf.dataset.round !== String(room.round)){
+    cf.dataset.round = room.round; cf.textContent = '';
+    const colors = win === 'red' ? ['#ef4b4f', '#ff7a6b', '#ffc928', '#fff'] : win === 'blue' ? ['#2f7cf0', '#62a8ff', '#ffc928', '#fff'] : ['#ef4b4f', '#2f7cf0', '#ffc928', '#3fbf6a'];
+    for (let i = 0; i < 60; i++){
+      const c = document.createElement('i');
+      c.style.left = Math.random() * 100 + '%';
+      c.style.background = colors[i % colors.length];
+      c.style.animationDelay = (Math.random() * 1.2) + 's';
+      c.style.animationDuration = (2 + Math.random() * 1.5) + 's';
+      cf.appendChild(c);
+    }
+  }
   $('#finalRed').textContent = `빨강 ${t.red}장`;
   $('#finalBlue').textContent = `파랑 ${t.blue}장`;
   const m = L.mvp(players());
