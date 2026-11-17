@@ -210,6 +210,7 @@ function renderLobby(){
   $('#toBlue').disabled = myTeam() === 'blue';
   $('#shuffleBtn').hidden = !host;
   $('#startBtn').hidden = !host;
+  moveChat('lobbyChatSlot');
   // 준비: 방장 빼고 모두 준비해야 시작 버튼이 노랗게 켜짐
   const r = readyCount(), meReady = !!(players()[pid] || {}).ready;
   const rb = $('#readyBtn');
@@ -318,10 +319,21 @@ function renderGame(){
   $('#blueSide').classList.toggle('mine', team === 'blue');
   fillRoster($('#redRoster'), 'red'); fillRoster($('#blueRoster'), 'blue');
   $('#myFlips').textContent = ((players()[pid] || {}).flips || 0) + '장';
-  renderChat();
+  moveChat('gameChatSlot');
   highlight();
   startTimer();
 }
+
+// 채팅 상자를 지금 화면(대기실/게임)의 자리로 옮김
+function moveChat(slotId){
+  const box = $('#chatBox'), slot = $('#' + slotId);
+  if (box.parentNode !== slot){ slot.appendChild(box); chatSig = ''; }
+  $('#chatHint').textContent = slotId === 'gameChatSlot' ? 'Esc: 게임으로' : '';
+  renderChat();
+}
+$('#gameLeaveBtn').onclick = () => {
+  if (confirm('경기에서 나갈까요?\n지금까지 뒤집은 판은 팀 색 그대로 남아요.')) leaveRoom();
+};
 
 /* ---------- 채팅 ---------- */
 const CHAT_KEEP = 50;            // 최근 50개만 보관
@@ -335,7 +347,7 @@ function renderChat(){
   const log = $('#chatLog');
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 30;
   log.textContent = '';
-  if (!keys.length){ const p = document.createElement('p'); p.className = 'empty'; p.textContent = '작전을 짜 보세요! 예) 오른쪽 줄 지켜!'; log.appendChild(p); }
+  if (!keys.length){ const p = document.createElement('p'); p.className = 'empty'; p.textContent = document.body.dataset.view === 'game' ? '작전을 짜 보세요! 예) 오른쪽 줄 지켜!' : '인사해 보세요! 예) 한 판 ㄱㄱ'; log.appendChild(p); }
   for (const k of keys.slice(-CHAT_KEEP)){
     const m = chat[k] || {}, p = document.createElement('p'), b = document.createElement('b');
     b.className = m.team === 'blue' ? 'blue' : 'red';

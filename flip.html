@@ -188,6 +188,14 @@ body[data-team="blue"] .typebar .tag{background:var(--blue)}
 .side{display:flex;flex-direction:column;gap:12px;height:calc(100vh - 42px);min-height:0}
 .side .roster{flex:none}
 .side .roster ul{max-height:30vh}
+.chatslot{display:flex;min-height:0}
+.side .chatslot{flex:1;min-height:150px}
+.lobbywrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;margin-top:14px;align-items:stretch}
+.lobbywrap .teams{margin-top:0}
+.lobbywrap .chatslot{min-height:260px}
+.bottombar{grid-template-columns:150px 1fr auto}
+#gameLeaveBtn{align-self:center}
+@media(max-width:1000px){.lobbywrap{grid-template-columns:1fr}.lobbywrap .chatslot{height:240px}}
 .chat{flex:1;min-height:150px;display:flex;flex-direction:column;background:var(--panel);border:3px solid var(--line);border-radius:18px;overflow:hidden;box-shadow:var(--shadow)}
 .chat-head{display:flex;justify-content:space-between;align-items:center;padding:5px 10px;font:400 16px "Black Han Sans",sans-serif;background:var(--panel2)}
 .chat-head small{font:700 11px "Malgun Gothic",sans-serif;color:var(--dim)}
@@ -317,9 +325,12 @@ body[data-team="blue"] .typebar .tag{background:var(--blue)}
     </div>
   </div>
 
-  <div class="teams">
-    <div class="tent red"><div class="roof">빨강 팀 <small id="redCount" style="margin-left:6px;font-size:15px"></small></div><ul id="redList"></ul><button id="toRed">빨강 팀으로</button></div>
-    <div class="tent blue"><div class="roof">파랑 팀 <small id="blueCount" style="margin-left:6px;font-size:15px"></small></div><ul id="blueList"></ul><button id="toBlue">파랑 팀으로</button></div>
+  <div class="lobbywrap">
+    <div class="teams">
+      <div class="tent red"><div class="roof">빨강 팀 <small id="redCount" style="margin-left:6px;font-size:15px"></small></div><ul id="redList"></ul><button id="toRed">빨강 팀으로</button></div>
+      <div class="tent blue"><div class="roof">파랑 팀 <small id="blueCount" style="margin-left:6px;font-size:15px"></small></div><ul id="blueList"></ul><button id="toBlue">파랑 팀으로</button></div>
+    </div>
+    <div class="chatslot" id="lobbyChatSlot"></div>
   </div>
 
   <div class="row" style="margin-top:16px;justify-content:center">
@@ -350,14 +361,18 @@ body[data-team="blue"] .typebar .tag{background:var(--blue)}
           <span class="msg" id="gameMsg"></span>
           <button class="primary small" id="sendBtn" type="button">입력 ↵</button>
         </div>
+        <button class="small" id="gameLeaveBtn" type="button" title="경기에서 나가기">🚪 나가기</button>
       </div>
     </div>
     <div class="side">
       <aside class="roster blue" id="blueSide"><div class="roof">파랑 팀</div><div class="ours">⭐ 우리 팀</div><ul id="blueRoster"></ul></aside>
-      <div class="chat">
-        <div class="chat-head">💬 채팅 <small>Esc: 게임으로</small></div>
-        <div id="chatLog" aria-live="polite"></div>
-        <input type="text" id="chatInput" maxlength="60" enterkeyhint="send" autocomplete="off" placeholder="채팅 치고 Enter">
+      <!-- 채팅 상자 하나를 대기실·게임 화면으로 옮겨 가며 씀 -->
+      <div class="chatslot" id="gameChatSlot">
+        <div class="chat" id="chatBox">
+          <div class="chat-head">💬 채팅 <small id="chatHint">Esc: 게임으로</small></div>
+          <div id="chatLog" aria-live="polite"></div>
+          <input type="text" id="chatInput" maxlength="60" enterkeyhint="send" autocomplete="off" placeholder="채팅 치고 Enter">
+        </div>
       </div>
     </div>
   </div>
