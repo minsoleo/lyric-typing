@@ -347,7 +347,6 @@ function renderChat(){
   const log = $('#chatLog');
   const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 30;
   log.textContent = '';
-  if (!keys.length){ const p = document.createElement('p'); p.className = 'empty'; p.textContent = document.body.dataset.view === 'game' ? '작전을 짜 보세요! 예) 오른쪽 줄 지켜!' : '인사해 보세요! 예) 한 판 ㄱㄱ'; log.appendChild(p); }
   for (const k of keys.slice(-CHAT_KEEP)){
     const m = chat[k] || {}, p = document.createElement('p'), b = document.createElement('b');
     b.className = m.team === 'blue' ? 'blue' : 'red';
@@ -539,6 +538,7 @@ function clearInput(){
 function renderResult(){
   stopTimer();
   view('result');
+  moveChat('resultChatSlot');
   const t = L.tally(room.cards || []);
   const win = t.red === t.blue ? '' : t.red > t.blue ? 'red' : 'blue';
   const w = $('#winText');

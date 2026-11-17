@@ -193,6 +193,8 @@ body[data-team="blue"] .typebar .tag{background:var(--blue)}
 .lobbywrap{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:16px;margin-top:14px;align-items:stretch}
 .lobbywrap .teams{margin-top:0}
 .lobbywrap .chatslot{min-height:260px}
+.result .chatslot{text-align:left;min-height:220px}
+.result .lobbywrap{position:relative;z-index:1}
 .bottombar{grid-template-columns:150px 1fr auto}
 #gameLeaveBtn{align-self:center}
 @media(max-width:1000px){.lobbywrap{grid-template-columns:1fr}.lobbywrap .chatslot{height:240px}}
@@ -385,9 +387,12 @@ body[data-team="blue"] .typebar .tag{background:var(--blue)}
     <div class="big display" id="winText"></div>
     <div class="final"><span class="r" id="finalRed"></span><span class="b" id="finalBlue"></span></div>
     <div class="mvp" id="mvpText"></div>
-    <div class="teams">
-      <div class="tent red"><div class="roof">빨강 팀</div><ul id="resRed"></ul></div>
-      <div class="tent blue"><div class="roof">파랑 팀</div><ul id="resBlue"></ul></div>
+    <div class="lobbywrap">
+      <div class="teams">
+        <div class="tent red"><div class="roof">빨강 팀</div><ul id="resRed"></ul></div>
+        <div class="tent blue"><div class="roof">파랑 팀</div><ul id="resBlue"></ul></div>
+      </div>
+      <div class="chatslot" id="resultChatSlot"></div>
     </div>
     <div class="row" style="justify-content:center;margin-top:16px">
       <button class="primary" id="againBtn">🔁 한 판 더</button>
