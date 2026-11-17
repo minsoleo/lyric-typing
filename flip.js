@@ -1,0 +1,382 @@
+/* 판 뒤집기: 화면 + Firebase 연결 */
+(function(){
+'use strict';
+const $ = s => document.querySelector(s);
+const L = window.FlipLogic;
+const MAX_PLAYERS = 16, BOARD = 49, OLD_ROOM_MS = 6 * 3600 * 1000;
+const TEAM_NAME = {red: '빨강', blue: '파랑'};
+
+/* ---------- 밝은/어두운 버전 (타자연습과 같은 설정 공유) ---------- */
+let theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
+function applyTheme(){
+  document.documentElement.dataset.theme = theme;
+  const b = $('#themeBtn'), label = theme === 'light' ? '어두운 버전으로 바꾸기' : '밝은 버전으로 바꾸기';
+  b.textContent = theme === 'light' ? '🌙' : '☀️';
+  b.title = label; b.setAttribute('aria-label', label);
+}
+$('#themeBtn').onclick = () => {
+  theme = theme === 'light' ? 'dark' : 'light'; applyTheme();
+  try { localStorage.setItem('lyricTyping.theme', theme); } catch (e) {}
+};
+applyTheme();
+
+/* ---------- 저장 (닉네임은 계속, 내 번호·방은 이 탭에서만) ---------- */
+const store = {
+  get(k, session){ try { return (session ? sessionStorage : localStorage).getItem(k); } catch (e) { return null; } },
+  set(k, v, session){ try { (session ? sessionStorage : localStorage).setItem(k, v); } catch (e) {} },
+  del(k, session){ try { (session ? sessionStorage : localStorage).removeItem(k); } catch (e) {} }
+};
+// 탭마다 다른 번호 → 같은 컴퓨터에서 창 두 개로도 두 사람처럼 할 수 있음
+let pid = store.get('flip.pid', true);
+if (!pid){ pid = 'p' + Math.random().toString(36).slice(2, 10); store.set('flip.pid', pid, true); }
+$('#nameInput').value = store.get('flip.name') || '';
+
+/* ---------- Firebase ---------- */
+const fbApp = firebase.initializeApp({databaseURL: 'https://lyric-typing-6ead1-default-rtdb.asia-southeast1.firebasedatabase.app'});
+const db = fbApp.database();
+let offset = 0;                                   // 내 컴퓨터 시계와 서버 시계 차이
+db.ref('.info/serverTimeOffset').on('value', s => { offset = s.val() || 0; });
+const now = () => Date.now() + offset;
+
+let code = null, roomRef = null, room = null, me = null, leaving = false;
+const view = name => {
+  document.body.dataset.view = name;
+  for (const s of document.querySelectorAll('main > section')) s.hidden = s.id !== 'v-' + name;
+};
+const isHost = () => room && room.host === pid;
+const players = () => (room && room.players) || {};
+const myTeam = () => (players()[pid] || {}).team || 'red';
+
+/* ---------- 입장 ---------- */
+function getName(){
+  const n = $('#nameInput').value.replace(/\s+/g, ' ').trim().slice(0, 10);
+  if (!n){ entryMsg('닉네임을 먼저 적어 주세요.'); $('#nameInput').focus(); return null; }
+  store.set('flip.name', n);
+  return n;
+}
+const entryMsg = m => { $('#entryMsg').textContent = m; };
+
+$('#createBtn').onclick = async () => {
+  const name = getName(); if (!name) return;
+  entryMsg('방을 만드는 중…');
+  setBusy(true);
+  try {
+    for (let i = 0; i < 12; i++){
+      const c = L.makeCode(Math.random);
+      const t = now();
+      const res = await db.ref('rooms/' + c).transaction(cur => {
+        if (cur && t - (cur.createdAt || 0) < OLD_ROOM_MS && cur.players) return;   // 쓰는 중인 방이면 다른 코드로
+        return {createdAt: t, host: pid, state: 'lobby', round: 0,
+                settings: {mode: 'word', seconds: 90},
+                players: {[pid]: {name, team: 'red', joinedAt: t, flips: 0}}};
+      });
+      if (res.committed){ entryMsg(''); return enterRoom(c, name); }
+    }
+    entryMsg('방을 만들지 못했어요. 다시 눌러 주세요.');
+  } catch (e) { connErr(e); }
+  finally { setBusy(false); }
+};
+
+$('#joinBtn').onclick = () => joinRoom($('#codeInput').value.trim());
+$('#codeInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#joinBtn').click(); });
+$('#codeInput').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4); });
+
+async function joinRoom(c, silent){
+  const name = getName(); if (!name) return;
+  if (!/^[0-9]{4}$/.test(c)){ entryMsg('방 코드는 숫자 4자리예요.'); return; }
+  if (!silent) entryMsg('들어가는 중…');
+  setBusy(true);
+  try {
+    const snap = await db.ref('rooms/' + c).once('value');
+    const r = snap.val();
+    if (!r || !r.players){ entryMsg('그 코드의 방이 없어요. 숫자를 다시 확인해 주세요.'); store.del('flip.code', true); return; }
+    const ps = r.players;
+    if (!ps[pid] && Object.keys(ps).length >= MAX_PLAYERS){ entryMsg(`방이 꽉 찼어요. (최대 ${MAX_PLAYERS}명)`); return; }
+    const mine = ps[pid] ? Object.assign({}, ps[pid], {name}) : {name, team: L.smallerTeam(ps), joinedAt: now(), flips: 0};
+    await db.ref(`rooms/${c}/players/${pid}`).set(mine);
+    entryMsg('');
+    enterRoom(c, name);
+  } catch (e) { connErr(e); }
+  finally { setBusy(false); }
+}
+function setBusy(b){ $('#createBtn').disabled = b; $('#joinBtn').disabled = b; }
+function connErr(e){
+  console.error(e);
+  entryMsg('서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요. (학교 인터넷이 막고 있을 수도 있어요)');
+}
+
+function enterRoom(c, name){
+  code = c; leaving = false;
+  roomRef = db.ref('rooms/' + c);
+  me = {name};
+  store.set('flip.code', c, true);
+  const pRef = roomRef.child('players/' + pid);
+  pRef.onDisconnect().remove();                    // 창을 닫으면 자동으로 방에서 빠짐
+  roomRef.on('value', onRoom);
+  $('#lobbyCode').textContent = c;
+}
+
+// 잠깐 인터넷이 끊겼다 돌아오면 다시 방에 들어감
+db.ref('.info/connected').on('value', s => {
+  if (!s.val() || !roomRef || leaving) return;
+  const pRef = roomRef.child('players/' + pid);
+  pRef.onDisconnect().remove();
+  if (me && me.saved) pRef.transaction(cur => cur || me.saved);
+});
+
+async function leaveRoom(){
+  if (!roomRef) return;
+  leaving = true;
+  roomRef.off('value', onRoom);
+  const ref = roomRef;
+  roomRef = null; room = null; code = null;
+  store.del('flip.code', true);
+  try {
+    await ref.child('players/' + pid).onDisconnect().cancel();
+    // 내가 마지막 사람이면 방을 통째로 지움
+    await ref.transaction(r => {
+      if (!r) return r;
+      if (r.players) delete r.players[pid];
+      if (!r.players || !Object.keys(r.players).length) return null;
+      return r;
+    });
+  } catch (e) { console.error(e); }
+  stopTimer();
+  view('entry');
+}
+$('#leaveBtn1').onclick = $('#leaveBtn2').onclick = leaveRoom;
+
+/* ---------- 방 상태가 바뀔 때마다 ---------- */
+function onRoom(snap){
+  room = snap.val();
+  if (!room){ entryMsg('방이 사라졌어요.'); roomRef && roomRef.off('value', onRoom); roomRef = null; code = null; store.del('flip.code', true); stopTimer(); view('entry'); return; }
+  const ps = players();
+  if (ps[pid]) me.saved = ps[pid];
+  else if (me.saved && !leaving){ roomRef.child('players/' + pid).transaction(cur => cur || me.saved); return; }
+  // 방장이 나갔으면 가장 먼저 들어온 사람이 방장
+  if (!ps[room.host] && L.nextHost(ps) === pid) roomRef.child('host').set(pid);
+  if (room.state === 'playing') renderGame();
+  else if (room.state === 'ended') renderResult();
+  else renderLobby();
+}
+
+/* ---------- 대기실 ---------- */
+function listPlayers(team, withFlips){
+  return Object.entries(players())
+    .filter(([, p]) => p.team === team)
+    .sort((a, b) => withFlips ? (b[1].flips || 0) - (a[1].flips || 0) : (a[1].joinedAt || 0) - (b[1].joinedAt || 0));
+}
+function fillList(ul, list, withFlips){
+  ul.textContent = '';
+  for (const [id, p] of list){
+    const li = document.createElement('li');
+    if (id === pid) li.className = 'me';
+    const n = document.createElement('span');
+    n.textContent = (id === room.host ? '👑 ' : '') + p.name + (id === pid ? ' (나)' : '');
+    li.appendChild(n);
+    if (withFlips){ const f = document.createElement('span'); f.textContent = (p.flips || 0) + '장'; li.appendChild(f); }
+    ul.appendChild(li);
+  }
+}
+function renderLobby(){
+  stopTimer();
+  view('lobby');
+  const s = room.settings || {mode: 'word', seconds: 90}, host = isHost();
+  const red = listPlayers('red'), blue = listPlayers('blue');
+  fillList($('#redList'), red); fillList($('#blueList'), blue);
+  $('#redCount').textContent = `(${red.length}명)`; $('#blueCount').textContent = `(${blue.length}명)`;
+  $('#lobbyInfo').textContent = `${red.length + blue.length}명 / 최대 ${MAX_PLAYERS}명 · 방장: ${(players()[room.host] || {}).name || '-'}`;
+  for (const b of $('#modeSeg').children){ b.classList.toggle('on', b.dataset.mode === s.mode); b.disabled = !host; }
+  for (const b of $('#secSeg').children){ b.classList.toggle('on', +b.dataset.sec === s.seconds); b.disabled = !host; }
+  $('#hostNote').textContent = host ? '방장만 바꿀 수 있어요' : '방장이 정해요';
+  $('#toRed').disabled = myTeam() === 'red';
+  $('#toBlue').disabled = myTeam() === 'blue';
+  $('#shuffleBtn').hidden = !host;
+  $('#startBtn').hidden = !host;
+  $('#lobbyMsg').textContent = host ? (!red.length || !blue.length ? '한 팀이 비어 있어요. 그래도 시작할 수 있어요.' : '') : '방장이 시작하면 바로 게임이 열려요.';
+}
+$('#modeSeg').onclick = e => { const b = e.target.closest('button'); if (b && isHost()) roomRef.child('settings/mode').set(b.dataset.mode); };
+$('#secSeg').onclick = e => { const b = e.target.closest('button'); if (b && isHost()) roomRef.child('settings/seconds').set(+b.dataset.sec); };
+$('#toRed').onclick = () => roomRef && roomRef.child(`players/${pid}/team`).set('red');
+$('#toBlue').onclick = () => roomRef && roomRef.child(`players/${pid}/team`).set('blue');
+$('#shuffleBtn').onclick = () => {
+  if (!isHost()) return;
+  const t = L.balanceTeams(Object.keys(players()), Math.random), up = {};
+  for (const [id, team] of Object.entries(t)) up[`players/${id}/team`] = team;
+  roomRef.update(up);
+};
+$('#copyCode').onclick = async () => {
+  try { await navigator.clipboard.writeText(code); $('#copyCode').textContent = '복사됨!'; }
+  catch (e) { $('#copyCode').textContent = '복사 실패'; }
+  setTimeout(() => { $('#copyCode').textContent = '코드 복사'; }, 1500);
+};
+
+function startRound(){
+  if (!isHost()) return;
+  const s = room.settings || {mode: 'word', seconds: 90};
+  const pool = window.FLIP_WORDS[s.mode] || window.FLIP_WORDS.word;
+  const cards = L.pickCards(pool, BOARD, Math.random).map(t => ({t, o: '', by: ''}));
+  const startsAt = now() + 3500;
+  const up = {state: 'playing', round: (room.round || 0) + 1, cards, startsAt, endsAt: startsAt + (s.seconds || 90) * 1000};
+  for (const id of Object.keys(players())) up[`players/${id}/flips`] = 0;
+  roomRef.update(up);
+}
+$('#startBtn').onclick = startRound;
+$('#againBtn').onclick = startRound;
+$('#toLobbyBtn').onclick = () => { if (isHost()) roomRef.update({state: 'lobby', cards: null, startsAt: null, endsAt: null}); };
+
+/* ---------- 게임 ---------- */
+let builtRound = -1, lastOwners = [], timer = null, endAsked = false;
+let inp = $('#flipInput');
+
+function renderGame(){
+  view('game');
+  const cards = room.cards || [];
+  const board = $('#board');
+  if (builtRound !== room.round){
+    builtRound = room.round; endAsked = false; lastOwners = [];
+    board.textContent = '';
+    board.classList.toggle('sent', (room.settings || {}).mode === 'sentence');
+    cards.forEach((c, i) => {
+      const d = document.createElement('div');
+      d.className = 'card'; d.dataset.i = i; d.textContent = c.t;
+      board.appendChild(d);
+    });
+    clearInput(); gameMsg('');
+  }
+  cards.forEach((c, i) => {
+    const d = board.children[i]; if (!d) return;
+    d.classList.toggle('red', c.o === 'red');
+    d.classList.toggle('blue', c.o === 'blue');
+    if (lastOwners[i] !== undefined && lastOwners[i] !== c.o){ d.classList.remove('flip'); void d.offsetWidth; d.classList.add('flip'); }
+    lastOwners[i] = c.o;
+  });
+  const t = L.tally(cards);
+  $('#redScore').textContent = t.red; $('#blueScore').textContent = t.blue;
+  const team = myTeam();
+  $('#myTeamLabel').textContent = `나는 ${team === 'red' ? '🟥' : '🟦'} ${TEAM_NAME[team]} 팀`;
+  highlight();
+  startTimer();
+}
+
+function startTimer(){ if (!timer){ tick(); timer = setInterval(tick, 200); } }
+function stopTimer(){ clearInterval(timer); timer = null; $('#countdown').hidden = true; }
+function tick(){
+  if (!room || room.state !== 'playing') return;
+  const t = now(), cd = $('#countdown');
+  if (t < room.startsAt){
+    cd.hidden = false; cd.textContent = Math.ceil((room.startsAt - t) / 1000);
+    inp.disabled = true;
+  } else {
+    if (!cd.hidden){ cd.hidden = true; inp.disabled = false; inp.focus(); }
+    if (inp.disabled && t < room.endsAt){ inp.disabled = false; inp.focus(); }
+  }
+  const left = Math.max(0, Math.min(room.endsAt - room.startsAt, room.endsAt - t));
+  const sec = Math.ceil(left / 1000);
+  $('#timer').textContent = Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0');
+  $('#timer').classList.toggle('hurry', sec <= 10);
+  if (t >= room.endsAt){
+    inp.disabled = true;
+    // 시간이 끝나면 방장이 게임을 끝냄 (방장이 없으면 2초 뒤 누구든)
+    if (!endAsked && (isHost() || t >= room.endsAt + 2000)){
+      endAsked = true;
+      const round = room.round;
+      roomRef.transaction(r => {
+        if (!r || r.state !== 'playing' || r.round !== round) return;
+        r.state = 'ended'; return r;
+      });
+    }
+  }
+}
+
+function highlight(){
+  const hits = new Set(L.prefixHits(room.cards || [], inp.value));
+  const board = $('#board');
+  for (const d of board.children) d.classList.toggle('hit', hits.has(+d.dataset.i));
+}
+function gameMsg(m, good){
+  const e = $('#gameMsg');
+  e.textContent = m; e.classList.toggle('good', !!good);
+}
+
+function submit(){
+  if (!room || room.state !== 'playing') return;
+  const t = now();
+  if (t < room.startsAt || t >= room.endsAt) return;
+  const typed = inp.value;
+  if (!L.norm(typed)) return;
+  const team = myTeam();
+  const r = L.findTarget(room.cards || [], typed, team);
+  clearInput();
+  highlight();
+  if (r.reason === 'none'){ gameMsg('판에 없는 글이에요'); shake(); return; }
+  if (r.reason === 'own'){ gameMsg('이미 우리 팀 카드예요'); return; }
+  const round = room.round;
+  roomRef.child('cards/' + r.index).transaction(c => {
+    if (!c || c.o === team) return;                  // 그새 우리 팀이 뒤집었으면 그만
+    if (!room || room.round !== round || now() >= room.endsAt) return;
+    c.o = team; c.by = pid; return c;
+  }, (err, committed) => {
+    if (err) { gameMsg('연결이 불안정해요'); return; }
+    if (committed){
+      roomRef.child(`players/${pid}/flips`).set(firebase.database.ServerValue.increment(1));
+      gameMsg('뒤집었다! ✔', true);
+    } else gameMsg('한발 늦었어요');
+  }, false);
+}
+function shake(){ inp.classList.remove('shake'); void inp.offsetWidth; inp.classList.add('shake'); }
+
+/* 한글 조립 중에 Enter를 누르면 글자가 확정된 뒤에 보내기 */
+let pendingSubmit = false;
+function onKey(e){
+  if (e.key !== 'Enter') return;
+  e.preventDefault();
+  if (e.isComposing){ pendingSubmit = true; return; }
+  submit();
+}
+function bindInput(el){
+  el.addEventListener('keydown', onKey);
+  el.addEventListener('compositionend', () => { if (pendingSubmit){ pendingSubmit = false; setTimeout(submit, 0); } });
+  el.addEventListener('input', () => { if (room && room.state === 'playing') highlight(); });
+  el.addEventListener('paste', e => e.preventDefault());   // 붙여넣기 금지
+}
+bindInput(inp);
+
+/* 입력 칸 비우기 (휴대폰 키보드가 조립 중이던 글자를 다음 입력에 붙이지 않도록, 휴대폰에선 칸을 새로 바꿔 끼움) */
+const isTouch = window.matchMedia && matchMedia('(pointer: coarse)').matches;
+function clearInput(){
+  pendingSubmit = false;
+  if (isTouch){
+    const old = inp, fresh = old.cloneNode(false);
+    fresh.value = ''; bindInput(fresh);
+    old.after(fresh); inp = fresh; fresh.focus(); old.remove();
+  } else {
+    inp.blur(); inp.value = ''; if (!inp.disabled) inp.focus();
+  }
+}
+
+/* ---------- 결과 ---------- */
+function renderResult(){
+  stopTimer();
+  view('result');
+  const t = L.tally(room.cards || []);
+  const win = t.red === t.blue ? '' : t.red > t.blue ? 'red' : 'blue';
+  const w = $('#winText');
+  w.className = 'big ' + win;
+  w.textContent = !win ? '🤝 무승부!' : `${win === 'red' ? '🟥' : '🟦'} ${TEAM_NAME[win]} 팀 승리!` + (win === myTeam() ? ' 🎉' : '');
+  $('#finalRed').textContent = `빨강 ${t.red}장`;
+  $('#finalBlue').textContent = `파랑 ${t.blue}장`;
+  const m = L.mvp(players());
+  $('#mvpText').textContent = m ? `⭐ MVP: ${m.name} (${m.flips}장 뒤집음)` : '';
+  fillList($('#resRed'), listPlayers('red', true), true);
+  fillList($('#resBlue'), listPlayers('blue', true), true);
+  const host = isHost();
+  $('#againBtn').hidden = !host; $('#toLobbyBtn').hidden = !host;
+  $('#resultNote').textContent = host ? '한 판 더: 같은 팀·같은 설정으로 바로 시작 / 대기실로: 팀이나 설정 바꾸기' : '방장이 다음 판을 시작할 때까지 기다려요.';
+}
+
+/* ---------- 새로고침해도 같은 방으로 ---------- */
+view('entry');
+const savedCode = store.get('flip.code', true);
+if (savedCode && $('#nameInput').value) joinRoom(savedCode, true);
+})();
