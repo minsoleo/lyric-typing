@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>flip-logic tests</title>
+<style>body{font:14px/1.5 monospace;padding:16px;background:#fff;color:#111}.p{color:#15803d}.f{color:#dc2626;font-weight:700}</style>
+</head>
+<body>
+<h1>판 뒤집기 로직 테스트</h1>
+<div id="out"></div>
+<script src="../flip-logic.js"></script>
+<script src="../flip-words.js"></script>
+<script>
+const out = document.getElementById('out');
+let pass = 0, fail = 0;
+function t(name, fn){
+  let ok = false, msg = '';
+  try { ok = fn() === true; if (!ok) msg = ' (false)'; } catch (e) { msg = ' (' + e.message + ')'; }
+  ok ? pass++ : fail++;
+  out.insertAdjacentHTML('beforeend', `<div class="${ok ? 'p' : 'f'}">${ok ? 'PASS' : 'FAIL'} ${name}${msg}</div>`);
+}
+// 정해진 순서로 나오는 가짜 랜덤 (테스트가 매번 같은 결과)
+function seeded(s){ return () => (s = (s * 16807) % 2147483647) / 2147483647; }
+const L = window.FlipLogic || {};
+const W = window.FLIP_WORDS || {};
+
+t('norm: 앞뒤·연속 공백 정리', () => L.norm('  가  나 ') === '가 나');
+t('norm: 조합형(NFD)도 같은 글', () => L.norm('가') === '가');
+
+const cards = [{t:'바다', o:''}, {t:'하늘', o:'red'}, {t:'별', o:'blue'}, {t:'바람', o:''}];
+t('findTarget: 주인 없는 카드 → flip', () => { const r = L.findTarget(cards, '바다', 'red'); return r.index === 0 && r.reason === 'flip'; });
+t('findTarget: 상대 카드 → flip', () => { const r = L.findTarget(cards, ' 별 ', 'red'); return r.index === 2 && r.reason === 'flip'; });
+t('findTarget: 이미 우리 카드 → own', () => { const r = L.findTarget(cards, '하늘', 'red'); return r.index === 1 && r.reason === 'own'; });
+t('findTarget: 판에 없음 → none', () => { const r = L.findTarget(cards, '구름', 'red'); return r.index === -1 && r.reason === 'none'; });
+
+t('prefixHits: "바"로 시작하는 카드', () => JSON.stringify(L.prefixHits(cards, '바')) === '[0,3]');
+t('prefixHits: 빈 글이면 없음', () => L.prefixHits(cards, '  ').length === 0);
+
+t('tally: 팀별 개수', () => { const r = L.tally(cards); return r.red === 1 && r.blue === 1 && r.none === 2; });
+
+t('mvp: 가장 많이 뒤집은 사람', () => { const m = L.mvp({a:{name:'민솔', flips:3}, b:{name:'친구', flips:5}}); return m.pid === 'b' && m.flips === 5; });
+t('mvp: 아무도 안 뒤집으면 null', () => L.mvp({a:{name:'민솔', flips:0}}) === null);
+
+t('balanceTeams: 5명 → 3대2', () => {
+  const r = L.balanceTeams(['a','b','c','d','e'], seeded(7));
+  const red = Object.values(r).filter(x => x === 'red').length;
+  return Object.keys(r).length === 5 && Math.abs(red - (5 - red)) === 1;
+});
+t('smallerTeam: 빨강이 많으면 파랑', () => L.smallerTeam({a:{team:'red'}, b:{team:'red'}, c:{team:'blue'}}) === 'blue');
+t('smallerTeam: 같으면 빨강', () => L.smallerTeam({}) === 'red');
+
+t('nextHost: 가장 먼저 들어온 사람', () => L.nextHost({a:{joinedAt:30}, b:{joinedAt:10}, c:{joinedAt:20}}) === 'b');
+t('nextHost: 아무도 없으면 null', () => L.nextHost({}) === null);
+
+t('makeCode: 숫자 4자리', () => { const r = seeded(3); for (let i = 0; i < 200; i++) if (!/^[0-9]{4}$/.test(L.makeCode(r))) return false; return true; });
+
+t('pickCards: 49개, 중복 없음', () => { const p = L.pickCards(W.word || [], 49, seeded(5)); return p.length === 49 && new Set(p).size === 49; });
+
+t('단어 목록: 150개, 중복 없음, 2~4자', () => {
+  const w = W.word || [];
+  return w.length === 150 && new Set(w.map(L.norm)).size === 150 && w.every(x => L.norm(x).length >= 2 && L.norm(x).length <= 4);
+});
+t('문장 목록: 100개, 중복 없음, 10~18자', () => {
+  const s = W.sentence || [];
+  const bad = s.filter(x => L.norm(x).length < 10 || L.norm(x).length > 18);
+  if (bad.length) throw new Error('길이 밖: ' + bad.join(' / '));
+  return s.length === 100 && new Set(s.map(L.norm)).size === 100;
+});
+
+out.insertAdjacentHTML('afterbegin', `<h2 id="sum">${fail ? 'FAIL' : 'ALL PASS'} — ${pass} pass, ${fail} fail</h2>`);
+</script>
+</body>
+</html>
