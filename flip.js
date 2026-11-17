@@ -354,11 +354,11 @@ function gameMsg(m, good){
   e.textContent = m; e.classList.toggle('good', !!good);
 }
 
-function submit(){
+function submit(text){
   if (!room || room.state !== 'playing') return;
   const t = now();
   if (t < room.startsAt || t >= room.endsAt) return;
-  const typed = inp.value;
+  const typed = typeof text === 'string' ? text : inp.value;
   if (!L.norm(typed)) return;
   const team = myTeam();
   const r = L.findTarget(room.cards || [], typed, team);
@@ -390,10 +390,25 @@ function onKey(e){
   if (e.isComposing){ pendingSubmit = true; return; }
   submit();
 }
+/* 스페이스바로 보내기
+   - 짧은 단어 판: 단어에 띄어쓰기가 없으니 스페이스바 = Enter
+   - 긴 문장 판: 문장 안에 띄어쓰기가 있으니, 판에 있는 문장과 똑같이 다 친 뒤에 누른 스페이스바만 보내기 */
+function onTypeInput(){
+  if (!room || room.state !== 'playing') return;
+  const v = inp.value;
+  if (/\s$/.test(v)){
+    const body = v.replace(/\s+$/, '');
+    if (body){
+      const sentence = (room.settings || {}).mode === 'sentence';
+      if (!sentence || L.findTarget(room.cards || [], body, myTeam()).index >= 0){ submit(body); return; }
+    } else { inp.value = ''; }
+  }
+  highlight();
+}
 function bindInput(el){
   el.addEventListener('keydown', onKey);
   el.addEventListener('compositionend', () => { if (pendingSubmit){ pendingSubmit = false; setTimeout(submit, 0); } });
-  el.addEventListener('input', () => { if (room && room.state === 'playing') highlight(); });
+  el.addEventListener('input', onTypeInput);
   el.addEventListener('paste', e => e.preventDefault());   // 붙여넣기 금지
 }
 bindInput(inp);
