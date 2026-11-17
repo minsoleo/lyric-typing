@@ -3,7 +3,7 @@
 'use strict';
 const $ = s => document.querySelector(s);
 const L = window.FlipLogic;
-const MAX_PLAYERS = 16, BOARD = 49, OLD_ROOM_MS = 6 * 3600 * 1000;
+const MAX_PLAYERS = 16, BOARD = 49, MEME_PER_BOARD = 20, OLD_ROOM_MS = 6 * 3600 * 1000;
 const TEAM_NAME = {red: '빨강', blue: '파랑'};
 
 /* ---------- 밝은/어두운 버전 (타자연습과 같은 설정 공유) ---------- */
@@ -225,8 +225,12 @@ $('#copyCode').onclick = async () => {
 function startRound(){
   if (!isHost()) return;
   const s = room.settings || {mode: 'word', seconds: 90};
-  const pool = window.FLIP_WORDS[s.mode] || window.FLIP_WORDS.word;
-  const cards = L.pickCards(pool, BOARD, Math.random).map(t => ({t, o: '', by: ''}));
+  const W = window.FLIP_WORDS;
+  // 긴 문장 판: 기본 문장 29개 + 밈 20개를 섞음 (기본 문장 비율을 더 높게)
+  const texts = s.mode === 'sentence'
+    ? L.mixBoard(W.sentence, W.meme, BOARD, MEME_PER_BOARD, Math.random)
+    : L.pickCards(W.word, BOARD, Math.random);
+  const cards = texts.map(t => ({t, o: '', by: ''}));
   const startsAt = now() + 7000;   // 팀 소개 3.5초 + 3·2·1 3.5초
   const up = {state: 'playing', round: (room.round || 0) + 1, cards, startsAt, endsAt: startsAt + (s.seconds || 90) * 1000};
   for (const id of Object.keys(players())) up[`players/${id}/flips`] = 0;

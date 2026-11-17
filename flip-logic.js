@@ -80,7 +80,16 @@
     return best;
   }
 
+  // 판 섞기: main에서 (n - extraCount)개 + extra에서 extraCount개를 뽑아 섞음
+  // extra가 모자라면 있는 만큼만, 빈자리는 main으로 채움
+  function mixBoard(main, extra, n, extraCount, rand){
+    const ex = pickCards(extra || [], Math.min(extraCount, n), rand);
+    const used = new Set(ex);
+    const rest = pickCards((main || []).filter(t => !used.has(norm(t))), n - ex.length, rand);
+    return pickCards(ex.concat(rest), n, rand);
+  }
+
   const makeCode = rand => String(Math.floor(rand() * 10000)).padStart(4, '0');
 
-  window.FlipLogic = {norm, pickCards, findTarget, prefixHits, tally, mvp, balanceTeams, smallerTeam, nextHost, makeCode};
+  window.FlipLogic = {norm, pickCards, findTarget, prefixHits, tally, mvp, balanceTeams, smallerTeam, nextHost, makeCode, mixBoard};
 })();
