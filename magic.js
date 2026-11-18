@@ -852,14 +852,36 @@ function topOf(e, c){
   const img = spriteOf(c || cls);
   return img ? e.y + e.r * 0.95 - (SPRITE_H[(c || cls).id] || e.r * 3.8) - 4 : e.y - e.r - 20;
 }
+/* 그림 한 장으로 움직임 흉내 내기
+   - 걷기: 발을 축으로 좌우로 뒤뚱 + 통통 뛰기 + 땅에 닿을 때 살짝 납작, 발걸음마다 먼지
+     (걸음 빠르기는 실제로 움직인 거리에 맞춤 → 빨리 걸으면 빨리 뒤뚱)
+   - 서 있기: 숨쉬듯 아주 살짝 커졌다 작아짐
+   - 공격: 앞으로 쑥 내밀며 기울임 / 돌진: 앞으로 숙이고 길쭉하게 */
 function drawSprite(p, t, img, c){
   if (Math.abs(p.face.x) > 0.15) p.look = p.face.x < 0 ? -1 : 1;   // 위·아래로 갈 땐 보던 쪽 그대로
   const dir = p.look || 1, h = SPRITE_H[c.id] || p.r * 3.8, w = h * img.width / img.height;
+  // 이번 장면에서 움직인 거리 → 걸음
+  const moved = p.lastX === undefined ? 0 : Math.hypot(p.x - p.lastX, p.y - p.lastY);
+  p.lastX = p.x; p.lastY = p.y;
+  const dashing = !!p.dash || (p.kind === 'player' && moved > 9);
+  const walking = !dashing && moved > 0.25 && moved < 40;
+  p.walkK = Math.max(0, Math.min(1, (p.walkK || 0) + (walking ? 0.2 : -0.12)));     // 걷기 ↔ 서 있기 부드럽게 바뀜
+  if (walking){
+    const before = Math.floor((p.walkT || 0) / Math.PI);
+    p.walkT = (p.walkT || 0) + Math.min(moved, 12) / 13;
+    if (Math.floor(p.walkT / Math.PI) !== before && inView(p.x, p.y, 0)) S.fx.push({type: 'dust', x: p.x - dir * 6, y: p.y + p.r * 0.95, t0: t, life: 0.35});   // 발걸음 먼지
+  }
+  const k = p.walkK, ph = p.walkT || 0;
+  let rot = Math.sin(ph) * 0.11 * k;                          // 뒤뚱
+  let lift = Math.abs(Math.sin(ph)) * 7 * k;                  // 통통
+  const land = (1 - Math.abs(Math.sin(ph))) * k;              // 땅에 닿는 순간
+  let sx = 1 + land * 0.05, sy = 1 - land * 0.06;             // 닿을 때 납작
+  if (k < 1){ const br = Math.sin(t * 2.6) * 0.018 * (1 - k); sy += br; sx -= br * 0.5; }   // 숨쉬기
+  let fwd = 0;
   const sw = Math.min(1, Math.max(0, (t - p.swingAt) / 0.22));
-  const tilt = sw < 1 ? Math.sin(sw * Math.PI) * 0.22 : 0;          // 공격할 때 앞으로 살짝 기울임
-  const moving = p.kind === 'me' ? !!(p.target || p.dash) : Math.hypot((p.tx === undefined ? p.x : p.tx) - p.x, (p.ty === undefined ? p.y : p.ty) - p.y) > 2;
-  const bob = moving ? -Math.abs(Math.sin(t * 10)) * 4 : Math.sin(t * 2.5) * 1.2;   // 걸을 때 통통, 서 있을 때 숨쉬기
-  ctx.save(); ctx.translate(p.x, p.y + p.r * 0.95 + bob); ctx.scale(dir, 1); ctx.rotate(tilt);
+  if (sw < 1){ const a = Math.sin(sw * Math.PI); rot += a * 0.24; fwd += a * 9; sx += a * 0.04; }   // 공격: 앞으로 쑥
+  if (dashing){ rot += 0.2; sx *= 1.1; sy *= 0.94; lift = 0; }                                  // 돌진: 앞으로 숙임
+  ctx.save(); ctx.translate(p.x + fwd * dir, p.y + p.r * 0.95 - lift); ctx.scale(dir * sx, sy); ctx.rotate(rot);
   ctx.drawImage(img, -w / 2, -h, w, h);
   ctx.restore();
 }

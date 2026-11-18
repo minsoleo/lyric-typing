@@ -23,7 +23,7 @@ window.MAGIC_CLASSES = [
   {
     id: 'tank', role: '탱커', name: '가데온', title: '강철 수호자', icon: '🛡', color: '#f08a24', dark: '#8a4a12', hp: 160, speed: 165, r: 26,
     about: '검과 방패를 든 기사. 아군을 지키며 맨 앞에서 싸워요. 튼튼하고 느려요.',
-    basic: {name: '강철 베기', melee: true, cd: 0.9, dmg: 12, reach: 95, arc: 120},
+    basic: {name: '강철 베기', melee: true, cd: 0.9, dmg: 12, reach: 120, arc: 120},
     spells: [
       {id: 'rockwall', type: 'wall',   name: '바위벽',     cd: 10, desc: '5초 동안 적의 공격을 막는 벽',     color: '#c9b08a', dist: 95, length: 230, time: 5},
       {id: 'guard',    type: 'buff',   name: '수호의 방패', cd: 12, desc: '8초 동안 받는 피해 40% 감소',      color: '#9fd3ff', time: 8, ally: 'one', fx: [{kind: 'def', value: 0.4}]},
@@ -37,7 +37,7 @@ window.MAGIC_CLASSES = [
   {
     id: 'dealer', role: '딜러', name: '레이브', title: '그림자 칼잡이', icon: '🗡', color: '#7d4dff', dark: '#3d2296', hp: 100, speed: 190, r: 22,
     about: '양손에 단검을 든 날쌘 전사. 피해를 가장 많이 주지만 몸이 약해요.',
-    basic: {name: '단검 베기', melee: true, cd: 0.4, dmg: 9, reach: 72, arc: 100},
+    basic: {name: '단검 베기', melee: true, cd: 0.25, dmg: 9, reach: 72, arc: 100},
     spells: [
       {id: 'gale',   type: 'slash',   name: '칼바람',     cd: 6,  desc: '1.5초 동안 3번 휘두름(8씩) 후 물러남', color: '#d9c8ff', swing: 1.5, every: 0.5, dmg: 8, reach: 130, arc: 130, back: 190},
       {id: 'rush',   type: 'dash',    name: '질풍 베기',   cd: 8,  desc: '멀리 달려가며 지나간 적 모두 피해 22', color: '#b9a3ff', reach: 520, dmg: 22, wide: 34},
