@@ -396,7 +396,7 @@ function healPlayer(amount, t, silent){
   if (!silent && got > 0) floatAt(p, '+' + Math.round(got), '#5ce08a', t);
   return got;
 }
-function floatAt(e, text, color, t){ S.floats.push({x: e.x + (Math.random() * 20 - 10), y: e.y - e.r - 14, text, color, t0: t}); }
+function floatAt(e, text, color, t){ S.floats.push({x: e.x + (Math.random() * 20 - 10), y: e.y - e.r - 34, text, color, t0: t}); }
 // 상태 이상을 신호에 담기 / 꺼내기
 const statusOf = o => ({st: o.stun || 0, sl: o.slow ? [o.slow.v, o.slow.t, o.slow.tag || 'slow'] : 0, wk: o.weak ? [o.weak.v, o.weak.t, o.weak.tag || 'weak'] : 0,
   pl: o.pull ? {x: r1(o.pull.x), y: r1(o.pull.y)} : 0});
@@ -844,8 +844,29 @@ function drawDummy(d, t){
   const tags = (slowed ? '🐢' : '') + (weak ? '💧' : '');
   if (tags){ ctx.font = '16px "Segoe UI Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(tags, d.x, d.y - 64); }
 }
-/* 캐릭터 모습 (나중에 그림 파일로 바꿀 수 있게 따로 둠) */
+/* 캐릭터 그림 (art/ 폴더, magic-art.js가 배경을 지워 둠). 그림은 오른쪽을 보는 모습 → 왼쪽을 보면 좌우로 뒤집음 */
+const SPRITE_H = {tank: 104, dealer: 90, healer: 90};
+const spriteOf = c => window.MagicArt ? MagicArt.get(c.id) : null;
+// 캐릭터 머리 위 높이 (체력 막대·이름표를 그 위에)
+function topOf(e, c){
+  const img = spriteOf(c || cls);
+  return img ? e.y + e.r * 0.95 - (SPRITE_H[(c || cls).id] || e.r * 3.8) - 4 : e.y - e.r - 20;
+}
+function drawSprite(p, t, img, c){
+  if (Math.abs(p.face.x) > 0.15) p.look = p.face.x < 0 ? -1 : 1;   // 위·아래로 갈 땐 보던 쪽 그대로
+  const dir = p.look || 1, h = SPRITE_H[c.id] || p.r * 3.8, w = h * img.width / img.height;
+  const sw = Math.min(1, Math.max(0, (t - p.swingAt) / 0.22));
+  const tilt = sw < 1 ? Math.sin(sw * Math.PI) * 0.22 : 0;          // 공격할 때 앞으로 살짝 기울임
+  const moving = p.kind === 'me' ? !!(p.target || p.dash) : Math.hypot((p.tx === undefined ? p.x : p.tx) - p.x, (p.ty === undefined ? p.y : p.ty) - p.y) > 2;
+  const bob = moving ? -Math.abs(Math.sin(t * 10)) * 4 : Math.sin(t * 2.5) * 1.2;   // 걸을 때 통통, 서 있을 때 숨쉬기
+  ctx.save(); ctx.translate(p.x, p.y + p.r * 0.95 + bob); ctx.scale(dir, 1); ctx.rotate(tilt);
+  ctx.drawImage(img, -w / 2, -h, w, h);
+  ctx.restore();
+}
+/* 그림이 없을 때 코드로 그리는 간단한 모습 */
 function drawHero(p, t, hc){
+  const art = spriteOf(hc || cls);
+  if (art) return drawSprite(p, t, art, hc || cls);
   const c = hc || cls, f = p.face, ang = Math.atan2(f.y, f.x), r = p.r;
   const L90 = {x: f.y, y: -f.x}, R90 = {x: -f.y, y: f.x};                    // 캐릭터 기준 왼손·오른손 쪽
   const sw = Math.min(1, Math.max(0, (t - p.swingAt) / 0.22)), swing = sw < 1 ? -1.2 + 2.4 * sw : 0;   // 휘두르는 중이면 무기가 돌아감
@@ -952,15 +973,16 @@ function drawPlayer(t){
     g.addColorStop(0, '#ffffff'); g.addColorStop(0.35, ch.spell.color); g.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = g; circle(tipX, tipY, 22);
   }
-  bar(p.x, p.y - p.r - 30, 64, p.hp / p.max, '#ff5d73');
+  const top = topOf(p);
+  bar(p.x, top - 10, 64, p.hp / p.max, '#ff5d73');
   if (net) nameTag(p, `${cls.icon} ${net.name} (나)`);
   // 걸려 있는 효과 아이콘
   const icons = Object.keys(FX_ICON).filter(k => k === 'def' ? L.takenMult(p.fx, t) < 1 : L.effectSum(p.fx, k, t) > 0).map(k => FX_ICON[k]).join('') + (hidden ? '👻' : '');
-  if (icons){ ctx.font = '16px "Segoe UI Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(icons, p.x, p.y - p.r - 36); }
+  if (icons){ ctx.font = '16px "Segoe UI Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(icons, p.x, top - 16); }
   const label = ch ? '⚡ ' + ch.spell.name : inp.value;
   if (label){
     ctx.font = '800 20px "Malgun Gothic",sans-serif'; ctx.textAlign = 'center';
-    const w = ctx.measureText(label).width + 24, y = p.y - p.r - 90;
+    const w = ctx.measureText(label).width + 24, y = top - 70;
     ctx.fillStyle = ch ? 'rgba(60,40,0,.9)' : 'rgba(8,30,16,.88)'; roundRect(p.x - w / 2, y, w, 32, 10); ctx.fill();
     ctx.fillStyle = ch ? '#ffd84a' : '#e3ffe9'; ctx.fillText(label, p.x, y + 23);
   }
@@ -1021,6 +1043,9 @@ function drawFx(t){
     else if (f.type === 'fizzle'){ ctx.fillStyle = '#ff7b7b'; ctx.font = '800 22px "Malgun Gothic",sans-serif'; ctx.textAlign = 'center'; ctx.fillText('퓨슉…', f.x, f.y - 50 - k * 20); }
     ctx.globalAlpha = 1;
   }
+}
+// 떠오르는 숫자·글자는 캐릭터 그림보다 위에
+function drawFloats(t){
   for (const f of S.floats){
     const life = f.life || 1, k = (t - f.t0) / life;
     ctx.globalAlpha = Math.max(0, Math.min(1, (1 - k) * 2)); ctx.fillStyle = f.color; ctx.strokeStyle = 'rgba(0,0,0,.6)'; ctx.lineWidth = 4;
@@ -1052,7 +1077,7 @@ function draw(){
   if (p.target && !p.deadUntil){ ctx.strokeStyle = 'rgba(95,225,255,.35)'; ctx.setLineDash([6, 8]); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.target.x, p.target.y); ctx.stroke(); ctx.setLineDash([]); }
   if (!inMatch()) for (const d of S.dummies) drawDummy(d, t);
   for (const o of S.others.values()) drawRemote(o, t);
-  drawPlayer(t); drawShots();
+  drawPlayer(t); drawShots(); drawFloats(t);
   ctx.setTransform(base, 0, 0, base, 0, 0);
   if (S.tint){   // 멈춰 버린 세계: 화면이 보랏빛으로
     const a = Math.min(1, (t - S.tint.t0) / 0.3) * Math.min(1, (S.tint.until - t) / 0.5) * 0.16;
@@ -1096,12 +1121,13 @@ function drawRemote(o, t){
   }
   if (t < o.frozenUntil){
     ctx.fillStyle = '#fff6a8'; ctx.font = '800 20px "Malgun Gothic",sans-serif'; ctx.textAlign = 'center';
-    for (let i = 0; i < 3; i++){ const a = t * 5 + i * 2.1; ctx.fillText('★', o.x + Math.cos(a) * 24, o.y - o.r - 40 + Math.sin(a) * 6); }
+    for (let i = 0; i < 3; i++){ const a = t * 5 + i * 2.1; ctx.fillText('★', o.x + Math.cos(a) * 24, topOf(o, o.cls) - 30 + Math.sin(a) * 6); }
   }
-  bar(o.x, o.y - o.r - 30, 64, o.hp / o.max, enemy ? '#ff5d73' : '#5ce08a');
+  const top = topOf(o, o.cls);
+  bar(o.x, top - 10, 64, o.hp / o.max, enemy ? '#ff5d73' : '#5ce08a');
   const icons = Object.keys(FX_ICON).filter(k => k === 'def' ? L.takenMult(o.fx, t) < 1 : L.effectSum(o.fx, k, t) > 0).map(k => FX_ICON[k]).join('')
     + (L.effectSum(o.fx, 'speed', t) < 0 ? '🐢' : '') + (L.effectSum(o.fx, 'atk', t) < 0 ? '💧' : '') + (hidden ? '👻' : '');
-  if (icons){ ctx.font = '16px "Segoe UI Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(icons, o.x, o.y - o.r - 36); }
+  if (icons){ ctx.font = '16px "Segoe UI Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(icons, o.x, top - 16); }
   nameTag(o, `${o.cls.icon} ${o.name}`);
 }
 function drawFeed(t){
@@ -1178,7 +1204,8 @@ function buildPick(){
   for (const c of CLASSES){
     const b = document.createElement('button'); b.type = 'button'; b.className = 'card' + (c === cls ? ' last' : ''); b.style.setProperty('--c', c.color);
     b.innerHTML = `<div class="face"><div class="dot"></div><div><span class="role"></span><b></b><small class="title"></small></div></div><div class="about"></div><div class="nums"><span></span><span></span><span></span></div><ul></ul>`;
-    b.querySelector('.dot').textContent = c.icon;
+    const dot = b.querySelector('.dot'), pic = window.MagicArt && MagicArt.url(c.id);
+    if (pic){ dot.classList.add('img'); dot.style.backgroundImage = `url(${pic})`; } else dot.textContent = c.icon;
     b.querySelector('.role').textContent = c.role; b.querySelector('b').textContent = c.name; b.querySelector('.title').textContent = c.title;
     b.querySelector('.about').textContent = c.about;
     const n = b.querySelectorAll('.nums span'); n[0].textContent = `❤ 체력 ${c.hp}`; n[1].textContent = `👟 속도 ${c.speed}`; n[2].textContent = c.basic.melee ? '👊 근접' : '🏹 원거리';
@@ -1414,6 +1441,7 @@ function drawMatchHud(){
 /* ---------- 시작 ---------- */
 function loop(){ update(); draw(); updateHud(); requestAnimationFrame(loop); }
 buildBook(); fit(); openPick();
+if (window.MagicArt) MagicArt.ready.then(() => { if (!$('#pick').hidden) buildPick(); });   // 그림이 다 오면 고르기 카드에도
 try { const c = sessionStorage.getItem('magic.code'); if (c){ $('#codeInput').value = c; pickMode = 'friend'; refreshPick(); } } catch (e) {}
 requestAnimationFrame(loop);
 
