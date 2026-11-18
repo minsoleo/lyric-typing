@@ -60,6 +60,9 @@ t('applyDamage: 체력은 0 아래로 안 내려감', () => L.applyDamage({hp: 1
 
 t('clampToWorld: 맵 밖으로 못 나감', () => { const r = L.clampToWorld({x: -50, y: 2000}, 20, 1600, 900); return r.x === 20 && r.y === 880; });
 
+t('camFollow: 맵 가운데서는 캐릭터가 화면 가운데', () => { const c = L.camFollow({x: 1600, y: 900}, 1600, 900, 3200, 1800); return c.x === 800 && c.y === 450; });
+t('camFollow: 맵 끝에서는 맵 밖이 안 보이게 멈춤', () => { const a = L.camFollow({x: 50, y: 50}, 1600, 900, 3200, 1800), b = L.camFollow({x: 3190, y: 1790}, 1600, 900, 3200, 1800); return a.x === 0 && a.y === 0 && b.x === 1600 && b.y === 900; });
+
 out.insertAdjacentHTML('afterbegin', `<h2 id="sum">${fail ? 'FAIL' : 'ALL PASS'} — ${pass} pass, ${fail} fail</h2>`);
 </script>
 </body>

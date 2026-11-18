@@ -18,13 +18,13 @@
 <style>
 :root{
   color-scheme:dark;
-  --bg:#07061a; --bg2:#151036; --panel:rgba(17,13,44,.9); --panel2:#221a52; --line:#3a2f7d; --hover:#2d2468; --field:#0b0822;
+  --bg:#07061a; --bg2:#151036; --panel:rgba(17,13,44,.92); --panel2:#221a52; --line:#3a2f7d; --hover:#2d2468; --field:#0b0822;
   --text:#f3f0ff; --dim:#b3a9de; --accent:#b38bff; --accent2:#5fe1ff; --gold:#ffc928; --gold-text:#2a1d00;
   --ok:#5ce08a; --bad:#ff7b7b; --pend:#ffd166; --hp:#ff5d73; --shadow:0 10px 26px rgba(0,0,0,.45);
 }
 :root[data-theme="light"]{
   color-scheme:light;
-  --bg:#efeaff; --bg2:#ffffff; --panel:rgba(255,255,255,.94); --panel2:#f1ecff; --line:#d6cdf5; --hover:#e6deff; --field:#ffffff;
+  --bg:#efeaff; --bg2:#ffffff; --panel:rgba(255,255,255,.95); --panel2:#f1ecff; --line:#d6cdf5; --hover:#e6deff; --field:#ffffff;
   --text:#1b1440; --dim:#5d5585; --accent:#7442e0; --accent2:#0c7fb0; --gold:#ffb800; --gold-text:#2a1d00;
   --ok:#14843f; --bad:#d42f2f; --pend:#a35400; --hp:#e2354f; --shadow:0 8px 20px rgba(40,20,100,.14);
 }
@@ -33,54 +33,57 @@ html,body{margin:0;height:100%}
 body{display:flex;flex-direction:column;overflow:hidden;color:var(--text);font-family:"Pretendard","Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;
   background:radial-gradient(900px 500px at 80% -10%,rgba(179,139,255,.25),transparent 60%),linear-gradient(var(--bg2),var(--bg))}
 .display{font-family:"Black Han Sans","Malgun Gothic",sans-serif;font-weight:400}
-header{flex:none;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:6px 16px;border-bottom:1px solid var(--line)}
-header h1{margin:0;font-size:21px}
+header{flex:none;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 16px;border-bottom:1px solid var(--line)}
+header h1{margin:0;font-size:20px}
 header h1 small{font:700 13px "Malgun Gothic",sans-serif;color:var(--dim);margin-left:6px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 button,.btn{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:6px 12px;cursor:pointer;text-decoration:none;white-space:nowrap;font-size:14px}
 button:hover,.btn:hover{background:var(--hover)}
 button.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:800}
-#themeBtn{width:36px;height:36px;padding:0;border-radius:50%;font-size:17px}
+#themeBtn{width:34px;height:34px;padding:0;border-radius:50%;font-size:16px}
 [hidden]{display:none !important}
 
-main{flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 250px;gap:12px;padding:10px 14px 0}
-.stage{position:relative;min-height:0;display:flex;align-items:center;justify-content:center}
+/* 맵 */
+.stage{flex:1;min-height:0;position:relative;display:flex;align-items:center;justify-content:center;padding:8px 14px 0}
 canvas{display:block;border-radius:16px;box-shadow:var(--shadow);cursor:crosshair;touch-action:none}
-.hint{position:absolute;left:12px;top:10px;padding:4px 10px;border-radius:99px;background:rgba(0,0,0,.45);color:#fff;font-size:12px;font-weight:700;pointer-events:none}
+.hint{position:absolute;left:24px;top:16px;padding:4px 10px;border-radius:99px;background:rgba(0,0,0,.5);color:#fff;font-size:12px;font-weight:700;pointer-events:none}
 
-/* 주문책 */
-.book{min-height:0;display:flex;flex-direction:column;background:var(--panel);border:2px solid var(--line);border-radius:16px;box-shadow:var(--shadow);overflow:hidden}
-.book h2{margin:0;padding:8px 12px;font-size:18px;background:var(--panel2)}
-.book ul{list-style:none;margin:0;padding:6px;overflow:auto;flex:1}
-.book li{position:relative;overflow:hidden;padding:6px 9px;margin-bottom:5px;border-radius:10px;background:var(--panel2);border:1px solid var(--line)}
-.book li b{display:block;font-size:15px}
-.book li span{display:block;font-size:11.5px;color:var(--dim)}
-.book li em{position:absolute;right:8px;top:6px;font-style:normal;font-size:12px;font-weight:800;color:var(--ok)}
-.book li.cool em{color:var(--pend)}
-.book li.cool b{opacity:.55}
-.book li i{position:absolute;left:0;bottom:0;height:3px;background:var(--pend)}
-.book li.flash{animation:flash .5s}
-@keyframes flash{from{background:var(--accent)}}
-.book .stats{padding:8px 12px;border-top:1px solid var(--line);font-size:12.5px;color:var(--dim);line-height:1.6}
-.book .stats b{color:var(--text)}
-
-/* 아래: 체력 + 주문 입력 */
-.bottom{flex:none;display:grid;grid-template-columns:220px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 14px}
-.hpbox{background:var(--panel);border:2px solid var(--line);border-radius:14px;padding:6px 10px}
+/* 아래: 체력 · 주문 칸 · 허수아비 */
+.bottom{flex:none;padding:8px 14px 10px}
+.topline{display:grid;grid-template-columns:230px minmax(0,1fr) auto;gap:12px;align-items:center}
+.hpbox{background:var(--panel);border:2px solid var(--line);border-radius:14px;padding:5px 10px}
 .hpbox small{font-size:12px;font-weight:800;color:var(--dim)}
-.hpbar{position:relative;height:14px;border-radius:99px;background:var(--field);overflow:hidden;margin-top:3px}
+.hpbar{position:relative;height:13px;border-radius:99px;background:var(--field);overflow:hidden;margin-top:3px}
 .hpbar i{position:absolute;inset:0 auto 0 0;background:linear-gradient(90deg,var(--hp),#ff9a8a);transition:width .2s}
 .hpbar u{position:absolute;inset:0 auto 0 0;background:rgba(95,225,255,.6);text-decoration:none}
-.cast{display:flex;align-items:center;gap:10px;background:var(--panel);border:2px solid var(--accent);border-radius:14px;padding:5px 8px 5px 12px;box-shadow:0 0 0 4px rgba(179,139,255,.18)}
+.cast{display:flex;align-items:center;gap:10px;background:var(--panel);border:2px solid var(--accent);border-radius:14px;padding:4px 8px 4px 12px;box-shadow:0 0 0 4px rgba(179,139,255,.18)}
 .cast label{flex:none;font:400 16px "Black Han Sans",sans-serif;color:var(--accent)}
-#spellInput{flex:1;min-width:0;font:800 20px "Malgun Gothic",sans-serif;color:var(--text);background:transparent;border:0;padding:6px 2px;outline:none}
-#castMsg{flex:none;font-size:14px;font-weight:800;min-width:120px;text-align:right}
-#castMsg.good{color:var(--ok)} #castMsg.bad{color:var(--bad)} #castMsg.wait{color:var(--pend)}
+#spellInput{flex:1;min-width:0;font:800 19px "Malgun Gothic",sans-serif;color:var(--text);background:transparent;border:0;padding:5px 2px;outline:none}
+#castMsg{flex:none;font-size:14px;font-weight:800;min-width:150px;text-align:right}
+#castMsg.good{color:var(--ok)} #castMsg.bad{color:var(--bad)} #castMsg.wait{color:var(--pend)} #castMsg.charge{color:var(--gold)}
 .cast.shake{animation:shake .3s}
+.cast.charged{border-color:var(--gold);box-shadow:0 0 0 4px rgba(255,201,40,.25)}
 @keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
 .dummy small{font-size:12px;font-weight:800;color:var(--dim);margin-right:2px}
-@media(max-width:900px){main{grid-template-columns:1fr}.book{display:none}.bottom{grid-template-columns:1fr}}
-@media(prefers-reduced-motion:reduce){.book li.flash,.cast.shake{animation:none}}
+.stats{font-size:11.5px;color:var(--dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stats b{color:var(--text)}
+
+/* 주문 막대 (가지런히 7칸) */
+.skills{list-style:none;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin:8px 0 0;padding:0}
+.skills li{position:relative;overflow:hidden;min-height:50px;padding:5px 8px 6px;border-radius:12px;background:var(--panel);border:2px solid var(--line);text-align:center;box-shadow:var(--shadow)}
+.skills li b{display:block;font-size:14px;line-height:1.25;word-break:keep-all}
+.skills li span{display:block;font-size:11px;color:var(--dim);line-height:1.3;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.skills li em{position:absolute;right:6px;top:3px;font-style:normal;font-size:11px;font-weight:800;color:var(--ok)}
+.skills li i{position:absolute;inset:auto 0 0 0;height:4px;background:var(--pend);width:0}
+.skills li.cool b,.skills li.cool span{opacity:.45}
+.skills li.cool em{color:var(--pend)}
+.skills li.charged{border-color:var(--gold);background:linear-gradient(var(--panel),rgba(255,201,40,.22));box-shadow:0 0 0 3px rgba(255,201,40,.35),var(--shadow)}
+.skills li.charged em{color:var(--gold)}
+.skills li.charged i{background:var(--gold)}
+.skills li.flash{animation:flash .5s}
+@keyframes flash{from{background:rgba(255,201,40,.6)}}
+@media(max-width:900px){.topline{grid-template-columns:1fr}.skills{grid-template-columns:repeat(4,1fr)}}
+@media(prefers-reduced-motion:reduce){.cast.shake{animation:none}}
 </style>
 </head>
 <body>
@@ -91,25 +94,25 @@ canvas{display:block;border-radius:16px;box-shadow:var(--shadow);cursor:crosshai
     <a class="btn" href="./">타자연습으로</a>
   </div>
 </header>
-<main>
-  <div class="stage" id="stage">
-    <canvas id="cv" aria-label="주문 대결 연습판"></canvas>
-    <div class="hint">🖱 왼쪽 클릭: 이동 · 🖱 오른쪽 클릭: 평타 · ⌨ 주문 치고 Enter (Esc: 지우기)</div>
-  </div>
-  <aside class="book">
-    <h2 class="display">📖 주문책</h2>
-    <ul id="book"></ul>
-    <div class="stats" id="stats"></div>
-  </aside>
-</main>
+<div class="stage" id="stage">
+  <canvas id="cv" aria-label="주문 대결 연습판"></canvas>
+  <div class="hint">🖱 왼쪽: 이동 · ⌨ 주문 + Enter: 장전 · 🖱 오른쪽: 장전한 주문 발사 (없으면 평타) · Esc: 지우기</div>
+</div>
 <div class="bottom">
-  <div class="hpbox"><small>내 체력 <span id="hpText">100 / 100</span></small><div class="hpbar"><i id="hpFill" style="width:100%"></i><u id="shieldFill" style="width:0"></u></div></div>
-  <div class="cast" id="castBox">
-    <label for="spellInput">주문</label>
-    <input type="text" id="spellInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="30" placeholder="주문책의 주문을 치고 Enter">
-    <span id="castMsg"></span>
+  <div class="topline">
+    <div class="hpbox">
+      <small>내 체력 <span id="hpText">100 / 100</span></small>
+      <div class="hpbar"><i id="hpFill" style="width:100%"></i><u id="shieldFill" style="width:0"></u></div>
+      <div class="stats" id="stats"></div>
+    </div>
+    <div class="cast" id="castBox">
+      <label for="spellInput">주문</label>
+      <input type="text" id="spellInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="30" placeholder="아래 주문을 치고 Enter로 장전 → 오른쪽 클릭으로 발사">
+      <span id="castMsg"></span>
+    </div>
+    <div class="row dummy"><small>허수아비</small><button id="dStill" class="on">가만히</button><button id="dMove">좌우로 움직이기</button></div>
   </div>
-  <div class="row dummy"><small>허수아비</small><button id="dStill" class="on">가만히</button><button id="dMove">좌우로 움직이기</button></div>
+  <ul class="skills" id="book"></ul>
 </div>
 <script src="magic-spells.js"></script>
 <script src="magic-logic.js"></script>

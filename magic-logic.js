@@ -64,5 +64,8 @@
 
   const clampToWorld = (p, r, W, H) => ({x: Math.max(r, Math.min(W - r, p.x)), y: Math.max(r, Math.min(H - r, p.y))});
 
-  window.MagicLogic = {norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld};
+  // 카메라: 캐릭터가 화면 가운데 오도록, 단 맵 밖은 안 보이게
+  const camFollow = (p, vw, vh, ww, wh) => ({x: Math.max(0, Math.min(ww - vw, p.x - vw / 2)), y: Math.max(0, Math.min(wh - vh, p.y - vh / 2))});
+
+  window.MagicLogic = {norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow};
 })();
