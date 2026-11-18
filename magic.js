@@ -59,7 +59,7 @@ const S = {
   player: null,
   dummies: [makeDummy(1000, 880), makeDummy(2250, 1080), makeDummy(2550, 500)],
   dummyMode: 'still',
-  shots: [], zones: [], walls: [], sanctums: [], fx: [], floats: [], tint: null,
+  shots: [], zones: [], walls: [], sanctums: [], fields: [], fx: [], floats: [], tint: null,
   cds: {}, lastBasic: undefined, lockUntil: 0, charged: null, ult: 0,
   stats: {dmg: 0, kills: 0, ok: 0, fail: 0, healed: 0, taken: 0}
 };
@@ -268,7 +268,9 @@ function castSpell(sp, t, target){
       break;
     }
     case 'slowfield':
-      for (const d of alive()) if (dist(d, p) < sp.area + d.r) L.addEffect(d.fx, 'speed', -sp.slow, t + sp.time, sp.id);
+      // 범위가 time초 동안 나를 따라다니며 유지됨 → 안에 들어온 적은 계속 느려짐
+      S.fields = S.fields.filter(f => f.id !== sp.id);
+      S.fields.push({id: sp.id, r: sp.area, slow: sp.slow, t0: t, until: t + sp.time, color: sp.color});
       applyBuff(sp, t);
       S.fx.push({type: 'ring', x: p.x, y: p.y, r: sp.area, t0: t, life: 0.8, color: sp.color});
       S.tint = {until: t + sp.time, t0: t, color: '90,60,190'};
@@ -363,7 +365,7 @@ function update(){
       p.x = pos.x; p.y = pos.y;
       if (m.arrived) p.target = null;
     }
-    // 주먹 폭풍: 정해진 시간 동안 마우스 쪽으로 계속 주먹
+    // 검의 폭풍: 정해진 시간 동안 마우스 쪽으로 계속 검 연타
     if (p.flurry){
       while (p.flurry && t >= p.flurry.next && p.flurry.next < p.flurry.until){ melee(t, p.flurry.sp, false, p.flurry.sp.color); p.flurry.next += p.flurry.sp.every; }
       if (p.flurry && t >= p.flurry.until) p.flurry = null;
@@ -397,6 +399,9 @@ function update(){
     }
   }
   S.sanctums = S.sanctums.filter(s => t < s.until);
+  // 멈춰 버린 세계: 나를 따라다니는 범위 안의 적은 느려짐 (나가도 1초 동안은 느림)
+  for (const f of S.fields) if (!p.deadUntil) for (const d of alive()) if (dist(d, p) < f.r + d.r) L.addEffect(d.fx, 'speed', -f.slow, Math.min(f.until, t + 1), f.id);
+  S.fields = S.fields.filter(f => t < f.until && !p.deadUntil);
   S.walls = S.walls.filter(w => t < w.until);
   if (S.tint && t >= S.tint.until) S.tint = null;
 
@@ -553,6 +558,14 @@ function drawGroundFx(t){
     ctx.strokeStyle = 'rgba(255,240,160,.95)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(s.x, s.y, s.r * k, 0, Math.PI * 2); ctx.stroke();
     ctx.strokeStyle = 'rgba(255,250,200,.5)'; ctx.lineWidth = 3;
     for (let i = 0; i < 8; i++){ const a = i / 8 * Math.PI * 2 + t * 0.6; ctx.beginPath(); ctx.moveTo(s.x + Math.cos(a) * 30, s.y + Math.sin(a) * 30); ctx.lineTo(s.x + Math.cos(a) * s.r * 0.85 * k, s.y + Math.sin(a) * s.r * 0.85 * k); ctx.stroke(); }
+    ctx.globalAlpha = 1;
+  }
+  for (const f of S.fields){
+    const p = S.player, k = Math.min(1, (t - f.t0) / 0.4), fade = Math.min(1, (f.until - t) / 0.6);
+    ctx.globalAlpha = fade;
+    ctx.fillStyle = 'rgba(140,110,255,.10)'; circle(p.x, p.y, f.r * k);
+    ctx.strokeStyle = 'rgba(199,184,255,.85)'; ctx.lineWidth = 4; ctx.setLineDash([16, 12]);
+    ctx.beginPath(); ctx.arc(p.x, p.y, f.r * k, t * 0.4, t * 0.4 + Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     ctx.globalAlpha = 1;
   }
   for (const w of S.walls){
@@ -854,7 +867,7 @@ function openPick(){ buildPick(); $('#pick').hidden = false; const last = $('#ca
 function choose(c){
   cls = c; try { localStorage.setItem('magic.class', c.id); } catch (e) {}
   S.player = makePlayer(c); S.cds = {}; S.lastBasic = undefined; S.lockUntil = 0; S.ult = 0; clearCharge();
-  S.zones = []; S.shots = []; S.walls = []; S.sanctums = []; S.tint = null;
+  S.zones = []; S.shots = []; S.walls = []; S.sanctums = []; S.fields = []; S.tint = null;
   for (const d of S.dummies){ d.fx = []; d.pull = null; }
   cam = L.camFollow(S.player, VW, VH, WW, WH);
   inp.value = ''; castMsg(`${c.role} · ${c.name}!`, 'good');

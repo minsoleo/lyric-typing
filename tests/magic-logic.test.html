@@ -47,7 +47,8 @@ t('민솔님이 정한 수치 (2026-11-18)', () => {
     && fx('dealer', 'oath', 'atk') === 0.4 && sp('dealer', 'stopworld').time === 12
     && sp('healer', 'spring').time === 7 && sp('healer', 'spear').dmg === 20 && sp('healer', 'flash').time === 2.5 && fx('healer', 'bless', 'def') === 0.3;
 });
-t('레이브 스킬 대기 시간은 모두 8초 이하 (2배 빠르게)', () => by('dealer').spells.every(s => s.cd <= 8));
+t('레이브 대기 시간은 원래대로, 궁극기 범위는 12초 유지', () => by('dealer').spells.map(s => s.cd).join() === '6,8,10,16,14' && by('dealer').ult.time === 12);
+t('가데온 검 이름: 강철 베기 · 검의 폭풍', () => by('tank').basic.name === '강철 베기' && by('tank').spells.some(s => s.name === '검의 폭풍'));
 t('findSpell: 다른 캐릭터 스킬은 못 씀', () => L.findSpell(all(by('tank')), '목 긋기') === null);
 t('findSpell: 궁극기도 찾음', () => { const c = by('healer'); const r = L.findSpell(all(c), '모든  어둠을 몰아내는 새벽의 성역 '); return !!r && r.id === c.ult.id; });
 

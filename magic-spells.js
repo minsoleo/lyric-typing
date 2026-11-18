@@ -11,7 +11,7 @@
      leap      가리킨 적 등 뒤로 순간 이동 + 피해 (screen: 화면 안이면 거리 상관없음)
      stun      가리킨 적 기절
      zone      바닥에 회복 샘
-     slowfield 넓은 범위 적을 느리게 + 나 강해짐
+     slowfield 나를 따라다니는 넓은 범위: 안에 들어온 적은 느려짐 + 나 강해짐 (time 동안 유지)
      sanctum   성역: 아군 회복 + 적 피해·나약함
    fx kind: atk(주는 피해 +) · def(받는 피해 −) · speed(이동 속도 +) · basic(평타 피해 +) · reach(근접 공격 거리 +)
    cd = 쓴 뒤 다시 쓸 수 있을 때까지(초), color = 장전됐을 때 빛나는 색, look = 날아가는 모양
@@ -20,13 +20,13 @@ window.MAGIC_CLASSES = [
   {
     id: 'tank', role: '탱커', name: '가데온', title: '강철 수호자', icon: '🛡', color: '#f08a24', dark: '#8a4a12', hp: 160, speed: 165, r: 26,
     about: '검과 방패를 든 기사. 아군을 지키며 맨 앞에서 싸워요. 튼튼하고 느려요.',
-    basic: {name: '강철 주먹', melee: true, cd: 0.9, dmg: 12, reach: 95, arc: 120},
+    basic: {name: '강철 베기', melee: true, cd: 0.9, dmg: 12, reach: 95, arc: 120},
     spells: [
       {id: 'rockwall', type: 'wall',   name: '바위벽',     cd: 10, desc: '5초 동안 적의 공격을 막는 벽',     color: '#c9b08a', dist: 95, length: 230, time: 5},
       {id: 'guard',    type: 'buff',   name: '수호의 방패', cd: 12, desc: '8초 동안 받는 피해 40% 감소',      color: '#9fd3ff', time: 8, ally: true, fx: [{kind: 'def', value: 0.4}]},
       {id: 'chain',    type: 'shot',   name: '강철 사슬',   cd: 9,  desc: '맞은 적을 끌어옴 · 피해 10',       color: '#cfd6e6', look: 'chain', dmg: 10, speed: 1400, radius: 12, range: 650, pull: true},
       {id: 'crash',    type: 'dash',   name: '파쇄 돌격',   cd: 8,  desc: '멀리 돌진 후 폭발 · 피해 20',      color: '#ffb36b', reach: 460, dmg: 0, boom: {area: 130, dmg: 20}},
-      {id: 'flurry',   type: 'flurry', name: '주먹 폭풍',   cd: 14, desc: '3초 동안 주먹 연타 · 한 대에 5',   color: '#ffcf6b', time: 3, every: 0.25, dmg: 5, reach: 110, arc: 120}
+      {id: 'flurry',   type: 'flurry', name: '검의 폭풍',   cd: 14, desc: '3초 동안 검 연타 · 한 대에 5',     color: '#ffcf6b', time: 3, every: 0.25, dmg: 5, reach: 110, arc: 120}
     ],
     ult: {id: 'legion', type: 'buff', name: '꺾이지 않는 강철 군단의 함성', desc: '8초 동안 받는 피해 −50% · 공격 거리 +50% · 공격력 +30% · 속도 +25% · 평타 2배', color: '#ffd84a', time: 8, ally: true,
       fx: [{kind: 'def', value: 0.5}, {kind: 'reach', value: 0.5}, {kind: 'atk', value: 0.3}, {kind: 'speed', value: 0.25}, {kind: 'basic', value: 1}]}
@@ -36,13 +36,13 @@ window.MAGIC_CLASSES = [
     about: '양손에 단검을 든 날쌘 전사. 피해를 가장 많이 주지만 몸이 약해요.',
     basic: {name: '단검 베기', melee: true, cd: 0.4, dmg: 9, reach: 72, arc: 100},
     spells: [
-      {id: 'gale',   type: 'slash',   name: '칼바람',     cd: 3,  desc: '앞을 베고(피해 24) 1.5초 뒤 물러남',   color: '#d9c8ff', dmg: 24, reach: 130, arc: 130, back: 190, backDelay: 1.5},
-      {id: 'rush',   type: 'dash',    name: '질풍 베기',   cd: 4,  desc: '멀리 달려가며 지나간 적 모두 피해 22', color: '#b9a3ff', reach: 520, dmg: 22, wide: 34},
-      {id: 'throat', type: 'leap',    name: '목 긋기',     cd: 5,  desc: '화면 안 가리킨 적 등 뒤로 · 피해 22',  color: '#ff6b8b', screen: true, dmg: 22},
-      {id: 'shadow', type: 'stealth', name: '그림자 은신', cd: 8,  desc: 'Enter만 쳐도 바로! 15초 투명 · 속도 2배', color: '#8f86b8', instant: true, time: 15, fx: [{kind: 'speed', value: 1}]},
-      {id: 'oath',   type: 'buff',    name: '칼끝의 맹세', cd: 7,  desc: '6초 동안 공격력 +40%',                 color: '#ff9ad5', time: 6, ally: true, fx: [{kind: 'atk', value: 0.4}]}
+      {id: 'gale',   type: 'slash',   name: '칼바람',     cd: 6,  desc: '앞을 베고(피해 24) 1.5초 뒤 물러남',   color: '#d9c8ff', dmg: 24, reach: 130, arc: 130, back: 190, backDelay: 1.5},
+      {id: 'rush',   type: 'dash',    name: '질풍 베기',   cd: 8,  desc: '멀리 달려가며 지나간 적 모두 피해 22', color: '#b9a3ff', reach: 520, dmg: 22, wide: 34},
+      {id: 'throat', type: 'leap',    name: '목 긋기',     cd: 10, desc: '화면 안 가리킨 적 등 뒤로 · 피해 22',  color: '#ff6b8b', screen: true, dmg: 22},
+      {id: 'shadow', type: 'stealth', name: '그림자 은신', cd: 16, desc: 'Enter만 쳐도 바로! 15초 투명 · 속도 2배', color: '#8f86b8', instant: true, time: 15, fx: [{kind: 'speed', value: 1}]},
+      {id: 'oath',   type: 'buff',    name: '칼끝의 맹세', cd: 14, desc: '6초 동안 공격력 +40%',                 color: '#ff9ad5', time: 6, ally: true, fx: [{kind: 'atk', value: 0.4}]}
     ],
-    ult: {id: 'stopworld', type: 'slowfield', name: '멈춰 버린 세계를 가르는 칼날', desc: '아주 넓은 범위 적 12초 동안 느려짐 · 나 속도 +30% · 피해 +40%', color: '#c7b8ff', time: 12, area: 650, slow: 0.5,
+    ult: {id: 'stopworld', type: 'slowfield', name: '멈춰 버린 세계를 가르는 칼날', desc: '12초 동안 나를 따라다니는 넓은 범위 · 안의 적 느려짐 · 나 속도 +30% · 피해 +40%', color: '#c7b8ff', time: 12, area: 650, slow: 0.5,
       fx: [{kind: 'speed', value: 0.3}, {kind: 'atk', value: 0.4}]}
   },
   {
