@@ -857,6 +857,7 @@ function topOf(e, c){
      (걸음 빠르기는 실제로 움직인 거리에 맞춤 → 빨리 걸으면 빨리 뒤뚱)
    - 서 있기: 숨쉬듯 아주 살짝 커졌다 작아짐
    - 공격: 앞으로 쑥 내밀며 기울임 / 돌진: 앞으로 숙이고 길쭉하게 */
+const MOTION = {sway: 0.05, hop: 3.5, squash: 0.025, attack: 0.14, dash: 0.12};   // 처음 값의 절반쯤
 function drawSprite(p, t, img, c){
   if (Math.abs(p.face.x) > 0.15) p.look = p.face.x < 0 ? -1 : 1;   // 위·아래로 갈 땐 보던 쪽 그대로
   const dir = p.look || 1, h = SPRITE_H[c.id] || p.r * 3.8, w = h * img.width / img.height;
@@ -872,15 +873,16 @@ function drawSprite(p, t, img, c){
     if (Math.floor(p.walkT / Math.PI) !== before && inView(p.x, p.y, 0)) S.fx.push({type: 'dust', x: p.x - dir * 6, y: p.y + p.r * 0.95, t0: t, life: 0.35});   // 발걸음 먼지
   }
   const k = p.walkK, ph = p.walkT || 0;
-  let rot = Math.sin(ph) * 0.11 * k;                          // 뒤뚱
-  let lift = Math.abs(Math.sin(ph)) * 7 * k;                  // 통통
+  // ★ 움직임 크기는 MOTION 숫자로 조절 (2026-11-19 민솔님: 너무 크다고 해서 줄임)
+  let rot = Math.sin(ph) * MOTION.sway * k;                   // 뒤뚱
+  let lift = Math.abs(Math.sin(ph)) * MOTION.hop * k;         // 통통
   const land = (1 - Math.abs(Math.sin(ph))) * k;              // 땅에 닿는 순간
-  let sx = 1 + land * 0.05, sy = 1 - land * 0.06;             // 닿을 때 납작
-  if (k < 1){ const br = Math.sin(t * 2.6) * 0.018 * (1 - k); sy += br; sx -= br * 0.5; }   // 숨쉬기
+  let sx = 1 + land * MOTION.squash, sy = 1 - land * MOTION.squash * 1.2;   // 닿을 때 납작
+  if (k < 1){ const br = Math.sin(t * 2.6) * 0.012 * (1 - k); sy += br; sx -= br * 0.5; }   // 숨쉬기
   let fwd = 0;
   const sw = Math.min(1, Math.max(0, (t - p.swingAt) / 0.22));
-  if (sw < 1){ const a = Math.sin(sw * Math.PI); rot += a * 0.24; fwd += a * 9; sx += a * 0.04; }   // 공격: 앞으로 쑥
-  if (dashing){ rot += 0.2; sx *= 1.1; sy *= 0.94; lift = 0; }                                  // 돌진: 앞으로 숙임
+  if (sw < 1){ const a = Math.sin(sw * Math.PI); rot += a * MOTION.attack; fwd += a * 5; sx += a * 0.025; }   // 공격: 앞으로 쑥
+  if (dashing){ rot += MOTION.dash; sx *= 1.06; sy *= 0.96; lift = 0; }                               // 돌진: 앞으로 숙임
   ctx.save(); ctx.translate(p.x + fwd * dir, p.y + p.r * 0.95 - lift); ctx.scale(dir * sx, sy); ctx.rotate(rot);
   ctx.drawImage(img, -w / 2, -h, w, h);
   ctx.restore();
