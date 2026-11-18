@@ -858,9 +858,9 @@ function topOf(e, c){
    - 서 있기: 숨쉬듯 아주 살짝 커졌다 작아짐
    - 공격: 앞으로 쑥 내밀며 기울임 / 돌진: 앞으로 숙이고 길쭉하게 */
 const MOTION = {sway: 0.05, hop: 3.5, squash: 0.025, attack: 0.14, dash: 0.12};   // 처음 값의 절반쯤
-function drawSprite(p, t, img, c){
+function drawSprite(p, t, art, c){
   if (Math.abs(p.face.x) > 0.15) p.look = p.face.x < 0 ? -1 : 1;   // 위·아래로 갈 땐 보던 쪽 그대로
-  const dir = p.look || 1, h = SPRITE_H[c.id] || p.r * 3.8, w = h * img.width / img.height;
+  const dir = p.look || 1, h = SPRITE_H[c.id] || p.r * 3.8;
   // 이번 장면에서 움직인 거리 → 걸음
   const moved = p.lastX === undefined ? 0 : Math.hypot(p.x - p.lastX, p.y - p.lastY);
   p.lastX = p.x; p.lastY = p.y;
@@ -873,10 +873,14 @@ function drawSprite(p, t, img, c){
     if (Math.floor(p.walkT / Math.PI) !== before && inView(p.x, p.y, 0)) S.fx.push({type: 'dust', x: p.x - dir * 6, y: p.y + p.r * 0.95, t0: t, life: 0.35});   // 발걸음 먼지
   }
   const k = p.walkK, ph = p.walkT || 0;
+  // 걷는 그림(4칸)이 있으면 걸을 때 칸을 바꿔 가며 보여 줌 (한 칸 = 약 20픽셀 걸음). 그때 뒤뚱은 아주 작게
+  const frames = window.MagicArt && MagicArt.walk(c.id), useWalk = !!frames && k > 0.5 && !dashing;
+  const fr = useWalk ? frames[Math.floor(ph / (Math.PI / 2)) % frames.length] : art, soft = useWalk ? 0.3 : 1;
+  const img = fr.img, w = h * img.width / img.height, ax = fr.ax * h / img.height;
   // ★ 움직임 크기는 MOTION 숫자로 조절 (2026-11-19 민솔님: 너무 크다고 해서 줄임)
-  let rot = Math.sin(ph) * MOTION.sway * k;                   // 뒤뚱
-  let lift = Math.abs(Math.sin(ph)) * MOTION.hop * k;         // 통통
-  const land = (1 - Math.abs(Math.sin(ph))) * k;              // 땅에 닿는 순간
+  let rot = Math.sin(ph) * MOTION.sway * k * soft;                   // 뒤뚱
+  let lift = Math.abs(Math.sin(ph)) * MOTION.hop * k * soft;         // 통통
+  const land = (1 - Math.abs(Math.sin(ph))) * k * soft;       // 땅에 닿는 순간
   let sx = 1 + land * MOTION.squash, sy = 1 - land * MOTION.squash * 1.2;   // 닿을 때 납작
   if (k < 1){ const br = Math.sin(t * 2.6) * 0.012 * (1 - k); sy += br; sx -= br * 0.5; }   // 숨쉬기
   let fwd = 0;
@@ -884,7 +888,7 @@ function drawSprite(p, t, img, c){
   if (sw < 1){ const a = Math.sin(sw * Math.PI); rot += a * MOTION.attack; fwd += a * 5; sx += a * 0.025; }   // 공격: 앞으로 쑥
   if (dashing){ rot += MOTION.dash; sx *= 1.06; sy *= 0.96; lift = 0; }                               // 돌진: 앞으로 숙임
   ctx.save(); ctx.translate(p.x + fwd * dir, p.y + p.r * 0.95 - lift); ctx.scale(dir * sx, sy); ctx.rotate(rot);
-  ctx.drawImage(img, -w / 2, -h, w, h);
+  ctx.drawImage(img, -ax, -h, w, h);   // 머리 위치를 캐릭터 가운데에 맞춤
   ctx.restore();
 }
 /* 그림이 없을 때 코드로 그리는 간단한 모습 */
