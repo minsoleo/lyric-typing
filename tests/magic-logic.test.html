@@ -6,7 +6,7 @@
 <style>body{font:14px/1.5 monospace;padding:16px;background:#fff;color:#111}.p{color:#15803d}.f{color:#dc2626;font-weight:700}</style>
 </head>
 <body>
-<h1>주문 대결 로직 테스트</h1>
+<h1>숲속의 한바탕 로직 테스트</h1>
 <div id="out"></div>
 <script src="../magic-spells.js"></script>
 <script src="../magic-logic.js"></script>
@@ -22,17 +22,40 @@ function t(name, fn){
 const L = window.MagicLogic || {};
 const C = window.MAGIC_CLASSES || [];
 const S = (C.find(c => c.id === 'dealer') || {spells: []}).spells;
-const TYPES = ['shot', 'dash', 'blink', 'shield', 'heal', 'nova', 'zone', 'zap'];
+const TYPES = ['shot', 'dash', 'slash', 'wall', 'flurry', 'buff', 'stealth', 'leap', 'stun', 'zone', 'slowfield', 'sanctum'];
 const near = (a, b, e = 0.01) => Math.abs(a - b) <= e;
+const len = s => s.replace(/\s/g, '').length;
+const all = c => c.spells.concat([c.ult]);
+const by = id => C.find(c => c.id === id);
 
-t('캐릭터 3개: 탱커·딜러·힐러, 색이 서로 다름', () =>
-  C.length === 3 && ['tank', 'dealer', 'healer'].every(id => C.some(c => c.id === id)) && new Set(C.map(c => c.color)).size === 3);
-t('캐릭터마다 주문 5개, 이름 겹침 없음, 대기 > 0, 아는 type', () =>
-  C.every(c => c.spells.length === 5 && new Set(c.spells.map(s => L.norm(s.name))).size === 5 && c.spells.every(s => s.cd > 0 && TYPES.includes(s.type))));
-t('주문 id는 모든 캐릭터에서 겹치지 않음', () => { const ids = C.flatMap(c => c.spells.map(s => s.id)); return new Set(ids).size === ids.length; });
+t('캐릭터 3명: 가데온(탱커)·레이브(딜러)·세라(힐러), 색이 서로 다름', () =>
+  C.length === 3 && by('tank').name === '가데온' && by('dealer').name === '레이브' && by('healer').name === '세라' && new Set(C.map(c => c.color)).size === 3);
+t('캐릭터마다 스킬 5개 + 궁극기, 이름 겹침 없음, 아는 type', () =>
+  C.every(c => c.spells.length === 5 && c.ult && new Set(all(c).map(s => L.norm(s.name))).size === 6 && all(c).every(s => TYPES.includes(s.type)) && c.spells.every(s => s.cd > 0)));
+t('스킬 이름은 5글자 이하, 궁극기는 12글자 이상', () => C.every(c => c.spells.every(s => len(s.name) <= 5) && len(c.ult.name) >= 12));
+t('민솔님이 정한 이름이 들어 있음', () => ['바위벽', '목 긋기', '그림자 은신', '질주', '숲속의 섬광'].every(n => C.some(c => all(c).some(s => s.name === n))));
+t('스킬 id는 모든 캐릭터에서 겹치지 않음', () => { const ids = C.flatMap(c => all(c).map(s => s.id)); return new Set(ids).size === ids.length; });
+t('장전 없이 바로 쓰는 스킬은 그림자 은신 하나뿐', () => { const ins = C.flatMap(c => all(c).filter(s => s.instant)); return ins.length === 1 && ins[0].name === '그림자 은신'; });
 t('캐릭터마다 체력·속도·평타 수치가 있음', () => C.every(c => c.hp > 0 && c.speed > 0 && c.basic && c.basic.cd > 0 && c.basic.dmg > 0));
-t('탱커가 가장 튼튼하고, 힐러가 가장 빠름', () => { const by = id => C.find(c => c.id === id); return by('tank').hp > by('dealer').hp && by('healer').speed > by('dealer').speed && by('dealer').speed > by('tank').speed; });
-t('findSpell: 다른 캐릭터 주문은 못 씀', () => { const tank = C.find(c => c.id === 'tank'); return L.findSpell(tank.spells, '불꽃') === null; });
+t('가데온·레이브 평타는 근접, 세라는 화살', () => by('tank').basic.melee && by('dealer').basic.melee && !by('healer').basic.melee && by('healer').basic.look === 'arrow');
+t('탱커가 가장 튼튼하고, 힐러가 가장 빠름', () => by('tank').hp > by('dealer').hp && by('healer').speed > by('dealer').speed && by('dealer').speed > by('tank').speed);
+t('궁극기 게이지 설정이 있음', () => window.MAGIC_ULT && window.MAGIC_ULT.need > 0 && window.MAGIC_ULT.typed > 0);
+t('findSpell: 다른 캐릭터 스킬은 못 씀', () => L.findSpell(all(by('tank')), '목 긋기') === null);
+t('findSpell: 궁극기도 찾음', () => { const c = by('healer'); const r = L.findSpell(all(c), '모든  어둠을 몰아내는 새벽의 성역 '); return !!r && r.id === c.ult.id; });
+
+t('effectSum: 시간 안 지난 효과만 더함', () => { const l = []; L.addEffect(l, 'atk', 0.3, 10, 'a'); L.addEffect(l, 'atk', 0.25, 4, 'b'); return near(L.effectSum(l, 'atk', 5), 0.3) && near(L.effectSum(l, 'atk', 3), 0.55); });
+t('addEffect: 같은 스킬을 또 쓰면 겹치지 않고 새로', () => { const l = []; L.addEffect(l, 'def', 0.4, 5, 'g'); L.addEffect(l, 'def', 0.4, 9, 'g'); return l.length === 1 && l[0].until === 9; });
+t('takenMult: 피해 감소는 곱해서 겹침', () => { const l = []; L.addEffect(l, 'def', 0.4, 9, 'a'); L.addEffect(l, 'def', 0.3, 9, 'b'); return near(L.takenMult(l, 1), 0.42); });
+t('calcDamage: 공격력 +30%, 상대 피해 감소 40%', () => { const a = [], d = []; L.addEffect(a, 'atk', 0.3, 9, 'x'); L.addEffect(d, 'def', 0.4, 9, 'y'); return L.calcDamage(10, a, d, 1) === 8; });
+t('calcDamage: 나약함(-30%)이면 덜 아프고, 최소 1', () => { const a = []; L.addEffect(a, 'atk', -0.3, 9, 'w'); return L.calcDamage(10, a, [], 1) === 7 && L.calcDamage(1, a, [{kind: 'def', value: 0.9, until: 9}], 1) === 1; });
+t('removeTag·pruneEffects: 효과 지우기', () => { const l = [{kind: 'speed', value: 1, until: 9, tag: 's'}, {kind: 'atk', value: 1, until: 2, tag: 'a'}]; return L.removeTag(l, 's').length === 1 && L.pruneEffects(l, 5).length === 1; });
+t('inArc: 앞은 맞고 뒤·먼 곳은 안 맞음', () => { const f = {x: 0, y: 0}, dir = {x: 1, y: 0}; return L.inArc(f, dir, {x: 50, y: 10}, 80, 90) && !L.inArc(f, dir, {x: -50, y: 0}, 80, 90) && !L.inArc(f, dir, {x: 100, y: 0}, 80, 90); });
+t('pickTarget: 마우스에 가장 가까운 적, 너무 멀면 없음', () => {
+  const list = [{x: 100, y: 0, r: 20}, {x: 160, y: 0, r: 20}];
+  return L.pickTarget(list, {x: 150, y: 0}, 50, {x: 0, y: 0}, 600) === list[1] && L.pickTarget(list, {x: 150, y: 0}, 50, {x: 0, y: 0}, 50) === null && L.pickTarget(list, {x: 400, y: 400}, 50, {x: 0, y: 0}, 600) === null;
+});
+t('wallPoints: 바라보는 방향과 수직으로 늘어섬', () => { const p = L.wallPoints({x: 0, y: 0}, {x: 1, y: 0}, 200, 50); return p.length === 5 && p.every(q => near(q.x, 0)) && near(p[0].y, -100) && near(p[4].y, 100); });
+t('gainUlt: 가득 차면 더 안 올라감', () => L.gainUlt(95, 20, 100) === 100 && L.gainUlt(10, 5, 100) === 15 && L.gainUlt(10, -5, 100) === 10);
 
 t('findSpell: 정확히 맞으면 찾음', () => { const s = L.findSpell(S, S[0].name); return !!s && s.id === S[0].id; });
 t('findSpell: 띄어쓰기·앞뒤 공백 달라도 찾음', () => {

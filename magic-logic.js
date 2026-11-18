@@ -1,4 +1,4 @@
-/* 주문 대결: 화면과 상관없는 계산만 (테스트: tests/magic-logic.test.html) */
+/* 숲속의 한바탕: 화면과 상관없는 계산만 (테스트: tests/magic-logic.test.html) */
 (function(){
   'use strict';
 
@@ -67,5 +67,52 @@
   // 카메라: 캐릭터가 화면 가운데 오도록, 단 맵 밖은 안 보이게
   const camFollow = (p, vw, vh, ww, wh) => ({x: Math.max(0, Math.min(ww - vw, p.x - vw / 2)), y: Math.max(0, Math.min(wh - vh, p.y - vh / 2))});
 
-  window.MagicLogic = {norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow};
+  /* ---------- 효과(버프·디버프): [{kind, value, until, tag}] ---------- */
+  // 같은 kind+tag는 새로 덮어씀 (같은 스킬을 또 쓰면 시간만 새로)
+  function addEffect(list, kind, value, until, tag){
+    const e = {kind, value, until, tag};
+    const i = list.findIndex(x => x.kind === kind && x.tag === tag);
+    if (i >= 0) list[i] = e; else list.push(e);
+    return list;
+  }
+  const effectSum = (list, kind, now) => (list || []).reduce((s, e) => e.kind === kind && e.until > now ? s + e.value : s, 0);
+  // 받는 피해 배율: 피해 감소(def)는 곱해서 겹침 (40% + 30% → 0.6 × 0.7)
+  const takenMult = (list, now) => (list || []).reduce((m, e) => e.kind === 'def' && e.until > now ? m * (1 - e.value) : m, 1);
+  const pruneEffects = (list, now) => list.filter(e => e.until > now);
+  const removeTag = (list, tag) => list.filter(e => e.tag !== tag);
+
+  // 실제 피해 = 기본 피해 × (1 + 공격력 증가, 나약함은 마이너스) × 받는 피해 배율, 최소 1
+  const calcDamage = (base, atkFx, defFx, now) =>
+    Math.max(1, Math.round(base * Math.max(0.1, 1 + effectSum(atkFx, 'atk', now)) * takenMult(defFx, now)));
+
+  // 근접 공격: target이 from에서 dir 쪽 부채꼴(각도 arcDeg, 거리 reach) 안에 있는지
+  function inArc(from, dir, target, reach, arcDeg){
+    const dx = target.x - from.x, dy = target.y - from.y, d = Math.hypot(dx, dy);
+    if (d > reach) return false;
+    if (d < 1) return true;
+    return (dx * dir.x + dy * dir.y) / d >= Math.cos(arcDeg / 2 * Math.PI / 180) - 1e-9;
+  }
+
+  // 마우스(point)에서 radius 안, 나(from)에서 reach 안에 있는 적 중 마우스에 가장 가까운 것
+  function pickTarget(list, point, radius, from, reach){
+    let best = null, bd = Infinity;
+    for (const e of list){
+      const r = e.r || 0, dm = Math.hypot(e.x - point.x, e.y - point.y);
+      if (dm > radius + r || Math.hypot(e.x - from.x, e.y - from.y) > reach + r) continue;
+      if (dm < bd){ bd = dm; best = e; }
+    }
+    return best;
+  }
+
+  // 바위벽: center에서 dir과 수직으로 length만큼 늘어선 점들 (gap 간격)
+  function wallPoints(center, dir, length, gap){
+    const px = -dir.y, py = dir.x, n = Math.max(1, Math.round(length / gap)), pts = [];
+    for (let i = 0; i <= n; i++){ const o = -length / 2 + length * i / n; pts.push({x: center.x + px * o, y: center.y + py * o}); }
+    return pts;
+  }
+
+  const gainUlt = (cur, amount, max) => Math.min(max, cur + Math.max(0, amount || 0));
+
+  window.MagicLogic = {norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
+    addEffect, effectSum, takenMult, pruneEffects, removeTag, calcDamage, inArc, pickTarget, wallPoints, gainUlt};
 })();

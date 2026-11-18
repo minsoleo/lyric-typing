@@ -1,46 +1,69 @@
-/* 주문 대결 — 캐릭터(역할)와 주문 표
-   ★ 캐릭터 이름, 주문 이름을 바꾸고 싶으면 여기 name만 고치면 돼요. (id는 그대로 두기)
-   주문 type: shot(날아가는 마법) · dash(돌진) · blink(순간 이동) · shield(방패) · heal(회복)
-              nova(내 주변 넓게) · zone(바닥에 회복 샘) · zap(잠깐 뒤 떨어지는 넓은 마법)
-   cd = 쓴 뒤 다시 쓸 수 있을 때까지(초), color = 장전됐을 때 빛나는 색, look = 날아가는 모양 */
+/* 숲속의 한바탕 — 캐릭터와 스킬 표 (정리본: docs/캐릭터-스킬표.md)
+   ★ 캐릭터·스킬 이름을 바꾸고 싶으면 여기 name만 고치면 돼요. (id는 그대로 두기)
+   스킬 type:
+     shot      날아가는 공격 (pull: 맞으면 끌어옴, freeze: 묶음)
+     dash      돌진 (dmg: 지나가며 피해, boom: 멈춘 자리에서 폭발, healAll: 아군 모두 회복)
+     slash     앞을 베고 뒤로 물러남
+     wall      바위벽 세우기 (적이 쏜 공격을 막음)
+     flurry    정해진 시간 동안 주먹 연타
+     buff      나(와 아군)를 강하게 (fx 목록)
+     stealth   투명해지고 빨라짐 (instant: 장전 없이 Enter만 쳐도 바로)
+     leap      가리킨 적 등 뒤로 순간 이동 + 피해
+     stun      가리킨 적 기절
+     zone      바닥에 회복 샘
+     slowfield 넓은 범위 적을 느리게 + 나 강해짐
+     sanctum   성역: 아군 회복 + 적 피해·나약함
+   fx kind: atk(주는 피해 +) · def(받는 피해 −) · speed(이동 속도 +) · basic(평타 피해 +)
+   cd = 쓴 뒤 다시 쓸 수 있을 때까지(초), color = 장전됐을 때 빛나는 색, look = 날아가는 모양
+   궁극기(ult)는 대기 시간 대신 게이지(MAGIC_ULT)가 가득 차야 쓸 수 있음 */
 window.MAGIC_CLASSES = [
   {
-    id: 'tank', role: '탱커', name: '바위 마법사', color: '#f08a24', hat: '#a8520c', hp: 160, speed: 165, r: 26,
-    about: '튼튼하고 느려요. 앞에서 막고 적을 묶어요.',
-    basic: {cd: 0.9, dmg: 12, speed: 420, radius: 11, range: 230, look: 'rock'},
+    id: 'tank', role: '탱커', name: '가데온', title: '강철 수호자', icon: '🛡', color: '#f08a24', dark: '#8a4a12', hp: 160, speed: 165, r: 26,
+    about: '아군을 지키며 맨 앞에서 싸워요. 튼튼하고 느려요.',
+    basic: {name: '강철 주먹', melee: true, cd: 0.9, dmg: 12, reach: 62, arc: 110},
     spells: [
-      {id: 'punch',  type: 'shot',   name: '바위 주먹',                     cd: 2,  desc: '묵직한 바위 · 피해 14',           color: '#d9a066', look: 'rock',  dmg: 14, speed: 480, radius: 15, range: 380},
-      {id: 'charge', type: 'dash',   name: '돌진',                          cd: 6,  desc: '앞으로 돌진 · 부딪히면 피해 12',  color: '#ffb36b', reach: 300, dmg: 12},
-      {id: 'jail',   type: 'shot',   name: '바위 감옥',                     cd: 7,  desc: '맞으면 1.5초 묶임 · 피해 8',      color: '#c9b08a', look: 'rock',  dmg: 8,  speed: 420, radius: 16, range: 700, freeze: 1.5},
-      {id: 'wall',   type: 'shield', name: '강철 방패',                     cd: 11, desc: '4초 동안 피해 60까지 막음',       color: '#9fd3ff', amount: 60, time: 4},
-      {id: 'quake',  type: 'nova',   name: '땅을 뒤흔드는 거대한 지진',     cd: 16, desc: '내 주변 넓게 · 피해 30 · 1초 묶임', color: '#ffcf6b', area: 200, dmg: 30, freeze: 1}
-    ]
+      {id: 'rockwall', type: 'wall',   name: '바위벽',     cd: 10, desc: '3초 동안 적의 공격을 막는 벽',     color: '#c9b08a', dist: 95, length: 230, time: 3},
+      {id: 'guard',    type: 'buff',   name: '수호의 방패', cd: 12, desc: '4초 동안 받는 피해 40% 감소',      color: '#9fd3ff', time: 4, ally: true, fx: [{kind: 'def', value: 0.4}]},
+      {id: 'chain',    type: 'shot',   name: '강철 사슬',   cd: 9,  desc: '맞은 적을 끌어옴 · 피해 10',       color: '#cfd6e6', look: 'chain', dmg: 10, speed: 760, radius: 12, range: 540, pull: true},
+      {id: 'crash',    type: 'dash',   name: '파쇄 돌격',   cd: 8,  desc: '돌진 후 폭발 · 피해 20',           color: '#ffb36b', reach: 300, dmg: 0, boom: {area: 130, dmg: 20}},
+      {id: 'flurry',   type: 'flurry', name: '주먹 폭풍',   cd: 14, desc: '3초 동안 주먹 연타 · 한 대에 5',   color: '#ffcf6b', time: 3, every: 0.25, dmg: 5, reach: 80, arc: 120}
+    ],
+    ult: {id: 'legion', type: 'buff', name: '꺾이지 않는 강철 군단의 함성', desc: '8초 동안 공격력 +30% · 받는 피해 −30% · 속도 +25% · 평타 2배', color: '#ffd84a', time: 8, ally: true,
+      fx: [{kind: 'atk', value: 0.3}, {kind: 'def', value: 0.3}, {kind: 'speed', value: 0.25}, {kind: 'basic', value: 1}]}
   },
   {
-    id: 'dealer', role: '딜러', name: '불꽃 마법사', color: '#7d4dff', hat: '#4b2bb3', hp: 100, speed: 185, r: 22,
-    about: '피해를 가장 많이 줘요. 대신 몸이 약해요.',
-    basic: {cd: 0.6, dmg: 8, speed: 500, radius: 7, range: 430, look: 'basic'},
+    id: 'dealer', role: '딜러', name: '레이브', title: '그림자 칼잡이', icon: '🗡', color: '#7d4dff', dark: '#3d2296', hp: 100, speed: 190, r: 22,
+    about: '단검을 찬 날쌘 전사. 피해를 가장 많이 주지만 몸이 약해요.',
+    basic: {name: '단검 베기', melee: true, cd: 0.4, dmg: 7, reach: 58, arc: 90},
     spells: [
-      {id: 'fire',    type: 'shot',  name: '불꽃',                   cd: 1.5, desc: '불덩이 발사 · 피해 12',         color: '#ff9a3d', look: 'fire', dmg: 12, speed: 520, radius: 11, range: 900},
-      {id: 'ice',     type: 'shot',  name: '얼음 감옥',               cd: 6,   desc: '맞으면 1.5초 얼어붙음 · 피해 6', color: '#8fe3ff', look: 'ice',  dmg: 6,  speed: 450, radius: 13, range: 850, freeze: 1.5},
-      {id: 'wind',    type: 'shot',  name: '바람의 칼날',             cd: 4,   desc: '뚫고 지나감 · 피해 18',          color: '#d9fff0', look: 'wind', dmg: 18, speed: 680, radius: 17, range: 950, pierce: true},
-      {id: 'blink',   type: 'blink', name: '순간 이동',               cd: 8,   desc: '마우스 쪽으로 휙 이동',          color: '#d6c2ff', reach: 320},
-      {id: 'thunder', type: 'zap',   name: '하늘을 가르는 천둥 번개', cd: 15,  desc: '0.7초 뒤 넓은 번개 · 피해 45',   color: '#fff07a', delay: 0.7, area: 110, dmg: 45}
-    ]
+      {id: 'gale',   type: 'slash',   name: '칼바람',     cd: 6,  desc: '앞을 베고(피해 18) 뒤로 물러남',       color: '#d9c8ff', dmg: 18, reach: 110, arc: 130, back: 190},
+      {id: 'rush',   type: 'dash',    name: '질풍 베기',   cd: 8,  desc: '달려가며 길 위의 적을 벰 · 피해 16',   color: '#b9a3ff', reach: 340, dmg: 16},
+      {id: 'throat', type: 'leap',    name: '목 긋기',     cd: 10, desc: '가리킨 적 등 뒤로 순간 이동 · 피해 15', color: '#ff6b8b', reach: 600, dmg: 15},
+      {id: 'shadow', type: 'stealth', name: '그림자 은신', cd: 16, desc: 'Enter만 쳐도 바로! 4초 투명 · 속도 +40%', color: '#8f86b8', instant: true, time: 4, fx: [{kind: 'speed', value: 0.4}]},
+      {id: 'oath',   type: 'buff',    name: '칼끝의 맹세', cd: 14, desc: '6초 동안 공격력 +25%',                 color: '#ff9ad5', time: 6, ally: true, fx: [{kind: 'atk', value: 0.25}]}
+    ],
+    ult: {id: 'stopworld', type: 'slowfield', name: '멈춰 버린 세계를 가르는 칼날', desc: '넓은 범위 적 6초 동안 느려짐 · 나 속도 +30% · 피해 +40%', color: '#c7b8ff', time: 6, area: 420, slow: 0.5,
+      fx: [{kind: 'speed', value: 0.3}, {kind: 'atk', value: 0.4}]}
   },
   {
-    id: 'healer', role: '힐러', name: '빛의 마법사', color: '#2fbf71', hat: '#1b7a47', hp: 90, speed: 195, r: 21,
-    about: '나와 팀을 회복시켜요. 공격은 약해요.',
-    basic: {cd: 0.7, dmg: 6, speed: 520, radius: 7, range: 400, look: 'light'},
+    id: 'healer', role: '힐러', name: '세라', title: '덩굴 요정', icon: '🏹', color: '#2fbf71', dark: '#1b6e42', hp: 90, speed: 200, r: 21,
+    about: '활을 든 덩굴 요정. 가장 빠르고 아군을 회복시켜요.',
+    basic: {name: '덩굴 화살', cd: 0.7, dmg: 6, speed: 580, radius: 7, range: 460, look: 'arrow', allyHeal: 5},
     spells: [
-      {id: 'orb',    type: 'shot',   name: '빛의 구슬',                     cd: 1.2, desc: '빛 구슬 · 피해 9',                     color: '#fff6b0', look: 'light', dmg: 9, speed: 560, radius: 10, range: 750},
-      {id: 'heal',   type: 'heal',   name: '치유의 빛',                     cd: 8,   desc: '체력 25 회복',                         color: '#7dffa8', heal: 25},
-      {id: 'spring', type: 'zone',   name: '생명의 샘',                     cd: 14,  desc: '바닥에 5초 동안 회복 샘 · 체력 30',     color: '#5cf0b0', reach: 500, area: 120, heal: 30, time: 5},
-      {id: 'bless',  type: 'shield', name: '수호의 축복',                   cd: 10,  desc: '3초 동안 피해 30까지 막음',            color: '#bff7ff', amount: 30, time: 3},
-      {id: 'angel',  type: 'zap',    name: '하늘에서 내려오는 천사의 빛',   cd: 18,  desc: '0.6초 뒤 넓은 빛 · 적 피해 22 · 나 회복 35', color: '#fffbd0', delay: 0.6, area: 140, dmg: 22, heal: 35}
-    ]
+      {id: 'sprint', type: 'dash',   name: '질주',       cd: 10, desc: '앞으로 달려감 · 아군 모두 체력 15 회복', color: '#9dffb0', reach: 260, dmg: 0, healAll: 15},
+      {id: 'spring', type: 'zone',   name: '생명의 샘',   cd: 14, desc: '바닥에 5초 동안 회복 샘 · 체력 30',     color: '#5cf0b0', reach: 500, area: 120, heal: 30, time: 5},
+      {id: 'spear',  type: 'shot',   name: '빛의 창',     cd: 3,  desc: '빛의 창을 던짐 · 피해 14',               color: '#fff6b0', look: 'spear', dmg: 14, speed: 660, radius: 10, range: 800},
+      {id: 'flash',  type: 'stun',   name: '숲속의 섬광', cd: 12, desc: '가리킨 적 1.2초 기절',                   color: '#fffbd0', reach: 650, time: 1.2},
+      {id: 'bless',  type: 'buff',   name: '수호의 축복', cd: 12, desc: '체력 20 회복 · 5초 동안 받는 피해 25% 감소', color: '#bff7ff', heal: 20, time: 5, ally: true, fx: [{kind: 'def', value: 0.25}]}
+    ],
+    ult: {id: 'sanctum', type: 'sanctum', name: '모든 어둠을 몰아내는 새벽의 성역', desc: '6초 동안 성역 · 아군 회복 50 · 적 피해 30 + 나약함', color: '#fff0a0', reach: 500, area: 210, time: 6, heal: 50, dmg: 30, weak: 0.3}
   }
 ];
 
-/* 장전: 주문을 치고 Enter → 이 시간 안에 오른쪽 클릭으로 써야 함 (안 쓰면 흩어짐) */
+/* 장전: 스킬을 치고 Enter → 이 시간 안에 오른쪽 클릭으로 써야 함 (안 쓰면 흩어짐) */
 window.MAGIC_CHARGE_TIME = 5;
+
+/* 궁극기 게이지: need만큼 차면 궁극기를 쓸 수 있음. 아래 숫자만큼 차오름
+   spellDmg: 스킬로 준 피해 1마다 · basicDmg: 평타로 준 피해 1마다 · heal: 회복 1마다
+   taken: 받은 피해 1마다 · typed: 스킬 이름을 맞게 칠 때마다 */
+window.MAGIC_ULT = {need: 100, spellDmg: 0.3, basicDmg: 0.15, heal: 0.3, taken: 0.2, typed: 4};
