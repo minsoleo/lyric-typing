@@ -39,7 +39,15 @@ t('장전 없이 바로 쓰는 스킬은 그림자 은신 하나뿐', () => { co
 t('캐릭터마다 체력·속도·평타 수치가 있음', () => C.every(c => c.hp > 0 && c.speed > 0 && c.basic && c.basic.cd > 0 && c.basic.dmg > 0));
 t('가데온·레이브 평타는 근접, 세라는 화살', () => by('tank').basic.melee && by('dealer').basic.melee && !by('healer').basic.melee && by('healer').basic.look === 'arrow');
 t('탱커가 가장 튼튼하고, 힐러가 가장 빠름', () => by('tank').hp > by('dealer').hp && by('healer').speed > by('dealer').speed && by('dealer').speed > by('tank').speed);
-t('궁극기 게이지 설정이 있음', () => window.MAGIC_ULT && window.MAGIC_ULT.need > 0 && window.MAGIC_ULT.typed > 0);
+t('궁극기 게이지 설정이 있음 (가만히 있어도 참, 딜이 더 빨리 채움)', () => { const u = window.MAGIC_ULT; return u && u.need > 0 && u.typed > 0 && u.idle > 0 && u.spellDmg > u.basicDmg; });
+t('민솔님이 정한 수치 (2026-11-18)', () => {
+  const sp = (c, id) => all(by(c)).find(s => s.id === id), fx = (c, id, k) => (sp(c, id).fx || []).find(f => f.kind === k).value;
+  return sp('tank', 'rockwall').time === 5 && sp('tank', 'guard').time === 8 && fx('tank', 'legion', 'def') === 0.5 && fx('tank', 'legion', 'reach') > 0
+    && sp('dealer', 'gale').backDelay === 1.5 && sp('dealer', 'throat').screen === true && sp('dealer', 'shadow').time === 15 && fx('dealer', 'shadow', 'speed') === 1
+    && fx('dealer', 'oath', 'atk') === 0.4 && sp('dealer', 'stopworld').time === 12
+    && sp('healer', 'spring').time === 7 && sp('healer', 'spear').dmg === 20 && sp('healer', 'flash').time === 2.5 && fx('healer', 'bless', 'def') === 0.3;
+});
+t('레이브 스킬 대기 시간은 모두 8초 이하 (2배 빠르게)', () => by('dealer').spells.every(s => s.cd <= 8));
 t('findSpell: 다른 캐릭터 스킬은 못 씀', () => L.findSpell(all(by('tank')), '목 긋기') === null);
 t('findSpell: 궁극기도 찾음', () => { const c = by('healer'); const r = L.findSpell(all(c), '모든  어둠을 몰아내는 새벽의 성역 '); return !!r && r.id === c.ult.id; });
 

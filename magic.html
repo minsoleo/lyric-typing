@@ -122,7 +122,7 @@ canvas{display:block;border-radius:16px;box-shadow:var(--shadow);cursor:crosshai
 </header>
 <div class="stage" id="stage">
   <canvas id="cv" aria-label="숲속의 한바탕 연습판"></canvas>
-  <div class="hint">🖱 왼쪽: 이동 · ⌨ 스킬 + Enter: 장전 · 🖱 오른쪽: 발사 (없으면 평타) · 🌟 게이지가 차면 궁극기 · Esc: 지우기</div>
+  <div class="hint">🖱 왼쪽: 이동 · ⌨ 스킬 + Enter: 장전 · 🖱 오른쪽: 발사 (없으면 평타) · 🌟 궁극기는 긴 이름 · ♾ 무제한이면 대기 시간 없음 · Esc: 지우기</div>
 </div>
 <div class="bottom">
   <div class="topline">
@@ -137,7 +137,7 @@ canvas{display:block;border-radius:16px;box-shadow:var(--shadow);cursor:crosshai
       <input type="text" id="spellInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="30" placeholder="아래 스킬 이름을 치고 Enter로 장전 → 오른쪽 클릭으로 발사">
       <span id="castMsg"></span>
     </div>
-    <div class="row dummy"><button id="pickBtn">🔄 캐릭터 바꾸기</button><small>허수아비</small><button id="dStill" class="on">가만히</button><button id="dMove">움직이기</button><button id="dAttack" title="허수아비가 나에게 공격을 쏴요 (가데온의 바위벽·세라 회복 연습용)">반격</button></div>
+    <div class="row dummy"><button id="infBtn" class="on">♾ 무제한</button><button id="pickBtn">🔄 캐릭터 바꾸기</button><small>허수아비</small><button id="dStill" class="on">가만히</button><button id="dMove">움직이기</button><button id="dAttack" title="허수아비가 나에게 공격을 쏴요 (가데온의 바위벽·세라 회복 연습용)">반격</button></div>
   </div>
   <ul class="skills" id="book"></ul>
 </div>
