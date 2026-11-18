@@ -3,7 +3,7 @@
    스킬 type:
      shot      날아가는 공격 (pull: 맞으면 끌어옴, freeze: 묶음)
      dash      돌진 (dmg: 지나가며 피해, boom: 멈춘 자리에서 폭발, healAll: 아군 모두 회복)
-     slash     앞을 베고 뒤로 물러남 (backDelay: 벤 뒤 몇 초 있다가 물러나는지)
+     slash     swing초 동안 every초마다 앞을 베고(한 번에 dmg), 다 휘두르면 뒤로 물러남
      wall      바위벽 세우기 (적이 쏜 공격을 막음)
      flurry    정해진 시간 동안 주먹 연타
      buff      나(와 아군)를 강하게 (fx 목록)
@@ -15,7 +15,9 @@
      sanctum   성역: 아군 회복 + 적 피해·나약함
    fx kind: atk(주는 피해 +) · def(받는 피해 −) · speed(이동 속도 +) · basic(평타 피해 +) · reach(근접 공격 거리 +)
    cd = 쓴 뒤 다시 쓸 수 있을 때까지(초), color = 장전됐을 때 빛나는 색, look = 날아가는 모양
-   궁극기(ult)는 대기 시간 대신 게이지(MAGIC_ULT)가 가득 차야 쓸 수 있음 */
+   궁극기(ult)는 대기 시간 대신 게이지(MAGIC_ULT)가 가득 차야 쓸 수 있음
+   ★ 스킬을 쓰는 동안(지속 시간)은 다른 스킬을 치거나 장전할 수 없음 (그림자 은신만 예외)
+     지속 시간 = time (돌진은 달리는 동안, 칼바람은 휘두르는 동안). 따로 정하고 싶으면 busy: 초 를 적으면 됨 */
 window.MAGIC_CLASSES = [
   {
     id: 'tank', role: '탱커', name: '가데온', title: '강철 수호자', icon: '🛡', color: '#f08a24', dark: '#8a4a12', hp: 160, speed: 165, r: 26,
@@ -36,7 +38,7 @@ window.MAGIC_CLASSES = [
     about: '양손에 단검을 든 날쌘 전사. 피해를 가장 많이 주지만 몸이 약해요.',
     basic: {name: '단검 베기', melee: true, cd: 0.4, dmg: 9, reach: 72, arc: 100},
     spells: [
-      {id: 'gale',   type: 'slash',   name: '칼바람',     cd: 6,  desc: '앞을 베고(피해 24) 1.5초 뒤 물러남',   color: '#d9c8ff', dmg: 24, reach: 130, arc: 130, back: 190, backDelay: 1.5},
+      {id: 'gale',   type: 'slash',   name: '칼바람',     cd: 6,  desc: '1.5초 동안 3번 휘두름(8씩) 후 물러남', color: '#d9c8ff', swing: 1.5, every: 0.5, dmg: 8, reach: 130, arc: 130, back: 190},
       {id: 'rush',   type: 'dash',    name: '질풍 베기',   cd: 8,  desc: '멀리 달려가며 지나간 적 모두 피해 22', color: '#b9a3ff', reach: 520, dmg: 22, wide: 34},
       {id: 'throat', type: 'leap',    name: '목 긋기',     cd: 10, desc: '화면 안 가리킨 적 등 뒤로 · 피해 22',  color: '#ff6b8b', screen: true, dmg: 22},
       {id: 'shadow', type: 'stealth', name: '그림자 은신', cd: 16, desc: 'Enter만 쳐도 바로! 15초 투명 · 속도 2배', color: '#8f86b8', instant: true, time: 15, fx: [{kind: 'speed', value: 1}]},
@@ -56,7 +58,7 @@ window.MAGIC_CLASSES = [
       {id: 'flash',  type: 'stun',   name: '숲속의 섬광', cd: 12, desc: '가리킨 적 2.5초 기절',                   color: '#fffbd0', reach: 650, time: 2.5},
       {id: 'bless',  type: 'buff',   name: '수호의 축복', cd: 12, desc: '체력 20 회복 · 5초 동안 받는 피해 30% 감소', color: '#bff7ff', heal: 20, time: 5, ally: true, fx: [{kind: 'def', value: 0.3}]}
     ],
-    ult: {id: 'sanctum', type: 'sanctum', name: '모든 어둠을 몰아내는 새벽의 성역', desc: '6초 동안 넓은 성역 · 아군 회복 50 · 적 피해 30 + 나약함', color: '#fff0a0', reach: 500, area: 320, time: 6, heal: 50, dmg: 30, weak: 0.3}
+    ult: {id: 'sanctum', type: 'sanctum', name: '모든 어둠을 몰아내는 새벽의 성역', desc: '10초 동안 넓은 성역 · 아군 회복 80 · 적 피해 50 + 나약함', color: '#fff0a0', reach: 500, area: 320, time: 10, heal: 80, dmg: 50, weak: 0.3}
   }
 ];
 

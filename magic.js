@@ -2,6 +2,7 @@
    - 캐릭터 3명(가데온·레이브·세라). 스킬 표는 magic-spells.js, 정리본은 docs/캐릭터-스킬표.md
    - 맵은 화면보다 크고 화면(카메라)이 캐릭터를 따라감 + 작은 지도
    - 스킬 + Enter → 장전(5초) → 오른쪽 클릭으로 발사. 장전은 한 번에 하나 (그림자 은신만 Enter로 바로)
+   - 스킬을 쓰는 동안(지속 시간)은 다른 스킬을 치거나 장전할 수 없음 (그림자 은신만 예외)
    - 궁극기: 가만히 있어도 천천히, 싸우면 더 빨리 게이지가 차오르고, 가득 차면 긴 이름을 쳐서 장전
    - ♾ 무제한(연습판 기본): 대기 시간·궁극기 게이지 없이 마음껏 써 보기
    - 게임 상태(S)와 그리기(draw)를 나눠 둠 → 2단계 온라인에서 상태만 주고받기 쉽게 */
@@ -60,7 +61,7 @@ const S = {
   dummies: [makeDummy(1000, 880), makeDummy(2250, 1080), makeDummy(2550, 500)],
   dummyMode: 'still',
   shots: [], zones: [], walls: [], sanctums: [], fields: [], fx: [], floats: [], tint: null,
-  cds: {}, lastBasic: undefined, lockUntil: 0, charged: null, ult: 0,
+  cds: {}, lastBasic: undefined, lockUntil: 0, charged: null, busy: null, ult: 0,
   stats: {dmg: 0, kills: 0, ok: 0, fail: 0, healed: 0, taken: 0}
 };
 function makePlayer(c){
@@ -144,6 +145,8 @@ function submitSpell(){
     castSpell(sp, t); castMsg(sp.name + '!', 'good'); flashSlot(sp.id);
     return;
   }
+  const busy = busyLeft(t);
+  if (busy > 0){ castMsg(`${S.busy.sp.name} 쓰는 중… ${busy.toFixed(1)}초 뒤에 다른 스킬`, 'wait'); shakeCast(); return; }
   if (S.charged){ castMsg(`⚡ ${S.charged.spell.name}부터 써요 (오른쪽 클릭)`, 'charge'); shakeCast(); return; }
   if (t < S.lockUntil){ castMsg('잠깐! 다시 집중하는 중…', 'wait'); return; }
   if (!sp){
@@ -180,8 +183,13 @@ function rightClick(){
     clearCharge();
     if (sp === cls.ult){ if (!unlimited) S.ult = 0; } else S.cds[sp.id] = t;
     castSpell(sp, t, target); castMsg(sp.name + '!', 'good');
+    // 이 스킬을 쓰는 동안은 다른 스킬 금지
+    const dashTime = sp.type === 'dash' && p.dash ? dist(p, p.dash.to) / p.dash.speed + 0.05 : 0;
+    const b = L.busyTime(sp, dashTime);
+    S.busy = b > 0 ? {sp, until: t + b, len: b} : null;
   } else basicAttack(t);
 }
+const busyLeft = t => S.busy ? Math.max(0, S.busy.until - t) : 0;
 
 /* ---------- 스킬 효과 (type별) ---------- */
 function aimDir(from){
@@ -234,9 +242,9 @@ function castSpell(sp, t, target){
       break;
     }
     case 'slash': {
-      melee(t, sp, false, sp.color);
-      // 벤 다음 backDelay초 뒤에 벤 방향 반대로 훌쩍 물러남
-      p.backAt = {at: t + (sp.backDelay || 0), dir: {x: p.face.x, y: p.face.y}, dist: sp.back};
+      // swing초 동안 every초마다 베고, 다 휘두르면 마지막으로 벤 방향 반대로 훌쩍 물러남
+      p.flurry = {until: t + sp.swing, next: t, sp};
+      p.backAt = {at: t + sp.swing, dist: sp.back};
       break;
     }
     case 'wall': {
@@ -322,7 +330,7 @@ function hurt(target, dmg, t, color, tag){
   if (target.hp > 0) return got;
   target.deadUntil = t + RESPAWN;
   S.fx.push({type: 'poof', x: target.x, y: target.y, t0: t, life: 0.7});
-  if (isMe){ Object.assign(target, {target: null, dash: null, flurry: null, backAt: null, stealthUntil: 0, fx: []}); clearCharge(); castMsg('쓰러졌어요! 3초 뒤 다시 일어나요', 'bad'); }
+  if (isMe){ Object.assign(target, {target: null, dash: null, flurry: null, backAt: null, stealthUntil: 0, fx: []}); clearCharge(); S.busy = null; castMsg('쓰러졌어요! 3초 뒤 다시 일어나요', 'bad'); }
   else { S.stats.kills++; target.fx = []; target.pull = null; }
   return got;
 }
@@ -341,8 +349,8 @@ function update(){
   if (!p.deadUntil && !(S.charged && S.charged.spell === cls.ult)) gainUlt(U.idle * dt, t);
   // 칼바람: 벤 뒤 시간이 되면 뒤로 물러남
   if (p.backAt && t >= p.backAt.at && !p.dash && !p.deadUntil){
-    const b = p.backAt; p.backAt = null;
-    p.dash = {to: L.clampToWorld({x: p.x - b.dir.x * b.dist, y: p.y - b.dir.y * b.dist}, p.r, WW, WH), dmg: 0, speed: 1100, hit: new Set()}; p.target = null;
+    const b = p.backAt, dir = b.dir || p.face; p.backAt = null;
+    p.dash = {to: L.clampToWorld({x: p.x - dir.x * b.dist, y: p.y - dir.y * b.dist}, p.r, WW, WH), dmg: 0, speed: 1100, hit: new Set()}; p.target = null;
     S.fx.push({type: 'smoke', x: p.x, y: p.y, t0: t, life: 0.4});
   }
 
@@ -367,7 +375,7 @@ function update(){
     }
     // 검의 폭풍: 정해진 시간 동안 마우스 쪽으로 계속 검 연타
     if (p.flurry){
-      while (p.flurry && t >= p.flurry.next && p.flurry.next < p.flurry.until){ melee(t, p.flurry.sp, false, p.flurry.sp.color); p.flurry.next += p.flurry.sp.every; }
+      while (p.flurry && t >= p.flurry.next && p.flurry.next < p.flurry.until - 1e-6){ melee(t, p.flurry.sp, false, p.flurry.sp.color); p.flurry.next += p.flurry.sp.every; }
       if (p.flurry && t >= p.flurry.until) p.flurry = null;
     }
   }
@@ -404,6 +412,7 @@ function update(){
   S.fields = S.fields.filter(f => t < f.until && !p.deadUntil);
   S.walls = S.walls.filter(w => t < w.until);
   if (S.tint && t >= S.tint.until) S.tint = null;
+  if (S.busy && t >= S.busy.until) S.busy = null;
 
   // 허수아비들
   for (const d of S.dummies){
@@ -693,6 +702,11 @@ function drawPlayer(t){
   if (L.takenMult(p.fx, t) < 1){ ctx.strokeStyle = 'rgba(95,225,255,.9)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 10 + Math.sin(t * 8) * 2, 0, Math.PI * 2); ctx.stroke(); }
   if (L.effectSum(p.fx, 'atk', t) > 0){ ctx.strokeStyle = 'rgba(255,120,150,.75)'; ctx.lineWidth = 3; ctx.setLineDash([5, 7]); ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 15, -t * 2, -t * 2 + Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
   const ch = S.charged;
+  if (S.busy && S.busy.until > t){   // 스킬 쓰는 중: 남은 시간만큼 흰 고리
+    const k = (S.busy.until - t) / S.busy.len;
+    ctx.strokeStyle = 'rgba(255,255,255,.7)'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 26, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * k); ctx.stroke();
+  }
   if (ch){
     const k = Math.max(0, (ch.until - t) / CHARGE);
     ctx.strokeStyle = ch.spell.color; ctx.lineWidth = 5; ctx.globalAlpha = 0.9;
@@ -823,10 +837,20 @@ function buildBook(){
 let hudAt = 0;
 function updateHud(){
   const t = now(); if (t - hudAt < 0.1) return; hudAt = t;
-  const ch = S.charged;
+  const ch = S.charged, bz = busyLeft(t);
   for (const sp of allSpells(cls)){
     const li = document.querySelector(`#book li[data-id="${sp.id}"]`); if (!li) continue;
     const isCh = !!ch && ch.spell.id === sp.id, em = li.querySelector('em'), bar = li.querySelector('i');
+    // 스킬을 쓰는 중: 그 칸은 남은 시간, 다른 칸은 🔒 (그림자 은신은 그대로)
+    const using = bz > 0 && S.busy.sp.id === sp.id, locked = bz > 0 && !using && !sp.instant;
+    li.classList.toggle('using', using); li.classList.toggle('locked', locked);
+    if (using || locked){
+      li.classList.remove('charged', 'ready'); li.classList.toggle('cool', locked);
+      em.textContent = using ? '⏳ ' + bz.toFixed(1) + '초' : '🔒';
+      bar.style.width = (using ? bz / S.busy.len * 100 : 0) + '%';
+      continue;
+    }
+    if (sp === cls.ult) li.classList.remove('cool');
     if (sp === cls.ult){
       const ready = unlimited || S.ult >= U.need, pct = unlimited ? 100 : Math.floor(S.ult / U.need * 100);
       li.classList.toggle('ready', ready && !isCh); li.classList.toggle('charged', isCh);
@@ -866,7 +890,7 @@ function buildPick(){
 function openPick(){ buildPick(); $('#pick').hidden = false; const last = $('#cards .last'); if (last) last.focus(); }
 function choose(c){
   cls = c; try { localStorage.setItem('magic.class', c.id); } catch (e) {}
-  S.player = makePlayer(c); S.cds = {}; S.lastBasic = undefined; S.lockUntil = 0; S.ult = 0; clearCharge();
+  S.player = makePlayer(c); S.cds = {}; S.lastBasic = undefined; S.lockUntil = 0; S.ult = 0; S.busy = null; clearCharge();
   S.zones = []; S.shots = []; S.walls = []; S.sanctums = []; S.fields = []; S.tint = null;
   for (const d of S.dummies){ d.fx = []; d.pull = null; }
   cam = L.camFollow(S.player, VW, VH, WW, WH);

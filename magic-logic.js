@@ -113,6 +113,17 @@
 
   const gainUlt = (cur, amount, max) => Math.min(max, cur + Math.max(0, amount || 0));
 
+  // 스킬을 쓰는 동안(초): 이 시간 동안은 다른 스킬을 치거나 장전할 수 없음
+  // 그림자 은신(instant)은 0, 바로 끝나는 공격(shot·leap·stun)도 0, 돌진은 달리는 시간(dashTime)
+  function busyTime(sp, dashTime){
+    if (!sp || sp.instant) return 0;
+    if (sp.busy !== undefined) return sp.busy;
+    if (sp.type === 'shot' || sp.type === 'leap' || sp.type === 'stun') return 0;
+    if (sp.type === 'dash') return dashTime || 0;
+    if (sp.type === 'slash') return (sp.swing || 0) + 0.2;
+    return sp.time || 0;
+  }
+
   window.MagicLogic = {norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
-    addEffect, effectSum, takenMult, pruneEffects, removeTag, calcDamage, inArc, pickTarget, wallPoints, gainUlt};
+    addEffect, effectSum, takenMult, pruneEffects, removeTag, calcDamage, inArc, pickTarget, wallPoints, gainUlt, busyTime};
 })();
