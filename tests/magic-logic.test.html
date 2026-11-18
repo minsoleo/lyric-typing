@@ -20,12 +20,19 @@ function t(name, fn){
   out.insertAdjacentHTML('beforeend', `<div class="${ok ? 'p' : 'f'}">${ok ? 'PASS' : 'FAIL'} ${name}${msg}</div>`);
 }
 const L = window.MagicLogic || {};
-const S = window.MAGIC_SPELLS || [];
+const C = window.MAGIC_CLASSES || [];
+const S = (C.find(c => c.id === 'dealer') || {spells: []}).spells;
+const TYPES = ['shot', 'dash', 'blink', 'shield', 'heal', 'nova', 'zone', 'zap'];
 const near = (a, b, e = 0.01) => Math.abs(a - b) <= e;
 
-t('주문 표: 7개, id·이름 겹침 없음, 재사용 대기 > 0', () =>
-  S.length === 7 && new Set(S.map(s => s.id)).size === 7 && new Set(S.map(s => L.norm(s.name))).size === 7 && S.every(s => s.cd > 0));
-t('평타 수치가 있음', () => !!window.MAGIC_BASIC && MAGIC_BASIC.cd > 0 && MAGIC_BASIC.dmg > 0);
+t('캐릭터 3개: 탱커·딜러·힐러, 색이 서로 다름', () =>
+  C.length === 3 && ['tank', 'dealer', 'healer'].every(id => C.some(c => c.id === id)) && new Set(C.map(c => c.color)).size === 3);
+t('캐릭터마다 주문 5개, 이름 겹침 없음, 대기 > 0, 아는 type', () =>
+  C.every(c => c.spells.length === 5 && new Set(c.spells.map(s => L.norm(s.name))).size === 5 && c.spells.every(s => s.cd > 0 && TYPES.includes(s.type))));
+t('주문 id는 모든 캐릭터에서 겹치지 않음', () => { const ids = C.flatMap(c => c.spells.map(s => s.id)); return new Set(ids).size === ids.length; });
+t('캐릭터마다 체력·속도·평타 수치가 있음', () => C.every(c => c.hp > 0 && c.speed > 0 && c.basic && c.basic.cd > 0 && c.basic.dmg > 0));
+t('탱커가 가장 튼튼하고, 힐러가 가장 빠름', () => { const by = id => C.find(c => c.id === id); return by('tank').hp > by('dealer').hp && by('healer').speed > by('dealer').speed && by('dealer').speed > by('tank').speed; });
+t('findSpell: 다른 캐릭터 주문은 못 씀', () => { const tank = C.find(c => c.id === 'tank'); return L.findSpell(tank.spells, '불꽃') === null; });
 
 t('findSpell: 정확히 맞으면 찾음', () => { const s = L.findSpell(S, S[0].name); return !!s && s.id === S[0].id; });
 t('findSpell: 띄어쓰기·앞뒤 공백 달라도 찾음', () => {

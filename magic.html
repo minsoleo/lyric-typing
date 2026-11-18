@@ -69,7 +69,7 @@ canvas{display:block;border-radius:16px;box-shadow:var(--shadow);cursor:crosshai
 .stats b{color:var(--text)}
 
 /* 주문 막대 (가지런히 7칸) */
-.skills{list-style:none;display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:8px;margin:8px 0 0;padding:0}
+.skills{list-style:none;display:grid;grid-template-columns:repeat(var(--n,5),minmax(0,1fr));gap:8px;margin:8px 0 0;padding:0}
 .skills li{position:relative;overflow:hidden;min-height:50px;padding:5px 8px 6px;border-radius:12px;background:var(--panel);border:2px solid var(--line);text-align:center;box-shadow:var(--shadow)}
 .skills li b{display:block;font-size:14px;line-height:1.25;word-break:keep-all}
 .skills li span{display:block;font-size:11px;color:var(--dim);line-height:1.3;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -82,7 +82,23 @@ canvas{display:block;border-radius:16px;box-shadow:var(--shadow);cursor:crosshai
 .skills li.charged i{background:var(--gold)}
 .skills li.flash{animation:flash .5s}
 @keyframes flash{from{background:rgba(255,201,40,.6)}}
-@media(max-width:900px){.topline{grid-template-columns:1fr}.skills{grid-template-columns:repeat(4,1fr)}}
+@media(max-width:900px){.topline{grid-template-columns:1fr}.skills{grid-template-columns:repeat(3,1fr)}}
+/* 캐릭터 고르기 */
+.pick{position:fixed;inset:0;z-index:20;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;background:rgba(5,3,20,.78);backdrop-filter:blur(4px)}
+.pick h2{margin:0 0 4px;font-size:34px;color:#fff}
+.pick p.sub{margin:0 0 16px;color:#d6ccff;font-size:14px}
+.cards{display:grid;grid-template-columns:repeat(3,minmax(0,250px));gap:16px;max-width:100%}
+.card{text-align:left;padding:14px 16px;border-radius:18px;background:var(--panel);border:3px solid var(--line);box-shadow:var(--shadow);cursor:pointer;color:var(--text);font:inherit;white-space:normal}
+.card:hover,.card:focus-visible{border-color:var(--c);transform:translateY(-3px);outline:none}
+.card .face{display:flex;align-items:center;gap:12px;margin-bottom:6px}
+.card .dot{width:46px;height:46px;border-radius:50%;background:var(--c);box-shadow:inset 0 -6px 0 rgba(0,0,0,.25)}
+.card .role{display:inline-block;padding:1px 9px;border-radius:99px;background:var(--c);color:#fff;font-size:12px;font-weight:800}
+.card b{display:block;font:400 21px "Black Han Sans",sans-serif}
+.card .about{font-size:13px;color:var(--dim);margin:4px 0 8px;min-height:36px}
+.card .nums{display:flex;gap:10px;font-size:12.5px;font-weight:800;margin-bottom:6px}
+.card ul{margin:0;padding-left:18px;font-size:13px;line-height:1.6}
+.card.last{border-color:var(--c)}
+@media(max-width:800px){.cards{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.cast.shake{animation:none}}
 </style>
 </head>
@@ -110,9 +126,15 @@ canvas{display:block;border-radius:16px;box-shadow:var(--shadow);cursor:crosshai
       <input type="text" id="spellInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="30" placeholder="아래 주문을 치고 Enter로 장전 → 오른쪽 클릭으로 발사">
       <span id="castMsg"></span>
     </div>
-    <div class="row dummy"><small>허수아비</small><button id="dStill" class="on">가만히</button><button id="dMove">좌우로 움직이기</button></div>
+    <div class="row dummy"><button id="pickBtn">🔄 캐릭터 바꾸기</button><small>허수아비</small><button id="dStill" class="on">가만히</button><button id="dMove">움직이기</button><button id="dAttack" title="허수아비가 나에게 마법을 쏴요 (탱커·힐러 연습용)">반격</button></div>
   </div>
   <ul class="skills" id="book"></ul>
+</div>
+<!-- 캐릭터 고르기 -->
+<div class="pick" id="pick" hidden>
+  <h2 class="display">캐릭터 고르기</h2>
+  <p class="sub">색으로 구분해요. 캐릭터마다 쓸 수 있는 주문이 달라요.</p>
+  <div class="cards" id="cards"></div>
 </div>
 <script src="magic-spells.js"></script>
 <script src="magic-logic.js"></script>
