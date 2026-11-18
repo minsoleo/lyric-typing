@@ -9,7 +9,10 @@
      · 각자 자기 캐릭터를 계산하고 0.1초마다 위치·체력·효과를 보냄
      · 내 공격이 친구에게 맞으면 "맞았어요" 신호를 보내고, 맞은 친구가 자기 피해 감소를 계산해서 체력을 깎음
      · 허수아비는 방장 컴퓨터가 계산해서 모두에게 보내 줌 (방장이 나가면 다음 사람이 이어받음)
-     · 빨강 팀 / 파랑 팀: 다른 팀은 적, 같은 팀은 아군 (안 아프고, 회복·강화를 줄 수 있음) */
+     · 빨강 팀 / 파랑 팀: 다른 팀은 적, 같은 팀은 아군 (안 아프고, 회복·강화를 줄 수 있음)
+   - ⚔ 대결 (온라인, 방장이 시작): 3초 준비 → 정해진 시간 동안 상대 팀을 많이 쓰러뜨린 팀이 이김
+     · 대결 중에는 허수아비가 사라지고 ♾ 무제한이 꺼짐 (실제 대기 시간·게이지)
+     · 점수는 쓰러진 사람이 "상대 팀 +1"을 서버에 올림, 시간은 서버 시계 기준 */
 (function(){
 'use strict';
 const $ = s => document.querySelector(s);
@@ -68,6 +71,12 @@ const makeDummy = (x, y, i) => ({kind: 'dummy', id: 'd' + i, x, y, tx: x, ty: y,
 let cls = classById(loadClass());
 let net = null;                                    // 친구랑 연습 중이면 MagicNet 연결
 const isAuth = () => !net || net.isHost();         // 허수아비를 계산하는 컴퓨터 (혼자면 나, 온라인이면 방장)
+// ⚔ 대결: match = {id, startAt, endAt, len, score} (서버 시계, ms)
+let match = null, matchId = null;
+const phase = () => { if (!net || !match) return null; const n = net.serverNow(); return n < match.startAt ? 'count' : n < match.endAt ? 'play' : 'end'; };
+const inMatch = () => !!phase();
+const locked = () => { const ph = phase(); return ph === 'count' || ph === 'end'; };   // 준비 중·끝난 뒤엔 못 움직임
+const unl = () => unlimited && !inMatch();         // 대결 중에는 무제한 꺼짐
 const S = {
   player: null,
   others: new Map(),                               // 친구들 (pid → 받은 상태)
@@ -75,7 +84,7 @@ const S = {
   dummyMode: 'still',
   shots: [], zones: [], walls: [], sanctums: [], fields: [], fx: [], floats: [], feed: [], tint: null,
   cds: {}, lastBasic: undefined, lockUntil: 0, charged: null, busy: null, ult: 0,
-  stats: {dmg: 0, kills: 0, ok: 0, fail: 0, healed: 0, taken: 0}
+  stats: {dmg: 0, kills: 0, deaths: 0, ok: 0, fail: 0, healed: 0, taken: 0}
 };
 function makePlayer(c, team){
   const sp = SPAWN[team] || SPAWN.solo;
@@ -94,7 +103,7 @@ let unlimited = (() => { try { return localStorage.getItem('magic.unlimited') !=
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 const others = () => [...S.others.values()];
 const isDown = e => e.kind === 'player' ? !!e.dead : !!e.deadUntil;
-const alive = () => S.dummies.filter(d => !d.deadUntil);
+const alive = () => inMatch() ? [] : S.dummies.filter(d => !d.deadUntil);   // 대결 중엔 허수아비 없음
 // 내 적: 허수아비 + 다른 팀 친구 / 내 아군: 같은 팀 친구 (나는 빼고)
 const enemies = () => alive().concat(others().filter(o => o.team !== S.player.team && !o.dead));
 const allies = () => others().filter(o => o.team === S.player.team && !o.dead);
@@ -135,7 +144,7 @@ cv.addEventListener('mousemove', e => { setMouse(e); if (mouse.left && !S.player
 window.addEventListener('mouseup', e => { if (e.button === 0) mouse.left = false; });
 document.addEventListener('contextmenu', e => { if (e.target === cv || $('#pick').hidden) e.preventDefault(); });
 function setMoveTarget(){
-  if (S.player.dash || S.player.deadUntil || S.player.pull) return;
+  if (S.player.dash || S.player.deadUntil || S.player.pull || locked()) return;
   S.player.target = {x: mouse.x, y: mouse.y};
   S.fx.push({type: 'mark', x: mouse.x, y: mouse.y, t0: now(), life: 0.5});
 }
@@ -170,10 +179,11 @@ function submitSpell(){
   if (!L.norm(text)) return;
   const t = now(), p = S.player;
   if (p.deadUntil){ castMsg('쓰러져 있어요…', 'wait'); return; }
+  if (locked()){ castMsg(phase() === 'count' ? '곧 시작해요!' : '대결이 끝났어요', 'wait'); return; }
   if (t < p.frozenUntil){ castMsg('기절해서 스킬을 못 써요!', 'bad'); return; }
   const sp = L.findSpell(allSpells(cls), text);
   const isUlt = sp === cls.ult;
-  const cdLeft = sp && !isUlt && !unlimited ? L.cooldownLeft(S.cds[sp.id], sp.cd, t) : 0;
+  const cdLeft = sp && !isUlt && !unl() ? L.cooldownLeft(S.cds[sp.id], sp.cd, t) : 0;
   // 그림자 은신: 장전 없이, 다른 스킬을 장전한 채로도 바로 씀
   if (sp && sp.instant && t >= S.lockUntil){
     if (cdLeft > 0){ castMsg(`${sp.name}: ${cdLeft.toFixed(1)}초 뒤에 다시`, 'wait'); return; }
@@ -192,7 +202,7 @@ function submitSpell(){
     S.fx.push({type: 'fizzle', x: p.x, y: p.y - 40, t0: t, life: 0.6});
     return;
   }
-  if (isUlt && !unlimited && S.ult < U.need){ castMsg(`궁극기 게이지 ${Math.floor(S.ult / U.need * 100)}% — 싸우면 차올라요`, 'wait'); return; }
+  if (isUlt && !unl() && S.ult < U.need){ castMsg(`궁극기 게이지 ${Math.floor(S.ult / U.need * 100)}% — 싸우면 차올라요`, 'wait'); return; }
   if (cdLeft > 0){ castMsg(`${sp.name}: ${cdLeft.toFixed(1)}초 뒤에 다시`, 'wait'); return; }
   inp.value = '';
   S.charged = {spell: sp, at: t, until: t + CHARGE};
@@ -205,7 +215,7 @@ function submitSpell(){
 /* 오른쪽 클릭: 장전한 스킬 발사, 없으면 평타 */
 function rightClick(){
   const t = now(), p = S.player;
-  if (p.deadUntil) return;
+  if (p.deadUntil || locked()) return;
   if (t < p.frozenUntil){ castMsg('기절!', 'bad'); return; }
   if (S.charged){
     const sp = S.charged.spell;
@@ -218,7 +228,7 @@ function rightClick(){
     }
     breakStealth(t);
     clearCharge();
-    if (sp === cls.ult){ if (!unlimited) S.ult = 0; } else S.cds[sp.id] = t;
+    if (sp === cls.ult){ if (!unl()) S.ult = 0; } else S.cds[sp.id] = t;
     castSpell(sp, t, target); castMsg(sp.name + '!', 'good');
     // 이 스킬을 쓰는 동안은 다른 스킬 금지
     const dashTime = sp.type === 'dash' && p.dash ? dist(p, p.dash.to) / p.dash.speed + 0.05 : 0;
@@ -372,7 +382,7 @@ function basicAttack(t){
 /* ---------- 피해 · 회복 · 궁극기 게이지 ---------- */
 function gainUlt(x, t){
   const was = S.ult; S.ult = L.gainUlt(S.ult, x, U.need);
-  if (was < U.need && S.ult >= U.need && !unlimited){
+  if (was < U.need && S.ult >= U.need && !unl()){
     if (!S.charged) castMsg('🌟 궁극기 준비 완료! 긴 이름을 쳐 봐요', 'charge');
     S.floats.push({x: S.player.x, y: S.player.y - 70, text: '🌟 궁극기 준비!', color: '#ffd84a', t0: t});
     flashSlot(cls.ult.id);
@@ -411,7 +421,7 @@ function dealHit(e, base, t, o){
 }
 // 맞은 쪽(나, 또는 방장 컴퓨터의 허수아비): 상태 이상을 걸고, 피해 감소를 계산해서 체력을 깎음
 function applyHit(e, out, o, t, by){
-  if (isDown(e)) return 0;
+  if (isDown(e) || locked()) return 0;
   const me = e === S.player;
   if (o.stun){ e.frozenUntil = Math.max(e.frozenUntil, t + o.stun); e.frozenKind = 'stun'; if (me){ e.target = null; e.flurry = null; } }
   if (o.slow) L.addEffect(e.fx, 'speed', -o.slow.v, t + o.slow.t, o.slow.tag);
@@ -434,7 +444,8 @@ function hurt(target, dmg, t, color, tag, by){
   addFx({type: 'poof', x: r1(target.x), y: r1(target.y), t0: t, life: 0.7}, true);
   if (isMe){
     Object.assign(target, {target: null, dash: null, flurry: null, backAt: null, pull: null, stealthUntil: 0, fx: []}); clearCharge(); S.busy = null;
-    castMsg('쓰러졌어요! 3초 뒤 다시 일어나요', 'bad');
+    castMsg('쓰러졌어요! 3초 뒤 다시 일어나요', 'bad'); S.stats.deaths++;
+    if (phase() === 'play'){ const k = S.others.get(by); if (k && k.team !== target.team) net.addScore(k.team); }   // 대결: 쓰러뜨린 팀 +1
     if (net){
       send({k: 'down', by: by || 0, who: myName()});
       addFeed(by && by !== 'dummy' ? `💥 ${nameOf(by)} → ${myName()}` : `💥 ${myName()} 쓰러짐`, '#ff9a9a');
@@ -492,7 +503,7 @@ function onNetState(pid, st){
   if (Math.hypot(st.x - o.x, st.y - o.y) > 400){ o.x = st.x; o.y = st.y; }   // 순간 이동·부활은 바로
   Object.assign(o, {tx: st.x, ty: st.y, name: st.n || '친구', team: st.tm === 'blue' ? 'blue' : 'red', cls: c, r: c.r, hp: st.hp, max: st.mx || c.hp,
     face: {x: (st.fa || [1, 0])[0], y: (st.fa || [1, 0])[1]}, stealth: !!st.sh, dead: !!st.dd, deadLeft: st.dd || 0, charged: st.ch || '', seen: t,
-    frozenUntil: st.fz ? t + st.fz : 0, frozenKind: 'stun', fx: (st.fx || []).map(([kind, value, left]) => ({kind, value, until: t + left, tag: 'net'}))});
+    frozenUntil: st.fz ? t + st.fz : 0, frozenKind: 'stun', k: st.k || 0, de: st.de || 0, dm: st.dm || 0, fx: (st.fx || []).map(([kind, value, left]) => ({kind, value, until: t + left, tag: 'net'}))});
   if (st.sw !== o.sw){ o.sw = st.sw; o.swingAt = t; }
 }
 // 방장이 보낸 허수아비 상태 (방장이 아닐 때만)
@@ -516,7 +527,8 @@ function publish(t){
   const p = S.player;
   net.publish({n: net.name, tm: p.team, c: cls.id, x: Math.round(p.x), y: Math.round(p.y), hp: r1(p.hp), mx: p.max, fa: [r2(p.face.x), r2(p.face.y)],
     fx: p.fx.filter(f => f.until > t).map(f => [f.kind, f.value, r1(f.until - t)]), sh: p.stealthUntil > t ? 1 : 0,
-    dd: p.deadUntil ? Math.max(0.1, r1(p.deadUntil - t)) : 0, ch: S.charged ? S.charged.spell.color : 0, sw: p.swings, fz: t < p.frozenUntil ? r1(p.frozenUntil - t) : 0});
+    dd: p.deadUntil ? Math.max(0.1, r1(p.deadUntil - t)) : 0, ch: S.charged ? S.charged.spell.color : 0, sw: p.swings, fz: t < p.frozenUntil ? r1(p.frozenUntil - t) : 0,
+    k: S.stats.kills, de: S.stats.deaths, dm: Math.round(S.stats.dmg)});
   if (net.isHost()) net.publishDummies(S.dummies.map(d => [Math.round(d.x), Math.round(d.y), Math.round(d.hp), d.deadUntil ? Math.max(0.1, r1(d.deadUntil - t)) : 0,
     t < d.frozenUntil ? r1(d.frozenUntil - t) : 0, d.frozenKind === 'stun' ? 1 : 0, L.effectSum(d.fx, 'speed', t) < 0 ? 1 : 0, L.effectSum(d.fx, 'atk', t) < 0 ? 1 : 0]));
 }
@@ -540,7 +552,7 @@ function update(){
     addFx({type: 'smoke', x: r1(p.x), y: r1(p.y), t0: t, life: 0.4}, true);
   }
 
-  if (!p.deadUntil){
+  if (!p.deadUntil && !locked()){
     const spd = p.speed * Math.max(0.2, 1 + L.effectSum(p.fx, 'speed', t));
     if (p.pull){                                         // 강철 사슬에 끌려감
       const m = L.moveToward(p, p.pull, PULL_SPEED * dt);
@@ -613,7 +625,7 @@ function update(){
   }
 
   // 허수아비들 (방장 또는 혼자일 때만 계산, 아니면 방장이 보낸 위치로 따라감)
-  if (isAuth()) updateDummies(t, dt);
+  if (isAuth() && !inMatch()) updateDummies(t, dt);
   else for (const d of S.dummies){ d.x += (d.tx - d.x) * Math.min(1, dt * 12); d.y += (d.ty - d.y) * Math.min(1, dt * 12); }
 
   // 날아가는 공격
@@ -1022,7 +1034,7 @@ function drawMinimap(){
   ctx.fillStyle = 'rgba(6,20,12,.75)'; roundRect(mx - 4, my - 4, mw + 8, mh + 8, 10); ctx.fill();
   ctx.fillStyle = 'rgba(44,100,64,.95)'; ctx.fillRect(mx, my, mw, mh);
   for (const o of OBSTACLES){ ctx.fillStyle = o.kind === 'pond' ? '#3d94c9' : o.kind === 'rock' ? '#9fa69c' : '#17552d'; ctx.fillRect(mx + o.x * k, my + o.y * k, Math.max(3, o.w * k), Math.max(3, o.h * k)); }
-  for (const d of S.dummies){ ctx.fillStyle = d.deadUntil ? 'rgba(255,255,255,.35)' : '#ff8a5c'; ctx.beginPath(); ctx.arc(mx + d.x * k, my + d.y * k, 3.5, 0, Math.PI * 2); ctx.fill(); }
+  if (!inMatch()) for (const d of S.dummies){ ctx.fillStyle = d.deadUntil ? 'rgba(255,255,255,.35)' : '#ff8a5c'; ctx.beginPath(); ctx.arc(mx + d.x * k, my + d.y * k, 3.5, 0, Math.PI * 2); ctx.fill(); }
   for (const o of S.others.values()){                 // 친구: 우리 팀은 초록, 다른 팀은 팀 색 (숨으면 안 보임)
     if (o.dead || (o.stealth && o.team !== S.player.team)) continue;
     ctx.fillStyle = o.team === S.player.team ? '#5ce08a' : (TEAMS[o.team] || {}).color || '#fff';
@@ -1038,7 +1050,7 @@ function draw(){
   drawGround(t); drawGroundFx(t); drawObstacles(); drawFx(t);
   const p = S.player;
   if (p.target && !p.deadUntil){ ctx.strokeStyle = 'rgba(95,225,255,.35)'; ctx.setLineDash([6, 8]); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.target.x, p.target.y); ctx.stroke(); ctx.setLineDash([]); }
-  for (const d of S.dummies) drawDummy(d, t);
+  if (!inMatch()) for (const d of S.dummies) drawDummy(d, t);
   for (const o of S.others.values()) drawRemote(o, t);
   drawPlayer(t); drawShots();
   ctx.setTransform(base, 0, 0, base, 0, 0);
@@ -1046,7 +1058,7 @@ function draw(){
     const a = Math.min(1, (t - S.tint.t0) / 0.3) * Math.min(1, (S.tint.until - t) / 0.5) * 0.16;
     ctx.fillStyle = `rgba(${S.tint.color},${a})`; ctx.fillRect(0, 0, VW, VH);
   }
-  drawMinimap(); drawFeed(t);
+  drawMinimap(); drawFeed(t); drawMatchHud();
 }
 
 /* ---------- 친구 그리기 (온라인) ---------- */
@@ -1135,13 +1147,13 @@ function updateHud(){
     }
     if (sp === cls.ult){
       li.classList.remove('cool');
-      const ready = unlimited || S.ult >= U.need, pct = unlimited ? 100 : Math.floor(S.ult / U.need * 100);
+      const ready = unl() || S.ult >= U.need, pct = unl() ? 100 : Math.floor(S.ult / U.need * 100);
       li.classList.toggle('ready', ready && !isCh); li.classList.toggle('charged', isCh);
-      em.textContent = isCh ? '⚡ ' + Math.max(0, ch.until - t).toFixed(1) + '초' : unlimited ? '♾' : ready ? '준비!' : pct + '%';
+      em.textContent = isCh ? '⚡ ' + Math.max(0, ch.until - t).toFixed(1) + '초' : unl() ? '♾' : ready ? '준비!' : pct + '%';
       bar.style.width = (isCh ? (ch.until - t) / CHARGE * 100 : pct) + '%';
       continue;
     }
-    const left = unlimited ? 0 : L.cooldownLeft(S.cds[sp.id], sp.cd, t);
+    const left = unl() ? 0 : L.cooldownLeft(S.cds[sp.id], sp.cd, t);
     li.classList.toggle('cool', left > 0); li.classList.toggle('charged', isCh);
     em.textContent = isCh ? '⚡ ' + Math.max(0, ch.until - t).toFixed(1) + '초' : left > 0 ? left.toFixed(1) + '초' : '✔';
     bar.style.width = (isCh ? (ch.until - t) / CHARGE * 100 : left > 0 ? left / sp.cd * 100 : 0) + '%';
@@ -1149,12 +1161,15 @@ function updateHud(){
   const p = S.player;
   $('#hpText').textContent = `${Math.round(p.hp)} / ${p.max} · ${cls.name}`;
   $('#hpFill').style.width = (p.hp / p.max * 100) + '%';
-  $('#ultFill').style.width = (unlimited ? 100 : S.ult / U.need * 100) + '%';
-  $('#ultText').textContent = unlimited ? '♾ 무제한' : S.ult >= U.need ? '🌟 준비!' : Math.floor(S.ult / U.need * 100) + '%';
+  $('#ultFill').style.width = (unl() ? 100 : S.ult / U.need * 100) + '%';
+  $('#ultText').textContent = unl() ? '♾ 무제한' : S.ult >= U.need ? '🌟 준비!' : Math.floor(S.ult / U.need * 100) + '%';
   const st = S.stats, total = st.ok + st.fail;
   $('#stats').innerHTML = `준 피해 <b>${Math.round(st.dmg)}</b> · 쓰러뜨림 <b>${st.kills}</b> · 받은 피해 <b>${Math.round(st.taken)}</b> · 회복 <b>${Math.round(st.healed)}</b> · 정확도 <b>${total ? Math.round(st.ok / total * 100) + '%' : '-'}</b>`;
   if (net && t - listAt > 0.5){ listAt = t; renderRoomList(); }
+  const ph = phase();
+  if (ph !== lastPhase){ lastPhase = ph; onPhase(ph); }
 }
+let lastPhase = null;
 let listAt = 0;
 
 /* ---------- 캐릭터 고르기 ---------- */
@@ -1236,6 +1251,7 @@ function startNet(conn){
   net.on.leave = pid => { const o = S.others.get(pid); if (o) addFeed(`👋 ${o.name} 님이 나갔어요`, '#cfd6e6'); S.others.delete(pid); };
   net.on.dummies = onNetDummies;
   net.on.mode = m => showDummyMode(m);
+  net.on.match = onMatch;
   net.on.host = () => { renderRoomBar(); if (net && net.isHost()) for (const d of S.dummies){ d.nextShot = 0; } };
   S.others.clear(); S.shots = []; S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; S.feed = []; S.tint = null;
   S.player.team = net.created ? 'red' : 'blue';           // 처음엔 방장 빨강, 들어온 친구 파랑 (언제든 바꿀 수 있음)
@@ -1249,7 +1265,7 @@ function startNet(conn){
 }
 async function leaveNet(){
   if (!net) return;
-  const n = net; net = null;
+  const n = net; net = null; match = null; matchId = null; $('#result').hidden = true;
   S.others.clear(); S.shots = []; S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; S.feed = []; S.tint = null;
   S.player.team = 'solo'; resetMe(); clearCharge(); S.busy = null;
   try { sessionStorage.removeItem('magic.code'); } catch (e) {}
@@ -1263,6 +1279,7 @@ window.addEventListener('pagehide', () => { if (net) net.leave(); });
 
 function setTeam(team){
   if (!net || S.player.team === team) return;
+  if (inMatch()){ castMsg('대결 중에는 팀을 못 바꿔요', 'wait'); return; }
   S.player.team = team; resetMe(); clearCharge(); S.busy = null;
   castMsg(`${TEAMS[team].name}이 됐어요!`, 'good'); renderTeamBtns(); renderRoomBar(); focusSpell();
 }
@@ -1276,6 +1293,11 @@ function renderRoomBar(){
   $('#barCode').textContent = net.code;
   const tb = $('#teamBtn'), tm = TEAMS[S.player.team];
   tb.textContent = `${tm.name} ⇄`; tb.style.color = tm.color;
+  const host = net.isHost(), m = inMatch();
+  $('#matchBox').hidden = !host || m;
+  tb.disabled = m; $('#teamRed').disabled = m; $('#teamBlue').disabled = m;
+  for (const id of ['#dStill', '#dMove', '#dAttack']) $(id).disabled = m;
+  $('#againBtn').hidden = $('#practiceBtn').hidden = !host; $('#resWait').hidden = host;
   renderRoomList();
 }
 // 방 사람들: 이름 · 캐릭터 · 팀 색 (👑 방장)
@@ -1302,8 +1324,8 @@ $('#dAttack').onclick = () => setDummyMode('attack');
 
 /* ---------- ♾ 무제한 켜고 끄기 ---------- */
 function applyUnlimited(){
-  const b = $('#infBtn'); b.classList.toggle('on', unlimited);
-  b.textContent = unlimited ? '♾ 무제한' : '⏳ 실전처럼';
+  const b = $('#infBtn'); b.classList.toggle('on', unl()); b.disabled = inMatch();
+  b.textContent = inMatch() ? '⚔ 대결 중' : unlimited ? '♾ 무제한' : '⏳ 실전처럼';
   b.title = unlimited ? '대기 시간·궁극기 게이지 없이 마음껏 쓰는 중 (누르면 실제 대결처럼)' : '실제 대결처럼 대기 시간·게이지가 있어요 (누르면 무제한)';
 }
 $('#infBtn').onclick = () => {
@@ -1312,6 +1334,83 @@ $('#infBtn').onclick = () => {
 };
 applyUnlimited();
 
+/* ---------- ⚔ 대결 ---------- */
+function onMatch(m){
+  const had = !!match;
+  match = m && m.startAt && m.endAt ? m : null;
+  if (match && match.id !== matchId){ matchId = match.id; startMatchLocal(); }
+  if (!match && had){ matchId = null; $('#result').hidden = true; castMsg('🎯 연습으로 돌아왔어요', 'good'); addFeed('🎯 연습으로 돌아왔어요', '#bff7c8'); resetMe(); }
+  lastPhase = undefined;   // 다음 화면 갱신 때 버튼들 다시 정리
+}
+// 새 판: 모두 출발 자리에서 체력 가득, 대기 시간·게이지·기록 처음부터
+function startMatchLocal(){
+  S.stats = {dmg: 0, kills: 0, deaths: 0, ok: 0, fail: 0, healed: 0, taken: 0};
+  S.cds = {}; S.ult = 0; S.busy = null; S.lockUntil = 0; clearCharge(); inp.value = '';
+  S.shots = []; S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; S.tint = null;
+  resetMe(); $('#result').hidden = true; focusSpell();
+  addFeed(`⚔ ${Math.round(match.len / 60)}분 대결! 상대 팀을 많이 쓰러뜨리면 이겨요`, '#ffd84a');
+}
+function onPhase(ph){
+  renderRoomBar(); applyUnlimited(); document.body.classList.toggle('matching', !!ph);
+  if (ph === 'play'){ castMsg('⚔ 시작!', 'good'); S.cds = {}; S.ult = 0; }
+  if (ph === 'end') showResult();
+  if (ph !== 'end') $('#result').hidden = true;
+}
+function startMatch(){
+  if (!net || !net.isHost()) return;
+  const teams = [S.player.team].concat(others().map(o => o.team));
+  if (!teams.includes('red') || !teams.includes('blue')){ castMsg('빨강·파랑 팀에 한 명 이상씩 있어야 대결할 수 있어요', 'bad'); return; }
+  const len = +$('#matchLen').value || 180, start = net.serverNow() + 3500;
+  net.setMatch({id: 'm' + Math.random().toString(36).slice(2, 8), startAt: start, endAt: start + len * 1000, len, score: {red: 0, blue: 0}});
+}
+$('#matchBtn').onclick = startMatch;
+$('#againBtn').onclick = startMatch;
+$('#practiceBtn').onclick = () => { if (net && net.isHost()) net.setMatch(null); };
+const score = tm => ((match && match.score) || {})[tm] || 0;
+function showResult(){
+  const red = score('red'), blue = score('blue');
+  const win = red > blue ? 'red' : blue > red ? 'blue' : null;
+  $('#resTitle').textContent = win ? `${TEAMS[win].name} 승리!` : '무승부!';
+  $('#resTitle').style.color = win ? TEAMS[win].color : '#ffd84a';
+  $('#resScore').innerHTML = `<span style="color:${TEAMS.red.color}">빨강 ${red}</span> : <span style="color:${TEAMS.blue.color}">${blue} 파랑</span>`;
+  const rows = [{id: net.pid, name: net.name, team: S.player.team, cls, k: S.stats.kills, de: S.stats.deaths, dm: Math.round(S.stats.dmg)}].concat(others());
+  rows.sort((a, b) => (a.team === b.team ? 0 : a.team === 'red' ? -1 : 1) || b.k - a.k || b.dm - a.dm);
+  const mvp = rows.slice().sort((a, b) => b.k - a.k || b.dm - a.dm)[0];
+  $('#resRows').innerHTML = rows.map(o => `<tr style="--tc:${TEAMS[o.team] ? TEAMS[o.team].color : '#fff'}"><td><i></i>${o === mvp ? '👑 ' : ''}${esc(o.name)}${o.id === net.pid ? ' (나)' : ''}</td>`
+    + `<td>${o.cls ? o.cls.icon + ' ' + o.cls.name : ''}</td><td>${o.k || 0}</td><td>${o.de || 0}</td><td>${o.dm || 0}</td></tr>`).join('');
+  $('#resMvp').textContent = mvp ? `🏅 MVP: ${mvp.name} (쓰러뜨림 ${mvp.k || 0}, 준 피해 ${mvp.dm || 0})` : '';
+  renderRoomBar();
+  $('#result').hidden = false;
+}
+// 맵 위: 준비 숫자 3·2·1 / 남은 시간 + 점수
+function drawMatchHud(){
+  const ph = phase(); if (!ph) return;
+  const n = net.serverNow();
+  ctx.textAlign = 'center';
+  if (ph === 'count'){
+    const left = Math.ceil((match.startAt - n) / 1000);
+    ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, VW, VH);
+    ctx.font = '400 150px "Black Han Sans","Malgun Gothic",sans-serif'; ctx.lineWidth = 10; ctx.strokeStyle = 'rgba(0,0,0,.6)';
+    const txt = left > 0 ? String(left) : '시작!';
+    ctx.strokeText(txt, VW / 2, VH / 2 + 50); ctx.fillStyle = '#ffd84a'; ctx.fillText(txt, VW / 2, VH / 2 + 50);
+    ctx.font = '800 26px "Malgun Gothic",sans-serif'; ctx.fillStyle = '#ffffff'; ctx.fillText(`나는 ${TEAMS[S.player.team].name}! 상대 팀을 많이 쓰러뜨리면 이겨요`, VW / 2, VH / 2 + 110);
+  }
+  const left = Math.max(0, Math.ceil((match.endAt - Math.max(n, match.startAt)) / 1000));
+  const time = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+  const w = 360, x = VW / 2 - w / 2, y = 14;
+  ctx.fillStyle = 'rgba(6,20,12,.85)'; roundRect(x, y, w, 64, 16); ctx.fill();
+  ctx.strokeStyle = 'rgba(255,216,74,.6)'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.font = '800 13px "Malgun Gothic",sans-serif';
+  ctx.fillStyle = TEAMS.red.color; ctx.fillText('빨강 팀', x + 52, y + 20);
+  ctx.fillStyle = TEAMS.blue.color; ctx.fillText('파랑 팀', x + w - 52, y + 20);
+  ctx.font = '400 32px "Black Han Sans","Malgun Gothic",sans-serif';
+  ctx.fillStyle = TEAMS.red.color; ctx.fillText(String(score('red')), x + 52, y + 54);
+  ctx.fillStyle = TEAMS.blue.color; ctx.fillText(String(score('blue')), x + w - 52, y + 54);
+  ctx.fillStyle = ph === 'end' ? '#ffd84a' : left <= 10 ? '#ff7b7b' : '#ffffff';
+  ctx.font = '400 34px "Black Han Sans","Malgun Gothic",sans-serif';
+  ctx.fillText(ph === 'end' ? '끝!' : time, VW / 2, y + 46);
+}
+
 /* ---------- 시작 ---------- */
 function loop(){ update(); draw(); updateHud(); requestAnimationFrame(loop); }
 buildBook(); fit(); openPick();
@@ -1319,5 +1418,5 @@ try { const c = sessionStorage.getItem('magic.code'); if (c){ $('#codeInput').va
 requestAnimationFrame(loop);
 
 window.__magic = {S, mouse, submitSpell, rightClick, choose, CLASSES, OBSTACLES, step(){ update(); draw(); updateHud(); }, get cls(){ return cls; }, get cam(){ return cam; },
-  get unlimited(){ return unlimited; }, setUnlimited(v){ unlimited = !!v; applyUnlimited(); }, get net(){ return net; }, setTeam, leaveNet};
+  get unlimited(){ return unlimited; }, setUnlimited(v){ unlimited = !!v; applyUnlimited(); }, get net(){ return net; }, setTeam, leaveNet, startMatch, get match(){ return match; }, phase};
 })();

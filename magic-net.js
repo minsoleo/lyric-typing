@@ -3,6 +3,7 @@
      game: 'magic', createdAt, host(방장 pid), dmode(허수아비 모드),
      st:  {pid: 각자 내 캐릭터 상태 (0.1초마다 덮어씀)},
      dum: [허수아비 상태 — 방장만 씀],
+     match: {id, startAt, endAt, len, score: {red, blue}} — ⚔ 대결 중일 때만 (시간은 서버 시계 기준)
      ev:  {신호: 맞았어요 / 회복 / 강화 / 날아가는 공격·벽·샘 그리기 …  5초 뒤 보낸 사람이 지움}
    }
    판 뒤집기와 같은 Firebase를 쓰고, game: 'magic' 으로 구분함 */
@@ -10,11 +11,14 @@
 'use strict';
 const DB_URL = 'https://lyric-typing-6ead1-default-rtdb.asia-southeast1.firebasedatabase.app';
 const MAX = 8, EV_LIFE = 5000, HOST_CHECK_AFTER = 3000;
-let app = null;
+let app = null, offset = 0;
 
 function db(){
   if (typeof firebase === 'undefined') throw new Error('온라인 연결 도구를 불러오지 못했어요. 인터넷 연결을 확인해 주세요. (학교 인터넷이 막고 있을 수도 있어요)');
-  if (!app) app = firebase.initializeApp({databaseURL: DB_URL}, 'magic');
+  if (!app){
+    app = firebase.initializeApp({databaseURL: DB_URL}, 'magic');
+    app.database().ref('.info/serverTimeOffset').on('value', s => { offset = s.val() || 0; });   // 내 시계와 서버 시계 차이
+  }
   return app.database();
 }
 // 탭마다 다른 사람으로 (같은 컴퓨터에서 창 두 개로도 시험 가능)
@@ -70,6 +74,9 @@ function connect(code, name, created){
     publish(st){ if (closed) return; st.j = joinedAt; stRef.set(clean(st)).catch(() => {}); },
     publishDummies(arr){ if (!closed) ref.child('dum').set(arr).catch(() => {}); },
     setMode(m){ if (!closed) ref.child('dmode').set(m).catch(() => {}); },
+    serverNow: () => Date.now() + offset,
+    setMatch(m){ if (!closed) ref.child('match').set(m ? clean(m) : null).catch(() => {}); },
+    addScore(team){ if (!closed) ref.child('match/score/' + team).transaction(v => (v || 0) + 1).catch(() => {}); },
     leave
   };
   const fire = (k, ...a) => { const f = conn.on[k]; if (f) try { f(...a); } catch (e) { console.error(e); } };
@@ -91,7 +98,8 @@ function connect(code, name, created){
     if (v.to && v.to !== pid && !(v.to[0] === 'd' && host === pid)) return;   // 나에게 온 것 + (방장이면) 허수아비에게 온 것
     fire('event', v);
   });
-  const hostRef = ref.child('host'), modeRef = ref.child('dmode'), dumRef = ref.child('dum');
+  const hostRef = ref.child('host'), modeRef = ref.child('dmode'), dumRef = ref.child('dum'), matchRef = ref.child('match');
+  matchRef.on('value', s => fire('match', s.val()));
   hostRef.on('value', s => { host = s.val(); fire('host', host); checkHost(); });
   modeRef.on('value', s => fire('mode', s.val() || 'still'));
   dumRef.on('value', s => { if (host !== pid) fire('dummies', s.val()); });
@@ -115,7 +123,7 @@ function connect(code, name, created){
   async function leave(){
     if (closed) return;
     closed = true; clearInterval(timer);
-    stq.off(); evq.off(); hostRef.off(); modeRef.off(); dumRef.off(); info.off('value', onInfo);
+    stq.off(); evq.off(); hostRef.off(); modeRef.off(); dumRef.off(); matchRef.off(); info.off('value', onInfo);
     try {
       await stRef.onDisconnect().cancel();
       await stRef.remove();

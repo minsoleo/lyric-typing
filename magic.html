@@ -137,6 +137,24 @@ canvas{display:block;border-radius:16px;box-shadow:var(--shadow);cursor:crosshai
 .roombar .code{flex:none;font-weight:800;font-size:13px;color:var(--dim)} .roombar .code b{color:var(--gold);font-size:16px;letter-spacing:1px}
 #barList{flex-wrap:nowrap;overflow:hidden;min-width:0}
 .roombar button{padding:4px 10px;font-size:13px;font-weight:800}
+button:disabled{opacity:.45;cursor:not-allowed}
+body.matching .hint{display:none}
+button.go{background:var(--gold);border-color:var(--gold);color:var(--gold-text);font-weight:800}
+.matchbox{display:flex;gap:4px;flex:none}
+#matchLen{font:inherit;font-size:13px;font-weight:800;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:3px 6px}
+/* ⚔ 대결 결과 */
+.result{position:fixed;inset:0;z-index:15;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(3,16,9,.55);overflow:auto}
+.resbox{width:min(640px,100%);padding:18px 22px;border-radius:20px;background:var(--panel);border:3px solid var(--gold);box-shadow:var(--shadow);text-align:center}
+.resbox h2{margin:0;font-size:40px}
+.resbox .score{margin:2px 0 10px;font-size:30px}
+.resbox table{width:100%;border-collapse:collapse;font-size:14px}
+.resbox th{font-size:12px;color:var(--dim);font-weight:800;padding:4px}
+.resbox td{padding:5px 4px;border-top:1px solid var(--line);font-weight:700}
+.resbox td:first-child{text-align:left}
+.resbox td i{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--tc);margin-right:6px}
+#resMvp{margin:10px 0;font-weight:800;color:var(--gold)}
+.resbox .row{justify-content:center}
+#resWait{margin:6px 0 0;color:var(--dim);font-size:13px}
 </style>
 </head>
 <body>
@@ -145,6 +163,7 @@ canvas{display:block;border-radius:16px;box-shadow:var(--shadow);cursor:crosshai
   <div class="roombar" id="roomBar" hidden>
     <span class="code">🏠 방 <b id="barCode"></b></span>
     <div class="chips" id="barList"></div>
+    <span class="matchbox" id="matchBox" hidden><select id="matchLen" aria-label="대결 시간"><option value="120">2분</option><option value="180" selected>3분</option><option value="300">5분</option></select><button id="matchBtn" type="button" class="go">⚔ 대결 시작</button></span>
     <button id="teamBtn" type="button" title="빨강 팀 ⇄ 파랑 팀">팀</button>
     <button id="leaveBtn" type="button">🚪 방 나가기</button>
   </div>
@@ -173,6 +192,17 @@ canvas{display:block;border-radius:16px;box-shadow:var(--shadow);cursor:crosshai
     <div class="row dummy"><button id="infBtn" class="on">♾ 무제한</button><button id="pickBtn">🔄 캐릭터 바꾸기</button><small>허수아비</small><button id="dStill" class="on">가만히</button><button id="dMove">움직이기</button><button id="dAttack" title="허수아비가 나에게 공격을 쏴요 (가데온의 바위벽·세라 회복 연습용)">반격</button></div>
   </div>
   <ul class="skills" id="book"></ul>
+</div>
+<!-- ⚔ 대결 결과 -->
+<div class="result" id="result" hidden>
+  <div class="resbox">
+    <h2 class="display" id="resTitle"></h2>
+    <p class="score display" id="resScore"></p>
+    <table><thead><tr><th>이름</th><th>캐릭터</th><th>쓰러뜨림</th><th>쓰러짐</th><th>준 피해</th></tr></thead><tbody id="resRows"></tbody></table>
+    <p id="resMvp"></p>
+    <div class="row"><button id="againBtn" type="button" class="go">⚔ 한 판 더</button><button id="practiceBtn" type="button">🎯 연습으로</button></div>
+    <p id="resWait">방장이 다음 판을 고르는 중이에요…</p>
+  </div>
 </div>
 <!-- 캐릭터 고르기 -->
 <div class="pick" id="pick" hidden>
