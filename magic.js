@@ -1,20 +1,30 @@
-/* 숲속의 한바탕 1단계: 혼자 연습판 (허수아비 상대)
+/* 숲속의 한바탕: 🎯 혼자 연습 + 👫 친구랑 연습 (온라인, 허수아비도 같이)
    - 캐릭터 3명(가데온·레이브·세라). 스킬 표는 magic-spells.js, 정리본은 docs/캐릭터-스킬표.md
    - 맵은 화면보다 크고 화면(카메라)이 캐릭터를 따라감 + 작은 지도
    - 스킬 + Enter → 장전(5초) → 오른쪽 클릭으로 발사. 장전은 한 번에 하나 (그림자 은신만 Enter로 바로)
    - 스킬을 쓰는 동안(지속 시간)은 다른 스킬을 치거나 장전할 수 없음 (그림자 은신만 예외)
    - 궁극기: 가만히 있어도 천천히, 싸우면 더 빨리 게이지가 차오르고, 가득 차면 긴 이름을 쳐서 장전
    - ♾ 무제한(연습판 기본): 대기 시간·궁극기 게이지 없이 마음껏 써 보기
-   - 게임 상태(S)와 그리기(draw)를 나눠 둠 → 2단계 온라인에서 상태만 주고받기 쉽게 */
+   - 친구랑 연습 (연결은 magic-net.js):
+     · 각자 자기 캐릭터를 계산하고 0.1초마다 위치·체력·효과를 보냄
+     · 내 공격이 친구에게 맞으면 "맞았어요" 신호를 보내고, 맞은 친구가 자기 피해 감소를 계산해서 체력을 깎음
+     · 허수아비는 방장 컴퓨터가 계산해서 모두에게 보내 줌 (방장이 나가면 다음 사람이 이어받음)
+     · 빨강 팀 / 파랑 팀: 다른 팀은 적, 같은 팀은 아군 (안 아프고, 회복·강화를 줄 수 있음) */
 (function(){
 'use strict';
 const $ = s => document.querySelector(s);
 const L = window.MagicLogic, CLASSES = window.MAGIC_CLASSES, CHARGE = window.MAGIC_CHARGE_TIME || 5, U = window.MAGIC_ULT;
 const WW = 3200, WH = 1800, VW = 1600, VH = 900;
-const DUMMY_SPEED = 100, FAIL_LOCK = 0.8, RESPAWN = 3, SPAWN = {x: 520, y: 900}, DASH_SPEED = 900;
+const DUMMY_SPEED = 100, FAIL_LOCK = 0.8, RESPAWN = 3, DASH_SPEED = 900, PULL_SPEED = 1300;
 const DUMMY_SHOT = {dmg: 7, speed: 300, radius: 9, range: 700, look: 'enemy'}, DUMMY_RATE = 2.2, DUMMY_SIGHT = 650;
-const AIM_RADIUS = 110;   // 목 긋기·숲속의 섬광: 마우스에서 이만큼 안에 있는 적을 "가리킨 적"으로 봄
+const AIM_RADIUS = 110;                    // 목 긋기·숲속의 섬광: 마우스에서 이만큼 안에 있는 적을 "가리킨 적"으로 봄
+const ALLY_RANGE = 600, NEAR_RANGE = 350;  // "가장 가까운 아군"을 찾는 거리 · "주변 아군" 거리
+const SEND_EVERY = 0.1;                    // 온라인: 내 상태를 보내는 간격(초)
+const SPAWN = {solo: {x: 520, y: 900}, red: {x: 520, y: 900}, blue: {x: 2680, y: 900}};
+const TEAMS = {red: {name: '빨강 팀', color: '#ff5d5d'}, blue: {name: '파랑 팀', color: '#4fa3ff'}};
 const allSpells = c => c.spells.concat([c.ult]);
+const classById = id => CLASSES.find(c => c.id === id) || CLASSES[1];
+const r1 = v => Math.round(v * 10) / 10, r2 = v => Math.round(v * 100) / 100;
 
 /* ---------- 밝은/어두운 버전 ---------- */
 let theme = document.documentElement.dataset.theme === 'light' ? 'light' : 'dark';
@@ -53,27 +63,52 @@ const DECOR = (() => {
 
 /* ---------- 게임 상태 ---------- */
 const now = () => performance.now() / 1000;
-const makeDummy = (x, y) => ({x, y, baseX: x, baseY: y, r: 26, hp: 100, max: 100, shield: 0, shieldUntil: 0, frozenUntil: 0, frozenKind: 'ice',
-  dir: 1, deadUntil: 0, nextShot: 0, fx: [], pull: null, homeAt: 0});
-let cls = CLASSES.find(c => c.id === loadClass()) || CLASSES[1];
+const makeDummy = (x, y, i) => ({kind: 'dummy', id: 'd' + i, x, y, tx: x, ty: y, baseX: x, baseY: y, r: 26, hp: 100, max: 100, shield: 0, shieldUntil: 0,
+  frozenUntil: 0, frozenKind: 'ice', dir: 1, deadUntil: 0, nextShot: 0, fx: [], pull: null, homeAt: 0});
+let cls = classById(loadClass());
+let net = null;                                    // 친구랑 연습 중이면 MagicNet 연결
+const isAuth = () => !net || net.isHost();         // 허수아비를 계산하는 컴퓨터 (혼자면 나, 온라인이면 방장)
 const S = {
   player: null,
-  dummies: [makeDummy(1000, 880), makeDummy(2250, 1080), makeDummy(2550, 500)],
+  others: new Map(),                               // 친구들 (pid → 받은 상태)
+  dummies: [makeDummy(1000, 880, 0), makeDummy(2250, 1080, 1), makeDummy(2550, 500, 2)],
   dummyMode: 'still',
-  shots: [], zones: [], walls: [], sanctums: [], fields: [], fx: [], floats: [], tint: null,
+  shots: [], zones: [], walls: [], sanctums: [], fields: [], fx: [], floats: [], feed: [], tint: null,
   cds: {}, lastBasic: undefined, lockUntil: 0, charged: null, busy: null, ult: 0,
   stats: {dmg: 0, kills: 0, ok: 0, fail: 0, healed: 0, taken: 0}
 };
-function makePlayer(c){
-  return {x: SPAWN.x, y: SPAWN.y, r: c.r, hp: c.hp, max: c.hp, speed: c.speed, shield: 0, shieldUntil: 0,
-    frozenUntil: 0, deadUntil: 0, target: null, dash: null, flurry: null, backAt: null, swingAt: -9, stealthUntil: 0, stealthTag: null, fx: [], face: {x: 1, y: 0}};
+function makePlayer(c, team){
+  const sp = SPAWN[team] || SPAWN.solo;
+  return {kind: 'me', team, x: sp.x, y: sp.y, r: c.r, hp: c.hp, max: c.hp, speed: c.speed, shield: 0, shieldUntil: 0,
+    frozenUntil: 0, frozenKind: 'stun', deadUntil: 0, target: null, dash: null, flurry: null, backAt: null, pull: null, swingAt: -9, swings: 0,
+    stealthUntil: 0, stealthTag: null, fx: [], face: {x: team === 'blue' ? -1 : 1, y: 0}};
 }
-S.player = makePlayer(cls);
+S.player = makePlayer(cls, 'solo');
 let cam = L.camFollow(S.player, VW, VH, WW, WH);
 const mouse = {sx: VW / 2, sy: VH / 2, left: false, get x(){ return this.sx + cam.x; }, get y(){ return this.sy + cam.y; }};
 function loadClass(){ try { return localStorage.getItem('magic.class'); } catch (e) { return null; } }
 // ♾ 무제한: 연습판에서는 기본으로 켜짐 (끄면 실제 대결처럼 대기 시간·게이지가 있음)
 let unlimited = (() => { try { return localStorage.getItem('magic.unlimited') !== 'off'; } catch (e) { return true; } })();
+
+/* ---------- 누가 적이고 누가 아군인지 ---------- */
+const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const others = () => [...S.others.values()];
+const isDown = e => e.kind === 'player' ? !!e.dead : !!e.deadUntil;
+const alive = () => S.dummies.filter(d => !d.deadUntil);
+// 내 적: 허수아비 + 다른 팀 친구 / 내 아군: 같은 팀 친구 (나는 빼고)
+const enemies = () => alive().concat(others().filter(o => o.team !== S.player.team && !o.dead));
+const allies = () => others().filter(o => o.team === S.player.team && !o.dead);
+const myName = () => net ? net.name : '나';
+const nameOf = pid => net && pid === net.pid ? net.name : (S.others.get(pid) || {}).name || '친구';
+
+/* ---------- 온라인 신호 보내기 ---------- */
+function send(ev){ if (net) net.send(ev); }
+// 효과 그림: share면 친구 화면에도 똑같이 그려지게 신호로 보냄
+function addFx(f, share){
+  S.fx.push(f);
+  if (share && net){ const c = Object.assign({}, f); delete c.t0; send({k: 'fx', v: c}); }
+}
+function addFeed(text, color){ S.feed.push({text, color: color || '#ffffff', t0: now()}); if (S.feed.length > 5) S.feed.shift(); }
 
 /* ---------- 캔버스 맞추기 ---------- */
 const cv = $('#cv'), ctx = cv.getContext('2d');
@@ -96,11 +131,11 @@ cv.addEventListener('mousedown', e => {
   else if (e.button === 2) rightClick();
   focusSpell();
 });
-cv.addEventListener('mousemove', e => { setMouse(e); if (mouse.left && !S.player.dash) S.player.target = {x: mouse.x, y: mouse.y}; });
+cv.addEventListener('mousemove', e => { setMouse(e); if (mouse.left && !S.player.dash && !S.player.pull) S.player.target = {x: mouse.x, y: mouse.y}; });
 window.addEventListener('mouseup', e => { if (e.button === 0) mouse.left = false; });
-document.addEventListener('contextmenu', e => e.preventDefault());
+document.addEventListener('contextmenu', e => { if (e.target === cv || $('#pick').hidden) e.preventDefault(); });
 function setMoveTarget(){
-  if (S.player.dash || S.player.deadUntil) return;
+  if (S.player.dash || S.player.deadUntil || S.player.pull) return;
   S.player.target = {x: mouse.x, y: mouse.y};
   S.fx.push({type: 'mark', x: mouse.x, y: mouse.y, t0: now(), life: 0.5});
 }
@@ -135,6 +170,7 @@ function submitSpell(){
   if (!L.norm(text)) return;
   const t = now(), p = S.player;
   if (p.deadUntil){ castMsg('쓰러져 있어요…', 'wait'); return; }
+  if (t < p.frozenUntil){ castMsg('기절해서 스킬을 못 써요!', 'bad'); return; }
   const sp = L.findSpell(allSpells(cls), text);
   const isUlt = sp === cls.ult;
   const cdLeft = sp && !isUlt && !unlimited ? L.cooldownLeft(S.cds[sp.id], sp.cd, t) : 0;
@@ -170,12 +206,13 @@ function submitSpell(){
 function rightClick(){
   const t = now(), p = S.player;
   if (p.deadUntil) return;
+  if (t < p.frozenUntil){ castMsg('기절!', 'bad'); return; }
   if (S.charged){
     const sp = S.charged.spell;
     let target = null;
     if (sp.type === 'leap' || sp.type === 'stun'){
       // screen: 화면 안에 보이는 적이면 거리 상관없이
-      const list = alive().filter(d => !sp.screen || inView(d.x, d.y, -d.r));
+      const list = enemies().filter(e => !sp.screen || inView(e.x, e.y, -e.r));
       target = L.pickTarget(list, mouse, AIM_RADIUS, p, sp.screen ? Infinity : sp.reach);
       if (!target){ castMsg(sp.screen ? '화면 안의 적을 마우스로 가리키고 오른쪽 클릭!' : '가까이 있는 적을 마우스로 가리키고 오른쪽 클릭!', 'wait'); return; }
     }
@@ -196,25 +233,50 @@ function aimDir(from){
   const dx = mouse.x - from.x, dy = mouse.y - from.y, d = Math.hypot(dx, dy) || 1;
   return {x: dx / d, y: dy / d};
 }
-const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
-const alive = () => S.dummies.filter(d => !d.deadUntil);
+// owner: 'me'(내 공격) · 'dummy'(허수아비, 방장만) · 'remote'(친구 화면에서 온 그림)
 function shoot(owner, from, dir, o, src){
-  S.shots.push({owner, src, look: o.look || 'basic', x: from.x + dir.x * (from.r + 6), y: from.y + dir.y * (from.r + 6), vx: dir.x * o.speed, vy: dir.y * o.speed,
-    r: o.radius, dmg: o.dmg, range: o.range, trav: 0, pierce: !!o.pierce, freeze: o.freeze || 0, pull: !!o.pull, basic: !!o.basic, color: o.color, hit: new Set()});
+  const s = {owner, src, team: owner === 'dummy' ? 'dummy' : S.player.team, look: o.look || 'basic',
+    x: from.x + dir.x * (from.r + 6), y: from.y + dir.y * (from.r + 6), vx: dir.x * o.speed, vy: dir.y * o.speed,
+    r: o.radius, dmg: o.dmg, range: o.range, trav: 0, pierce: !!o.pierce, pull: !!o.pull, basic: !!o.basic, allyHeal: o.allyHeal || 0, color: o.color, hit: new Set()};
+  S.shots.push(s);
+  if (net) send({k: 'shot', s: {team: s.team, look: s.look, x: r1(s.x), y: r1(s.y), vx: r1(s.vx), vy: r1(s.vy), r: s.r, range: s.range, color: s.color || 0}});
+  return s;
 }
 function melee(t, o, isBasic, color){
-  const p = S.player, dir = aimDir(p); p.face = dir; p.swingAt = t;
+  const p = S.player, dir = aimDir(p); p.face = dir; p.swingAt = t; p.swings++;
   const reach = p.r + o.reach * (1 + L.effectSum(p.fx, 'reach', t));   // 궁극기 등으로 공격 거리가 늘어남
-  for (const d of alive()) if (L.inArc(p, dir, d, reach + d.r, o.arc)) playerHit(d, o.dmg, t, {basic: isBasic, color});
-  S.fx.push({type: 'swing', x: p.x, y: p.y, a: Math.atan2(dir.y, dir.x), r: reach, arc: o.arc * Math.PI / 180, t0: t, life: 0.2, color: color || '#ffffff'});
+  for (const e of enemies()) if (L.inArc(p, dir, e, reach + e.r, o.arc)) dealHit(e, o.dmg, t, {basic: isBasic, color});
+  addFx({type: 'swing', x: r1(p.x), y: r1(p.y), a: r2(Math.atan2(dir.y, dir.x)), r: r1(reach), arc: r2(o.arc * Math.PI / 180), t0: t, life: 0.2, color: color || '#ffffff'}, true);
 }
+// 나에게 강화 걸기 (fx: [{kind, value}], time초 동안). by: 걸어 준 친구 이름
+function buffMe(fx, time, tag, heal, color, t, by){
+  const p = S.player;
+  for (const f of fx || []) L.addEffect(p.fx, f.kind, f.value, t + time, tag);
+  if (heal) healPlayer(heal, t);
+  addFx({type: 'buff', x: r1(p.x), y: r1(p.y), t0: t, life: 0.8, color}, true);
+  const txt = (fx || []).map(fxLabel).filter(Boolean);
+  if (by) txt.unshift(`💚 ${by} 님이 걸어 줌`);
+  txt.forEach((line, i) => S.floats.push({x: p.x, y: p.y - 74 - i * 22, text: i === txt.length - 1 && time ? `${line} (${time}초)` : line, color, t0: t, life: 1.8, size: 17}));
+}
+// 같은 팀 친구에게 강화 (신호로 보내면 친구 쪽에서 걸림)
+function buffAlly(o, sp, t){
+  send({k: 'buff', to: o.id, fx: (sp.fx || []).map(f => [f.kind, f.value]), tm: sp.time, tag: sp.id, h: sp.heal || 0, c: sp.color, by: myName()});
+  S.floats.push({x: o.x, y: o.y - o.r - 40, text: `${sp.name} → ${o.name}`, color: sp.color, t0: t, life: 1.4, size: 17});
+  if (sp.heal){ S.stats.healed += sp.heal; gainUlt(sp.heal * U.heal, t); }
+}
+function healAlly(o, amount, t){
+  send({k: 'heal', to: o.id, a: amount});
+  S.floats.push({x: o.x, y: o.y - o.r - 14, text: '+' + Math.round(amount), color: '#5ce08a', t0: t});
+  S.stats.healed += amount; gainUlt(amount * U.heal, t);
+}
+// 강화 스킬: ally 'one' → 가장 가까운 아군 한 명 (없으면 나), 'near' → 나 + 주변 아군, 없으면 나만
 function applyBuff(sp, t){
   const p = S.player;
-  for (const f of sp.fx || []) L.addEffect(p.fx, f.kind, f.value, t + sp.time, sp.id);
-  if (sp.heal) healPlayer(sp.heal, t);
-  S.fx.push({type: 'buff', x: p.x, y: p.y, t0: t, life: 0.8, color: sp.color});
-  const txt = (sp.fx || []).map(fxLabel).filter(Boolean);
-  txt.forEach((line, i) => S.floats.push({x: p.x, y: p.y - 74 - i * 22, text: i === txt.length - 1 ? `${line} (${sp.time}초)` : line, color: sp.color, t0: t, life: 1.8, size: 17}));
+  if (sp.ally === 'one'){
+    const near = allies().filter(o => dist(o, p) < ALLY_RANGE).sort((a, b) => dist(a, p) - dist(b, p))[0];
+    if (near) return buffAlly(near, sp, t);
+  } else if (sp.ally === 'near') for (const o of allies()) if (dist(o, p) < NEAR_RANGE) buffAlly(o, sp, t);
+  buffMe(sp.fx, sp.time, sp.id, sp.heal, sp.color, t);
 }
 // 걸린 효과를 글로: 🛡 받는 피해 −40% 처럼
 function fxLabel(f){
@@ -223,12 +285,12 @@ function fxLabel(f){
     : f.kind === 'reach' ? '📏 공격 거리 +' + pct : f.kind === 'basic' ? '👊 평타 ' + (1 + f.value) + '배' : '';
 }
 function explode(at, o, t, color){
-  S.fx.push({type: 'ring', x: at.x, y: at.y, r: o.area, t0: t, life: 0.5, color});
-  for (const d of alive()) if (dist(d, at) < o.area + d.r) playerHit(d, o.dmg, t, {color});
+  addFx({type: 'ring', x: r1(at.x), y: r1(at.y), r: o.area, t0: t, life: 0.5, color}, true);
+  for (const e of enemies()) if (dist(e, at) < o.area + e.r) dealHit(e, o.dmg, t, {color});
 }
 function breakStealth(t){
   const p = S.player;
-  if (p.stealthUntil > t){ p.fx = L.removeTag(p.fx, p.stealthTag); S.fx.push({type: 'smoke', x: p.x, y: p.y, t0: t, life: 0.5}); }
+  if (p.stealthUntil > t){ p.fx = L.removeTag(p.fx, p.stealthTag); addFx({type: 'smoke', x: r1(p.x), y: r1(p.y), t0: t, life: 0.5}, true); }
   p.stealthUntil = 0;
 }
 function castSpell(sp, t, target){
@@ -238,54 +300,63 @@ function castSpell(sp, t, target){
     case 'dash': {
       const to = L.clampToWorld(L.clampReach(p, mouse, sp.reach), p.r, WW, WH);
       p.dash = {to, dmg: sp.dmg || 0, wide: sp.wide || 8, boom: sp.boom || null, color: sp.color, speed: DASH_SPEED, hit: new Set()}; p.target = null; p.face = aimDir(p);
-      if (sp.healAll){ healPlayer(sp.healAll, t); S.fx.push({type: 'heal', x: p.x, y: p.y, t0: t, life: 0.8}); }
+      if (sp.healAll){
+        healPlayer(sp.healAll, t);
+        for (const o of allies()) healAlly(o, sp.healAll, t);
+        addFx({type: 'heal', x: r1(p.x), y: r1(p.y), t0: t, life: 0.8}, true);
+      }
       break;
     }
-    case 'slash': {
+    case 'slash':
       // swing초 동안 every초마다 베고, 다 휘두르면 마지막으로 벤 방향 반대로 훌쩍 물러남
       p.flurry = {until: t + sp.swing, next: t, sp};
       p.backAt = {at: t + sp.swing, dist: sp.back};
       break;
-    }
     case 'wall': {
       const d = aimDir(p); p.face = d;
-      S.walls.push({pts: L.wallPoints({x: p.x + d.x * sp.dist, y: p.y + d.y * sp.dist}, d, sp.length, 30), r: 22, t0: t, until: t + sp.time});
+      const pts = L.wallPoints({x: p.x + d.x * sp.dist, y: p.y + d.y * sp.dist}, d, sp.length, 30).map(q => ({x: r1(q.x), y: r1(q.y)}));
+      S.walls.push({pts, r: 22, t0: t, until: t + sp.time, team: p.team});
+      send({k: 'wall', pts, tm: sp.time, team: p.team});
       break;
     }
     case 'flurry': p.flurry = {until: t + sp.time, next: t, sp}; break;
     case 'buff': applyBuff(sp, t); break;
     case 'stealth':
-      p.stealthUntil = t + sp.time; p.stealthTag = sp.id; applyBuff(sp, t);
-      S.fx.push({type: 'smoke', x: p.x, y: p.y, t0: t, life: 0.6});
+      p.stealthUntil = t + sp.time; p.stealthTag = sp.id; buffMe(sp.fx, sp.time, sp.id, 0, sp.color, t);
+      addFx({type: 'smoke', x: r1(p.x), y: r1(p.y), t0: t, life: 0.6}, true);
       break;
     case 'leap': {
       const ux = (target.x - p.x) / (dist(target, p) || 1), uy = (target.y - p.y) / (dist(target, p) || 1), from = {x: p.x, y: p.y}, gap = target.r + p.r + 6;
       const to = L.pushOut(L.clampToWorld({x: target.x + ux * gap, y: target.y + uy * gap}, p.r, WW, WH), p.r, WALLS);
       p.x = to.x; p.y = to.y; p.target = null; p.face = {x: -ux, y: -uy};
-      S.fx.push({type: 'blink', x: from.x, y: from.y, t0: t, life: 0.45, color: sp.color}, {type: 'cut', x: target.x, y: target.y, t0: t, life: 0.45, color: sp.color});
-      playerHit(target, sp.dmg, t, {color: sp.color});
+      addFx({type: 'blink', x: r1(from.x), y: r1(from.y), t0: t, life: 0.45, color: sp.color}, true);
+      addFx({type: 'cut', x: r1(target.x), y: r1(target.y), t0: t, life: 0.45, color: sp.color}, true);
+      dealHit(target, sp.dmg, t, {color: sp.color});
       break;
     }
     case 'stun':
-      target.frozenUntil = Math.max(target.frozenUntil, t + sp.time); target.frozenKind = 'stun';
-      S.fx.push({type: 'flash', x: target.x, y: target.y, t0: t, life: 0.5});
+      dealHit(target, 0, t, {stun: sp.time, color: sp.color});
+      addFx({type: 'flash', x: r1(target.x), y: r1(target.y), t0: t, life: 0.5}, true);
       break;
     case 'zone': {
-      const at = L.clampToWorld(L.clampReach(p, mouse, sp.reach), 0, WW, WH);
-      S.zones.push({x: at.x, y: at.y, r: sp.area, rate: sp.heal / sp.time, until: t + sp.time, t0: t, color: sp.color, acc: 0});
+      const at = L.clampToWorld(L.clampReach(p, mouse, sp.reach), 0, WW, WH), z = {x: r1(at.x), y: r1(at.y), r: sp.area, rate: r2(sp.heal / sp.time)};
+      S.zones.push(Object.assign({until: t + sp.time, t0: t, color: sp.color, acc: 0, team: p.team}, z));
+      send(Object.assign({k: 'zone', tm: sp.time, c: sp.color, team: p.team}, z));
       break;
     }
     case 'slowfield':
       // 범위가 time초 동안 나를 따라다니며 유지됨 → 안에 들어온 적은 계속 느려짐
-      S.fields = S.fields.filter(f => f.id !== sp.id);
-      S.fields.push({id: sp.id, r: sp.area, slow: sp.slow, t0: t, until: t + sp.time, color: sp.color});
-      applyBuff(sp, t);
-      S.fx.push({type: 'ring', x: p.x, y: p.y, r: sp.area, t0: t, life: 0.8, color: sp.color});
+      S.fields = S.fields.filter(f => !(f.owner === 'me' && f.id === sp.id));
+      S.fields.push({id: sp.id, owner: 'me', r: sp.area, slow: sp.slow, t0: t, until: t + sp.time, next: t, color: sp.color});
+      send({k: 'field', r: sp.area, tm: sp.time, c: sp.color});
+      buffMe(sp.fx, sp.time, sp.id, 0, sp.color, t);
+      addFx({type: 'ring', x: r1(p.x), y: r1(p.y), r: sp.area, t0: t, life: 0.8, color: sp.color}, true);
       S.tint = {until: t + sp.time, t0: t, color: '90,60,190'};
       break;
     case 'sanctum': {
-      const at = L.clampToWorld(L.clampReach(p, mouse, sp.reach), 0, WW, WH);
-      S.sanctums.push({x: at.x, y: at.y, r: sp.area, t0: t, until: t + sp.time, healRate: sp.heal / sp.time, dmgPer: sp.dmg / sp.time, weak: sp.weak, nextTick: t + 1, acc: 0, id: sp.id});
+      const at = L.clampToWorld(L.clampReach(p, mouse, sp.reach), 0, WW, WH), s = {x: r1(at.x), y: r1(at.y), r: sp.area, hr: r2(sp.heal / sp.time)};
+      S.sanctums.push({x: s.x, y: s.y, r: s.r, t0: t, until: t + sp.time, healRate: s.hr, dmgPer: sp.dmg / sp.time, weak: sp.weak, nextTick: t + 1, acc: 0, id: sp.id, team: p.team, mine: true});
+      send(Object.assign({k: 'sanc', tm: sp.time, team: p.team}, s));
       break;
     }
   }
@@ -301,7 +372,7 @@ function basicAttack(t){
 /* ---------- 피해 · 회복 · 궁극기 게이지 ---------- */
 function gainUlt(x, t){
   const was = S.ult; S.ult = L.gainUlt(S.ult, x, U.need);
-  if (was < U.need && S.ult >= U.need){
+  if (was < U.need && S.ult >= U.need && !unlimited){
     if (!S.charged) castMsg('🌟 궁극기 준비 완료! 긴 이름을 쳐 봐요', 'charge');
     S.floats.push({x: S.player.x, y: S.player.y - 70, text: '🌟 궁극기 준비!', color: '#ffd84a', t0: t});
     flashSlot(cls.ult.id);
@@ -309,30 +380,145 @@ function gainUlt(x, t){
 }
 function healPlayer(amount, t, silent){
   const p = S.player, before = p.hp;
+  if (p.deadUntil) return 0;
   p.hp = Math.min(p.max, p.hp + amount);
   const got = p.hp - before; S.stats.healed += got; gainUlt(got * U.heal, t);
-  if (!silent && got > 0) S.floats.push({x: p.x, y: p.y - 40, text: '+' + Math.round(got), color: '#5ce08a', t0: t});
+  if (!silent && got > 0) floatAt(p, '+' + Math.round(got), '#5ce08a', t);
   return got;
 }
-// 내가 적에게: 공격력 증가·평타 강화·상대 상태를 계산해서 피해
-function playerHit(d, base, t, o){
+function floatAt(e, text, color, t){ S.floats.push({x: e.x + (Math.random() * 20 - 10), y: e.y - e.r - 14, text, color, t0: t}); }
+// 상태 이상을 신호에 담기 / 꺼내기
+const statusOf = o => ({st: o.stun || 0, sl: o.slow ? [o.slow.v, o.slow.t, o.slow.tag || 'slow'] : 0, wk: o.weak ? [o.weak.v, o.weak.t, o.weak.tag || 'weak'] : 0,
+  pl: o.pull ? {x: r1(o.pull.x), y: r1(o.pull.y)} : 0});
+const statusFrom = ev => ({color: ev.c || null, stun: ev.st || 0, slow: ev.sl ? {v: ev.sl[0], t: ev.sl[1], tag: ev.sl[2]} : null,
+  weak: ev.wk ? {v: ev.wk[0], t: ev.wk[1], tag: ev.wk[2]} : null, pull: ev.pl || null});
+
+/* 내 공격이 적(허수아비·다른 팀 친구)에게 맞음
+   o: {basic, color, stun(초), slow{v,t,tag}, weak{v,t,tag}, pull{x,y}, noUlt}
+   내 쪽(공격력·평타 강화)만 계산해서 보내고, 피해 감소는 맞은 쪽이 계산함 */
+function dealHit(e, base, t, o){
+  if (isDown(e)) return 0;
   const p = S.player, mult = o.basic ? 1 + L.effectSum(p.fx, 'basic', t) : 1;
-  const dealt = hurt(d, L.calcDamage(base * mult, p.fx, d.fx, t), t, o.color);
-  if (!o.noUlt) gainUlt(dealt * (o.basic ? U.basicDmg : U.spellDmg), t);
+  const out = base * mult * Math.max(0.1, 1 + L.effectSum(p.fx, 'atk', t));
+  let got = 0;
+  if (e.kind === 'dummy' && isAuth()) got = applyHit(e, out, o, t, null);
+  else {
+    send(Object.assign({k: 'hit', to: e.id, d: r2(out)}, statusOf(o), {c: o.color || 0}));
+    if (out > 0){ got = Math.max(1, Math.round(out * L.takenMult(e.fx, t))); S.stats.dmg += got; floatAt(e, String(got), o.color || '#ffd166', t); }
+  }
+  if (!o.noUlt && got) gainUlt(got * (o.basic ? U.basicDmg : U.spellDmg), t);
+  return got;
 }
-function hurt(target, dmg, t, color, tag){
-  if (target.deadUntil) return 0;
+// 맞은 쪽(나, 또는 방장 컴퓨터의 허수아비): 상태 이상을 걸고, 피해 감소를 계산해서 체력을 깎음
+function applyHit(e, out, o, t, by){
+  if (isDown(e)) return 0;
+  const me = e === S.player;
+  if (o.stun){ e.frozenUntil = Math.max(e.frozenUntil, t + o.stun); e.frozenKind = 'stun'; if (me){ e.target = null; e.flurry = null; } }
+  if (o.slow) L.addEffect(e.fx, 'speed', -o.slow.v, t + o.slow.t, o.slow.tag);
+  if (o.weak) L.addEffect(e.fx, 'atk', -o.weak.v, t + o.weak.t, o.weak.tag);
+  if (o.pull){ e.pull = L.pushOut(L.clampToWorld(o.pull, e.r, WW, WH), e.r, WALLS); if (me){ e.target = null; e.dash = null; } }
+  if (!(out > 0)) return 0;
+  const m = L.takenMult(e.fx, t), dmg = Math.max(1, Math.round(out * m));
+  return hurt(e, dmg, t, o.color, me && m < 1 ? ' 🛡' : '', by);
+}
+// by: 때린 친구 pid (내가 때렸으면 null)
+function hurt(target, dmg, t, color, tag, by){
+  if (isDown(target)) return 0;
   const r = L.applyDamage(target, dmg, t);
   target.hp = r.hp; target.shield = r.shield;
   const isMe = target === S.player, got = dmg - r.absorbed;
-  if (isMe){ S.stats.taken += got; gainUlt(got * U.taken, t); } else S.stats.dmg += got;
-  S.floats.push({x: target.x + (Math.random() * 20 - 10), y: target.y - target.r - 14, text: (isMe ? '-' : '') + got + (tag || ''), color: isMe ? (tag ? '#8fd8ff' : '#ff7b7b') : color || '#ffd166', t0: t});
+  if (isMe){ S.stats.taken += got; gainUlt(got * U.taken, t); } else if (!by) S.stats.dmg += got;
+  floatAt(target, (isMe ? '-' : '') + got + (tag || ''), isMe ? (tag ? '#8fd8ff' : '#ff7b7b') : color || '#ffd166', t);
   if (target.hp > 0) return got;
   target.deadUntil = t + RESPAWN;
-  S.fx.push({type: 'poof', x: target.x, y: target.y, t0: t, life: 0.7});
-  if (isMe){ Object.assign(target, {target: null, dash: null, flurry: null, backAt: null, stealthUntil: 0, fx: []}); clearCharge(); S.busy = null; castMsg('쓰러졌어요! 3초 뒤 다시 일어나요', 'bad'); }
-  else { S.stats.kills++; target.fx = []; target.pull = null; }
+  addFx({type: 'poof', x: r1(target.x), y: r1(target.y), t0: t, life: 0.7}, true);
+  if (isMe){
+    Object.assign(target, {target: null, dash: null, flurry: null, backAt: null, pull: null, stealthUntil: 0, fx: []}); clearCharge(); S.busy = null;
+    castMsg('쓰러졌어요! 3초 뒤 다시 일어나요', 'bad');
+    if (net){
+      send({k: 'down', by: by || 0, who: myName()});
+      addFeed(by && by !== 'dummy' ? `💥 ${nameOf(by)} → ${myName()}` : `💥 ${myName()} 쓰러짐`, '#ff9a9a');
+    }
+  } else {
+    target.fx = []; target.pull = null;
+    if (!by) S.stats.kills++; else if (by !== 'dummy') send({k: 'kill', to: by});
+  }
   return got;
+}
+
+/* ---------- 친구에게서 온 신호 ---------- */
+function onNetEvent(ev){
+  const t = now(), from = S.others.get(ev.f), p = S.player;
+  switch (ev.k){
+    case 'hit': {
+      const o = statusFrom(ev);
+      if (ev.to === net.pid){
+        if (!ev.dm && from && from.team === p.team) return;       // 같은 팀 공격은 안 아픔
+        applyHit(p, ev.d, o, t, ev.dm ? 'dummy' : ev.f);
+      } else if (ev.to[0] === 'd' && isAuth()){
+        const d = S.dummies[+ev.to.slice(1)];
+        if (d) applyHit(d, ev.d, o, t, ev.f);
+      }
+      break;
+    }
+    case 'heal':
+      if (ev.to === net.pid && !p.deadUntil){ const got = healPlayer(ev.a, t, true); if (got > 0) floatAt(p, '+' + Math.round(got), '#5ce08a', t); }
+      break;
+    case 'buff':
+      if (ev.to === net.pid && !p.deadUntil) buffMe((ev.fx || []).map(([kind, value]) => ({kind, value})), ev.tm || 0, ev.tag, ev.h, ev.c, t, ev.by);
+      break;
+    case 'fx': if (ev.v) S.fx.push(Object.assign({}, ev.v, {t0: t})); break;
+    case 'shot': if (ev.s) S.shots.push(Object.assign({owner: 'remote', pid: ev.f, trav: 0, hit: new Set()}, ev.s)); break;
+    case 'wall': S.walls.push({pts: ev.pts || [], r: 22, t0: t, until: t + ev.tm, team: ev.team}); break;
+    case 'zone': S.zones.push({x: ev.x, y: ev.y, r: ev.r, rate: ev.rate, until: t + ev.tm, t0: t, color: ev.c, acc: 0, team: ev.team}); break;
+    case 'sanc': S.sanctums.push({x: ev.x, y: ev.y, r: ev.r, t0: t, until: t + ev.tm, healRate: ev.hr, team: ev.team, acc: 0}); break;
+    case 'field': S.fields.push({owner: ev.f, r: ev.r, t0: t, until: t + ev.tm, color: ev.c}); break;
+    case 'down':
+      if (ev.by === net.pid) S.stats.kills++;
+      addFeed(ev.by && ev.by !== 'dummy' ? `💥 ${nameOf(ev.by)} → ${ev.who}` : `💥 ${ev.who} 쓰러짐`, ev.by === net.pid ? '#ffd84a' : '#ffffff');
+      break;
+    case 'kill': if (ev.to === net.pid) S.stats.kills++; break;
+  }
+}
+// 친구 상태(0.1초마다) → 화면에 그릴 친구 정보
+function onNetState(pid, st){
+  const t = now(), c = classById(st.c);
+  let o = S.others.get(pid);
+  if (!o){
+    o = {kind: 'player', id: pid, x: st.x, y: st.y, sw: st.sw, swingAt: -9, shield: 0, shieldUntil: 0};
+    S.others.set(pid, o);
+    addFeed(`👋 ${st.n || '친구'} 님이 들어왔어요`, '#bff7c8');
+  }
+  if (Math.hypot(st.x - o.x, st.y - o.y) > 400){ o.x = st.x; o.y = st.y; }   // 순간 이동·부활은 바로
+  Object.assign(o, {tx: st.x, ty: st.y, name: st.n || '친구', team: st.tm === 'blue' ? 'blue' : 'red', cls: c, r: c.r, hp: st.hp, max: st.mx || c.hp,
+    face: {x: (st.fa || [1, 0])[0], y: (st.fa || [1, 0])[1]}, stealth: !!st.sh, dead: !!st.dd, deadLeft: st.dd || 0, charged: st.ch || '', seen: t,
+    frozenUntil: st.fz ? t + st.fz : 0, frozenKind: 'stun', fx: (st.fx || []).map(([kind, value, left]) => ({kind, value, until: t + left, tag: 'net'}))});
+  if (st.sw !== o.sw){ o.sw = st.sw; o.swingAt = t; }
+}
+// 방장이 보낸 허수아비 상태 (방장이 아닐 때만)
+function onNetDummies(arr){
+  if (!arr || isAuth()) return;
+  const t = now();
+  arr.forEach((a, i) => {
+    const d = S.dummies[i]; if (!d || !a) return;
+    d.tx = a[0]; d.ty = a[1]; if (Math.hypot(a[0] - d.x, a[1] - d.y) > 400){ d.x = a[0]; d.y = a[1]; }
+    d.hp = a[2]; d.deadUntil = a[3] ? t + a[3] : 0; d.frozenUntil = a[4] ? t + a[4] : 0; d.frozenKind = a[5] ? 'stun' : 'ice';
+    d.fx = [];
+    if (a[6]) d.fx.push({kind: 'speed', value: -0.5, until: t + 0.5, tag: 'net'});
+    if (a[7]) d.fx.push({kind: 'atk', value: -0.3, until: t + 0.5, tag: 'net'});
+    d.pull = null;
+  });
+}
+let sentAt = 0;
+function publish(t){
+  if (!net || t - sentAt < SEND_EVERY) return;
+  sentAt = t;
+  const p = S.player;
+  net.publish({n: net.name, tm: p.team, c: cls.id, x: Math.round(p.x), y: Math.round(p.y), hp: r1(p.hp), mx: p.max, fa: [r2(p.face.x), r2(p.face.y)],
+    fx: p.fx.filter(f => f.until > t).map(f => [f.kind, f.value, r1(f.until - t)]), sh: p.stealthUntil > t ? 1 : 0,
+    dd: p.deadUntil ? Math.max(0.1, r1(p.deadUntil - t)) : 0, ch: S.charged ? S.charged.spell.color : 0, sw: p.swings, fz: t < p.frozenUntil ? r1(p.frozenUntil - t) : 0});
+  if (net.isHost()) net.publishDummies(S.dummies.map(d => [Math.round(d.x), Math.round(d.y), Math.round(d.hp), d.deadUntil ? Math.max(0.1, r1(d.deadUntil - t)) : 0,
+    t < d.frozenUntil ? r1(d.frozenUntil - t) : 0, d.frozenKind === 'stun' ? 1 : 0, L.effectSum(d.fx, 'speed', t) < 0 ? 1 : 0, L.effectSum(d.fx, 'atk', t) < 0 ? 1 : 0]));
 }
 
 /* ---------- 한 프레임 진행 ---------- */
@@ -342,26 +528,30 @@ function update(){
   const p = S.player;
   p.fx = L.pruneEffects(p.fx, t);
 
-  // 내가 쓰러졌다가 다시 일어남
-  if (p.deadUntil && t >= p.deadUntil){ Object.assign(p, {deadUntil: 0, hp: p.max, x: SPAWN.x, y: SPAWN.y, frozenUntil: 0}); }
+  // 내가 쓰러졌다가 다시 일어남 (우리 팀 출발 자리에서)
+  if (p.deadUntil && t >= p.deadUntil){ const sp = SPAWN[p.team] || SPAWN.solo; Object.assign(p, {deadUntil: 0, hp: p.max, x: sp.x, y: sp.y, frozenUntil: 0}); }
   if (p.stealthUntil && t >= p.stealthUntil) p.stealthUntil = 0;
   // 궁극기 게이지: 가만히 있어도 천천히 참 (장전한 궁극기를 들고 있을 때는 빼고)
   if (!p.deadUntil && !(S.charged && S.charged.spell === cls.ult)) gainUlt(U.idle * dt, t);
-  // 칼바람: 벤 뒤 시간이 되면 뒤로 물러남
+  // 칼바람: 다 휘두르면 뒤로 물러남
   if (p.backAt && t >= p.backAt.at && !p.dash && !p.deadUntil){
     const b = p.backAt, dir = b.dir || p.face; p.backAt = null;
     p.dash = {to: L.clampToWorld({x: p.x - dir.x * b.dist, y: p.y - dir.y * b.dist}, p.r, WW, WH), dmg: 0, speed: 1100, hit: new Set()}; p.target = null;
-    S.fx.push({type: 'smoke', x: p.x, y: p.y, t0: t, life: 0.4});
+    addFx({type: 'smoke', x: r1(p.x), y: r1(p.y), t0: t, life: 0.4}, true);
   }
 
   if (!p.deadUntil){
     const spd = p.speed * Math.max(0.2, 1 + L.effectSum(p.fx, 'speed', t));
-    if (p.dash){                                         // 돌진: 빠르게 미끄러지며 부딪힌 허수아비에 피해
+    if (p.pull){                                         // 강철 사슬에 끌려감
+      const m = L.moveToward(p, p.pull, PULL_SPEED * dt);
+      p.x = m.x; p.y = m.y;
+      if (m.arrived) p.pull = null;
+    } else if (p.dash){                                  // 돌진: 빠르게 미끄러지며 부딪힌 적에 피해
       const m = L.moveToward(p, p.dash.to, p.dash.speed * dt);
       const pos = L.pushOut(m, p.r, WALLS);
       const blocked = Math.hypot(pos.x - m.x, pos.y - m.y) > 1;
       p.x = pos.x; p.y = pos.y;
-      if (p.dash.dmg) for (const d of alive()) if (!p.dash.hit.has(d) && dist(d, p) < d.r + p.r + (p.dash.wide || 8)){ p.dash.hit.add(d); playerHit(d, p.dash.dmg, t, {color: p.dash.color}); }
+      if (p.dash.dmg) for (const e of enemies()) if (!p.dash.hit.has(e) && dist(e, p) < e.r + p.r + (p.dash.wide || 8)){ p.dash.hit.add(e); dealHit(e, p.dash.dmg, t, {color: p.dash.color}); }
       if (Math.random() < 0.6) S.fx.push({type: 'dust', x: p.x, y: p.y + p.r, t0: t, life: 0.4});
       if (m.arrived || blocked){ if (p.dash.boom) explode(p, p.dash.boom, t, p.dash.color); p.dash = null; }
     } else if (p.target && t >= p.frozenUntil){
@@ -373,7 +563,7 @@ function update(){
       p.x = pos.x; p.y = pos.y;
       if (m.arrived) p.target = null;
     }
-    // 검의 폭풍: 정해진 시간 동안 마우스 쪽으로 계속 검 연타
+    // 검의 폭풍·칼바람: 정해진 시간 동안 마우스 쪽으로 계속 연타
     if (p.flurry){
       while (p.flurry && t >= p.flurry.next && p.flurry.next < p.flurry.until - 1e-6){ melee(t, p.flurry.sp, false, p.flurry.sp.color); p.flurry.next += p.flurry.sp.every; }
       if (p.flurry && t >= p.flurry.until) p.flurry = null;
@@ -385,42 +575,103 @@ function update(){
     castMsg(`${S.charged.spell.name}: 힘이 흩어졌어요`, 'bad'); clearCharge();
   }
 
-  // 회복 샘
+  // 회복 샘 (우리 팀 샘만)
   for (const z of S.zones){
-    if (!p.deadUntil && dist(p, z) < z.r){
+    if (!p.deadUntil && z.team === p.team && dist(p, z) < z.r){
       z.acc += healPlayer(z.rate * dt, t, true);
-      if (z.acc >= 5){ S.floats.push({x: p.x, y: p.y - 40, text: '+' + Math.round(z.acc), color: '#5ce08a', t0: t}); z.acc = 0; }
+      if (z.acc >= 5){ floatAt(p, '+' + Math.round(z.acc), '#5ce08a', t); z.acc = 0; }
     }
   }
   S.zones = S.zones.filter(z => t < z.until);
 
-  // 새벽의 성역: 안의 아군 회복, 안의 적은 1초마다 피해 + 나약함
+  // 새벽의 성역: 우리 팀은 회복, 안의 적은 1초마다 피해 + 나약함 (피해는 성역을 만든 사람이 계산)
   for (const s of S.sanctums){
-    if (!p.deadUntil && dist(p, s) < s.r){
+    if (!p.deadUntil && s.team === p.team && dist(p, s) < s.r){
       s.acc += healPlayer(s.healRate * dt, t, true);
-      if (s.acc >= 5){ S.floats.push({x: p.x, y: p.y - 40, text: '+' + Math.round(s.acc), color: '#5ce08a', t0: t}); s.acc = 0; }
+      if (s.acc >= 5){ floatAt(p, '+' + Math.round(s.acc), '#5ce08a', t); s.acc = 0; }
     }
-    const tick = t >= s.nextTick; if (tick) s.nextTick += 1;
-    for (const d of alive()) if (dist(d, s) < s.r + d.r){
-      L.addEffect(d.fx, 'atk', -s.weak, t + 0.5, s.id);
-      if (tick) playerHit(d, s.dmgPer, t, {color: '#fff0a0', noUlt: true});
-    }
+    if (!s.mine || t < s.nextTick) continue;
+    s.nextTick += 1;
+    for (const e of enemies()) if (dist(e, s) < s.r + e.r) dealHit(e, s.dmgPer, t, {color: '#fff0a0', noUlt: true, weak: {v: s.weak, t: 1.2, tag: s.id}});
   }
   S.sanctums = S.sanctums.filter(s => t < s.until);
   // 멈춰 버린 세계: 나를 따라다니는 범위 안의 적은 느려짐 (나가도 1초 동안은 느림)
-  for (const f of S.fields) if (!p.deadUntil) for (const d of alive()) if (dist(d, p) < f.r + d.r) L.addEffect(d.fx, 'speed', -f.slow, Math.min(f.until, t + 1), f.id);
-  S.fields = S.fields.filter(f => t < f.until && !p.deadUntil);
+  for (const f of S.fields){
+    if (f.owner !== 'me' || p.deadUntil || t < f.next) continue;
+    f.next = t + 0.5;
+    for (const e of enemies()) if (dist(e, p) < f.r + e.r) dealHit(e, 0, t, {slow: {v: f.slow, t: 1, tag: f.id}, noUlt: true});
+  }
+  S.fields = S.fields.filter(f => t < f.until && (f.owner === 'me' ? !p.deadUntil : S.others.has(f.owner)));
   S.walls = S.walls.filter(w => t < w.until);
   if (S.tint && t >= S.tint.until) S.tint = null;
   if (S.busy && t >= S.busy.until) S.busy = null;
 
-  // 허수아비들
+  // 친구들: 받은 위치로 부드럽게 따라감
+  for (const o of others()){
+    if (o.tx === undefined) continue;
+    o.x += (o.tx - o.x) * Math.min(1, dt * 12); o.y += (o.ty - o.y) * Math.min(1, dt * 12);
+  }
+
+  // 허수아비들 (방장 또는 혼자일 때만 계산, 아니면 방장이 보낸 위치로 따라감)
+  if (isAuth()) updateDummies(t, dt);
+  else for (const d of S.dummies){ d.x += (d.tx - d.x) * Math.min(1, dt * 12); d.y += (d.ty - d.y) * Math.min(1, dt * 12); }
+
+  // 날아가는 공격
+  const myWallHit = s => S.walls.some(w => w.team !== s.team && w.pts.some(q => Math.hypot(s.x - q.x, s.y - q.y) < s.r + w.r));
+  for (const s of S.shots){
+    const step = Math.hypot(s.vx, s.vy) * dt;
+    s.x += s.vx * dt; s.y += s.vy * dt; s.trav += step;
+    if (s.trav > s.range || s.x < -40 || s.x > WW + 40 || s.y < -40 || s.y > WH + 40){ s.dead = true; continue; }
+    const puff = look => { s.dead = true; S.fx.push({type: 'puff', x: s.x, y: s.y, t0: t, life: 0.35, look: look || s.look}); };
+    if (!s.pierce && L.pointInRects(s.x, s.y, s.r * 0.4, BLOCKERS)){ puff(); continue; }
+    if (myWallHit(s)){ puff('rock'); continue; }                 // 다른 팀(허수아비는 모두)의 바위벽에 막힘
+    if (s.owner === 'remote'){                                   // 친구 화면의 공격: 그림만 (맞았는지는 쏜 친구가 계산)
+      const hitSomething = (s.team !== 'dummy' && alive().some(d => dist(s, d) < s.r + d.r))
+        || (!p.deadUntil && p.team !== s.team && dist(s, p) < s.r + p.r)
+        || others().some(o => o.id !== s.pid && !o.dead && o.team !== s.team && dist(s, o) < s.r + o.r);
+      if (hitSomething) puff();
+      continue;
+    }
+    if (s.owner === 'dummy'){                                    // 허수아비 공격: 나 또는 친구에게
+      const out = s.dmg * Math.max(0.1, 1 + L.effectSum(s.src ? s.src.fx : [], 'atk', t));
+      if (!p.deadUntil && dist(s, p) < s.r + p.r){ applyHit(p, out, {}, t, 'dummy'); puff(); continue; }
+      const o = others().find(o => !o.dead && dist(s, o) < s.r + o.r);
+      if (o){ send({k: 'hit', to: o.id, d: r2(out), dm: 1}); puff(); }
+      continue;
+    }
+    // 내 공격: 적에게 피해, 덩굴 화살은 아군 회복
+    for (const e of enemies()){
+      if (s.dead) break;
+      if (s.hit.has(e) || dist(s, e) >= s.r + e.r) continue;
+      s.hit.add(e);
+      const o = {basic: s.basic, color: s.color || '#ffd166'};
+      if (s.pull){ const ux = (e.x - p.x) / (dist(e, p) || 1), uy = (e.y - p.y) / (dist(e, p) || 1), gap = p.r + e.r + 16; o.pull = {x: p.x + ux * gap, y: p.y + uy * gap}; }
+      dealHit(e, s.dmg, t, o);
+      puff();
+      if (s.pierce) s.dead = false;
+    }
+    if (!s.dead && s.allyHeal) for (const o of allies()) if (dist(s, o) < s.r + o.r){ healAlly(o, s.allyHeal, t); puff(); break; }
+  }
+  S.shots = S.shots.filter(s => !s.dead);
+
+  S.fx = S.fx.filter(f => t - f.t0 < f.life);
+  S.floats = S.floats.filter(f => t - f.t0 < (f.life || 1));
+  S.feed = S.feed.filter(f => t - f.t0 < 6);
+
+  const want = L.camFollow(p, VW, VH, WW, WH);
+  cam = {x: cam.x + (want.x - cam.x) * Math.min(1, dt * 8), y: cam.y + (want.y - cam.y) * Math.min(1, dt * 8)};
+  publish(t);
+}
+function updateDummies(t, dt){
+  const p = S.player;
+  // 반격 모드에서 노릴 수 있는 사람 (쓰러졌거나 투명하면 못 봄)
+  const people = [p].concat(others()).filter(e => e === p ? !p.deadUntil && p.stealthUntil <= t : !e.dead && !e.stealth);
   for (const d of S.dummies){
     if (d.deadUntil && t >= d.deadUntil){ Object.assign(d, {deadUntil: 0, hp: d.max, frozenUntil: 0, x: d.baseX, y: d.baseY, fx: []}); }
     if (d.deadUntil) continue;
     d.fx = L.pruneEffects(d.fx, t);
     if (d.pull){                                         // 강철 사슬에 끌려옴
-      const m = L.moveToward(d, d.pull, 1300 * dt);
+      const m = L.moveToward(d, d.pull, PULL_SPEED * dt);
       d.x = m.x; d.y = m.y;
       if (m.arrived){ d.pull = null; d.homeAt = t + 1.5; }
       continue;
@@ -434,50 +685,16 @@ function update(){
         if (d.x < d.baseX - 220) d.dir = 1;
       } else d.x += (d.baseX - d.x) * Math.min(1, dt * 3);
     }
-    // 반격 모드: 가까이 오면 나에게 마법을 쏨 (투명하면 못 봄)
-    if (S.dummyMode === 'attack' && free && !p.deadUntil && p.stealthUntil <= t && t >= d.nextShot && dist(p, d) < DUMMY_SIGHT){
-      const dx = p.x - d.x, dy = p.y - d.y, len = Math.hypot(dx, dy) || 1;
-      shoot('dummy', d, {x: dx / len, y: dy / len}, DUMMY_SHOT, d);
-      d.nextShot = t + (DUMMY_RATE + Math.random() * 0.6) / mult;
+    // 반격 모드: 가장 가까운 사람에게 공격을 쏨
+    if (S.dummyMode === 'attack' && free && t >= d.nextShot){
+      const who = people.filter(e => dist(e, d) < DUMMY_SIGHT).sort((a, b) => dist(a, d) - dist(b, d))[0];
+      if (who){
+        const dx = who.x - d.x, dy = who.y - d.y, len = Math.hypot(dx, dy) || 1;
+        shoot('dummy', d, {x: dx / len, y: dy / len}, DUMMY_SHOT, d);
+        d.nextShot = t + (DUMMY_RATE + Math.random() * 0.6) / mult;
+      }
     }
   }
-
-  // 날아가는 공격
-  for (const s of S.shots){
-    const step = Math.hypot(s.vx, s.vy) * dt;
-    s.x += s.vx * dt; s.y += s.vy * dt; s.trav += step;
-    if (s.trav > s.range || s.x < -40 || s.x > WW + 40 || s.y < -40 || s.y > WH + 40){ s.dead = true; continue; }
-    if (!s.pierce && L.pointInRects(s.x, s.y, s.r * 0.4, BLOCKERS)){ s.dead = true; S.fx.push({type: 'puff', x: s.x, y: s.y, t0: t, life: 0.35, look: s.look}); continue; }
-    if (s.owner === 'dummy'){
-      if (S.walls.some(w => w.pts.some(q => Math.hypot(s.x - q.x, s.y - q.y) < s.r + w.r))){ s.dead = true; S.fx.push({type: 'puff', x: s.x, y: s.y, t0: t, life: 0.35, look: 'rock'}); continue; }
-      if (!p.deadUntil && dist(s, p) < s.r + p.r){
-        const dmg = L.calcDamage(s.dmg, s.src ? s.src.fx : [], p.fx, t);
-        hurt(p, dmg, t, null, L.takenMult(p.fx, t) < 1 ? ' 🛡' : '');   // 피해 감소가 걸려 있으면 파란 글씨 + 🛡
-        s.dead = true; S.fx.push({type: 'puff', x: s.x, y: s.y, t0: t, life: 0.35, look: s.look});
-      }
-      continue;
-    }
-    for (const d of S.dummies){
-      if (s.dead) break;
-      if (d.deadUntil || s.hit.has(d) || dist(s, d) >= s.r + d.r) continue;
-      s.hit.add(d);
-      playerHit(d, s.dmg, t, {basic: s.basic, color: s.color || '#ffd166'});
-      if (s.freeze && !d.deadUntil){ d.frozenUntil = t + s.freeze; d.frozenKind = 'ice'; }
-      if (s.pull && !d.deadUntil){
-        const ux = (d.x - p.x) / (dist(d, p) || 1), uy = (d.y - p.y) / (dist(d, p) || 1), gap = p.r + d.r + 16;
-        d.pull = L.pushOut({x: p.x + ux * gap, y: p.y + uy * gap}, d.r, WALLS);
-      }
-      S.fx.push({type: 'puff', x: s.x, y: s.y, t0: t, life: 0.35, look: s.look});
-      if (!s.pierce) s.dead = true;
-    }
-  }
-  S.shots = S.shots.filter(s => !s.dead);
-
-  S.fx = S.fx.filter(f => t - f.t0 < f.life);
-  S.floats = S.floats.filter(f => t - f.t0 < (f.life || 1));
-
-  const want = L.camFollow(p, VW, VH, WW, WH);
-  cam = {x: cam.x + (want.x - cam.x) * Math.min(1, dt * 8), y: cam.y + (want.y - cam.y) * Math.min(1, dt * 8)};
 }
 
 /* ---------- 그리기 ---------- */
@@ -570,7 +787,8 @@ function drawGroundFx(t){
     ctx.globalAlpha = 1;
   }
   for (const f of S.fields){
-    const p = S.player, k = Math.min(1, (t - f.t0) / 0.4), fade = Math.min(1, (f.until - t) / 0.6);
+    const p = f.owner === 'me' ? S.player : S.others.get(f.owner); if (!p) continue;   // 범위는 만든 사람을 따라다님
+    const k = Math.min(1, (t - f.t0) / 0.4), fade = Math.min(1, (f.until - t) / 0.6);
     ctx.globalAlpha = fade;
     ctx.fillStyle = 'rgba(140,110,255,.10)'; circle(p.x, p.y, f.r * k);
     ctx.strokeStyle = 'rgba(199,184,255,.85)'; ctx.lineWidth = 4; ctx.setLineDash([16, 12]);
@@ -615,8 +833,8 @@ function drawDummy(d, t){
   if (tags){ ctx.font = '16px "Segoe UI Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(tags, d.x, d.y - 64); }
 }
 /* 캐릭터 모습 (나중에 그림 파일로 바꿀 수 있게 따로 둠) */
-function drawHero(p, t){
-  const c = cls, f = p.face, ang = Math.atan2(f.y, f.x), r = p.r;
+function drawHero(p, t, hc){
+  const c = hc || cls, f = p.face, ang = Math.atan2(f.y, f.x), r = p.r;
   const L90 = {x: f.y, y: -f.x}, R90 = {x: -f.y, y: f.x};                    // 캐릭터 기준 왼손·오른손 쪽
   const sw = Math.min(1, Math.max(0, (t - p.swingAt) / 0.22)), swing = sw < 1 ? -1.2 + 2.4 * sw : 0;   // 휘두르는 중이면 무기가 돌아감
   if (c.id === 'healer'){                                // 요정 날개 (몸 뒤)
@@ -694,11 +912,12 @@ function drawPlayer(t){
   const p = S.player;
   if (p.deadUntil){
     ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.font = '800 22px "Malgun Gothic",sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(`쓰러짐… ${Math.ceil(p.deadUntil - t)}`, SPAWN.x, SPAWN.y - 40);
+    ctx.fillText(`쓰러짐… ${Math.ceil(p.deadUntil - t)}`, p.x, p.y - 40);
     return;
   }
   const hidden = p.stealthUntil > t;
   ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(p.x, p.y + p.r + 2, p.r, 7, 0, 0, Math.PI * 2); ctx.fill();
+  if (net) teamRing(p);
   if (L.takenMult(p.fx, t) < 1){ ctx.strokeStyle = 'rgba(95,225,255,.9)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 10 + Math.sin(t * 8) * 2, 0, Math.PI * 2); ctx.stroke(); }
   if (L.effectSum(p.fx, 'atk', t) > 0){ ctx.strokeStyle = 'rgba(255,120,150,.75)'; ctx.lineWidth = 3; ctx.setLineDash([5, 7]); ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 15, -t * 2, -t * 2 + Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
   const ch = S.charged;
@@ -722,6 +941,7 @@ function drawPlayer(t){
     ctx.fillStyle = g; circle(tipX, tipY, 22);
   }
   bar(p.x, p.y - p.r - 30, 64, p.hp / p.max, '#ff5d73');
+  if (net) nameTag(p, `${cls.icon} ${net.name} (나)`);
   // 걸려 있는 효과 아이콘
   const icons = Object.keys(FX_ICON).filter(k => k === 'def' ? L.takenMult(p.fx, t) < 1 : L.effectSum(p.fx, k, t) > 0).map(k => FX_ICON[k]).join('') + (hidden ? '👻' : '');
   if (icons){ ctx.font = '16px "Segoe UI Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(icons, p.x, p.y - p.r - 36); }
@@ -735,7 +955,8 @@ function drawPlayer(t){
 }
 function drawShots(){
   for (const s of S.shots){
-    if (s.look === 'chain'){ ctx.strokeStyle = 'rgba(207,214,230,.85)'; ctx.lineWidth = 3; ctx.setLineDash([9, 5]); ctx.beginPath(); ctx.moveTo(S.player.x, S.player.y); ctx.lineTo(s.x, s.y); ctx.stroke(); ctx.setLineDash([]); }
+    const by = s.owner === 'me' ? S.player : S.others.get(s.pid);   // 사슬은 던진 사람과 이어져 있음
+    if (s.look === 'chain' && by){ ctx.strokeStyle = 'rgba(207,214,230,.85)'; ctx.lineWidth = 3; ctx.setLineDash([9, 5]); ctx.beginPath(); ctx.moveTo(by.x, by.y); ctx.lineTo(s.x, s.y); ctx.stroke(); ctx.setLineDash([]); }
     ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(Math.atan2(s.vy, s.vx));
     if (s.look === 'chain'){
       ctx.fillStyle = '#dfe5f0'; ctx.strokeStyle = '#7d8598'; ctx.lineWidth = 3;
@@ -802,6 +1023,11 @@ function drawMinimap(){
   ctx.fillStyle = 'rgba(44,100,64,.95)'; ctx.fillRect(mx, my, mw, mh);
   for (const o of OBSTACLES){ ctx.fillStyle = o.kind === 'pond' ? '#3d94c9' : o.kind === 'rock' ? '#9fa69c' : '#17552d'; ctx.fillRect(mx + o.x * k, my + o.y * k, Math.max(3, o.w * k), Math.max(3, o.h * k)); }
   for (const d of S.dummies){ ctx.fillStyle = d.deadUntil ? 'rgba(255,255,255,.35)' : '#ff8a5c'; ctx.beginPath(); ctx.arc(mx + d.x * k, my + d.y * k, 3.5, 0, Math.PI * 2); ctx.fill(); }
+  for (const o of S.others.values()){                 // 친구: 우리 팀은 초록, 다른 팀은 팀 색 (숨으면 안 보임)
+    if (o.dead || (o.stealth && o.team !== S.player.team)) continue;
+    ctx.fillStyle = o.team === S.player.team ? '#5ce08a' : (TEAMS[o.team] || {}).color || '#fff';
+    ctx.beginPath(); ctx.arc(mx + o.x * k, my + o.y * k, 4.5, 0, Math.PI * 2); ctx.fill();
+  }
   ctx.fillStyle = cls.color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
   ctx.beginPath(); ctx.arc(mx + S.player.x * k, my + S.player.y * k, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
   ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.strokeRect(mx + cam.x * k, my + cam.y * k, VW * k, VH * k);
@@ -813,13 +1039,70 @@ function draw(){
   const p = S.player;
   if (p.target && !p.deadUntil){ ctx.strokeStyle = 'rgba(95,225,255,.35)'; ctx.setLineDash([6, 8]); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.target.x, p.target.y); ctx.stroke(); ctx.setLineDash([]); }
   for (const d of S.dummies) drawDummy(d, t);
+  for (const o of S.others.values()) drawRemote(o, t);
   drawPlayer(t); drawShots();
   ctx.setTransform(base, 0, 0, base, 0, 0);
   if (S.tint){   // 멈춰 버린 세계: 화면이 보랏빛으로
     const a = Math.min(1, (t - S.tint.t0) / 0.3) * Math.min(1, (S.tint.until - t) / 0.5) * 0.16;
     ctx.fillStyle = `rgba(${S.tint.color},${a})`; ctx.fillRect(0, 0, VW, VH);
   }
-  drawMinimap();
+  drawMinimap(); drawFeed(t);
+}
+
+/* ---------- 친구 그리기 (온라인) ---------- */
+function teamRing(e){
+  const c = (TEAMS[e.team] || {}).color; if (!c) return;
+  ctx.strokeStyle = c; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(e.x, e.y + e.r * 0.6, e.r + 8, e.r * 0.55, 0, 0, Math.PI * 2); ctx.stroke();
+}
+function nameTag(e, text){
+  ctx.font = '800 15px "Malgun Gothic",sans-serif'; ctx.textAlign = 'center';
+  const y = e.y + e.r + 26;
+  ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText(text, e.x, y);
+  ctx.fillStyle = (TEAMS[e.team] || {}).color || '#ffffff'; ctx.fillText(text, e.x, y);
+}
+function drawRemote(o, t){
+  if (!o.cls || !inView(o.x, o.y, 120)) return;
+  const enemy = o.team !== S.player.team;
+  if (o.dead){
+    ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.font = '800 18px "Malgun Gothic",sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText(`${o.name} 쓰러짐…`, o.x, o.y);
+    return;
+  }
+  const hidden = o.stealth;
+  if (hidden && enemy){ ctx.globalAlpha = 0.07; drawHero(o, t, o.cls); ctx.globalAlpha = 1; return; }   // 다른 팀이 숨으면 거의 안 보임
+  ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(o.x, o.y + o.r + 2, o.r, 7, 0, 0, Math.PI * 2); ctx.fill();
+  teamRing(o);
+  if (L.takenMult(o.fx, t) < 1){ ctx.strokeStyle = 'rgba(95,225,255,.9)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(o.x, o.y, o.r + 10 + Math.sin(t * 8) * 2, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.globalAlpha = hidden ? 0.32 : 1;
+  drawHero(o, t, o.cls);
+  ctx.globalAlpha = 1;
+  if (o.charged){
+    const tipX = o.x + o.face.x * (o.r + 14), tipY = o.y + o.face.y * (o.r + 14);
+    const g = ctx.createRadialGradient(tipX, tipY, 1, tipX, tipY, 18 + Math.sin(t * 10) * 3);
+    g.addColorStop(0, '#ffffff'); g.addColorStop(0.35, o.charged); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; circle(tipX, tipY, 22);
+  }
+  if (t < o.frozenUntil){
+    ctx.fillStyle = '#fff6a8'; ctx.font = '800 20px "Malgun Gothic",sans-serif'; ctx.textAlign = 'center';
+    for (let i = 0; i < 3; i++){ const a = t * 5 + i * 2.1; ctx.fillText('★', o.x + Math.cos(a) * 24, o.y - o.r - 40 + Math.sin(a) * 6); }
+  }
+  bar(o.x, o.y - o.r - 30, 64, o.hp / o.max, enemy ? '#ff5d73' : '#5ce08a');
+  const icons = Object.keys(FX_ICON).filter(k => k === 'def' ? L.takenMult(o.fx, t) < 1 : L.effectSum(o.fx, k, t) > 0).map(k => FX_ICON[k]).join('')
+    + (L.effectSum(o.fx, 'speed', t) < 0 ? '🐢' : '') + (L.effectSum(o.fx, 'atk', t) < 0 ? '💧' : '') + (hidden ? '👻' : '');
+  if (icons){ ctx.font = '16px "Segoe UI Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(icons, o.x, o.y - o.r - 36); }
+  nameTag(o, `${o.cls.icon} ${o.name}`);
+}
+function drawFeed(t){
+  let y = 22;
+  ctx.textAlign = 'right'; ctx.font = '800 17px "Malgun Gothic","Segoe UI Emoji",sans-serif';
+  for (const f of S.feed){
+    ctx.globalAlpha = Math.min(1, (6 - (t - f.t0)) / 0.8);
+    const w = ctx.measureText(f.text).width + 20;
+    ctx.fillStyle = 'rgba(0,0,0,.55)'; roundRect(VW - 16 - w, y - 4, w, 28, 9); ctx.fill();
+    ctx.fillStyle = f.color; ctx.fillText(f.text, VW - 26, y + 16);
+    y += 34;
+  }
+  ctx.globalAlpha = 1;
 }
 
 /* ---------- 아래 스킬 막대 · 체력 · 기록 ---------- */
@@ -850,8 +1133,8 @@ function updateHud(){
       bar.style.width = (using ? bz / S.busy.len * 100 : 0) + '%';
       continue;
     }
-    if (sp === cls.ult) li.classList.remove('cool');
     if (sp === cls.ult){
+      li.classList.remove('cool');
       const ready = unlimited || S.ult >= U.need, pct = unlimited ? 100 : Math.floor(S.ult / U.need * 100);
       li.classList.toggle('ready', ready && !isCh); li.classList.toggle('charged', isCh);
       em.textContent = isCh ? '⚡ ' + Math.max(0, ch.until - t).toFixed(1) + '초' : unlimited ? '♾' : ready ? '준비!' : pct + '%';
@@ -869,8 +1152,10 @@ function updateHud(){
   $('#ultFill').style.width = (unlimited ? 100 : S.ult / U.need * 100) + '%';
   $('#ultText').textContent = unlimited ? '♾ 무제한' : S.ult >= U.need ? '🌟 준비!' : Math.floor(S.ult / U.need * 100) + '%';
   const st = S.stats, total = st.ok + st.fail;
-  $('#stats').innerHTML = `준 피해 <b>${st.dmg}</b> · 쓰러뜨림 <b>${st.kills}</b> · 받은 피해 <b>${Math.round(st.taken)}</b> · 회복 <b>${Math.round(st.healed)}</b> · 정확도 <b>${total ? Math.round(st.ok / total * 100) + '%' : '-'}</b>`;
+  $('#stats').innerHTML = `준 피해 <b>${Math.round(st.dmg)}</b> · 쓰러뜨림 <b>${st.kills}</b> · 받은 피해 <b>${Math.round(st.taken)}</b> · 회복 <b>${Math.round(st.healed)}</b> · 정확도 <b>${total ? Math.round(st.ok / total * 100) + '%' : '-'}</b>`;
+  if (net && t - listAt > 0.5){ listAt = t; renderRoomList(); }
 }
+let listAt = 0;
 
 /* ---------- 캐릭터 고르기 ---------- */
 function buildPick(){
@@ -887,24 +1172,130 @@ function buildPick(){
     box.appendChild(b);
   }
 }
-function openPick(){ buildPick(); $('#pick').hidden = false; const last = $('#cards .last'); if (last) last.focus(); }
+let pickMode = 'solo';
+function openPick(){ buildPick(); $('#pick').hidden = false; refreshPick(); const last = $('#cards .last'); if (last && !$('#cardsBox').hidden) last.focus(); }
+function refreshPick(){
+  const inRoom = !!net, friend = pickMode === 'friend' || inRoom;
+  $('#modeSolo').classList.toggle('on', !friend); $('#modeFriend').classList.toggle('on', friend);
+  $('#modes').hidden = inRoom;
+  $('#friendBox').hidden = !friend;
+  $('#fEntry').hidden = inRoom; $('#fRoom').hidden = !inRoom;
+  $('#cardsBox').hidden = friend && !inRoom;
+  if (inRoom){ $('#roomCode').textContent = net.code; renderTeamBtns(); renderRoomList(); }
+}
 function choose(c){
   cls = c; try { localStorage.setItem('magic.class', c.id); } catch (e) {}
-  S.player = makePlayer(c); S.cds = {}; S.lastBasic = undefined; S.lockUntil = 0; S.ult = 0; S.busy = null; clearCharge();
-  S.zones = []; S.shots = []; S.walls = []; S.sanctums = []; S.fields = []; S.tint = null;
-  for (const d of S.dummies){ d.fx = []; d.pull = null; }
-  cam = L.camFollow(S.player, VW, VH, WW, WH);
+  resetMe();
+  S.cds = {}; S.lastBasic = undefined; S.lockUntil = 0; S.ult = 0; S.busy = null; clearCharge();
+  S.shots = S.shots.filter(s => s.owner !== 'me'); S.fields = S.fields.filter(f => f.owner !== 'me'); S.sanctums = S.sanctums.filter(s => !s.mine); S.tint = null;
+  if (!net){ S.shots = []; S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; for (const d of S.dummies){ d.fx = []; d.pull = null; } }
   inp.value = ''; castMsg(`${c.role} · ${c.name}!`, 'good');
   buildBook(); $('#pick').hidden = true; focusSpell();
 }
+// 내 캐릭터를 우리 팀 출발 자리에 새로
+function resetMe(){
+  const team = net ? (S.player.team === 'blue' ? 'blue' : 'red') : 'solo';
+  S.player = makePlayer(cls, team);
+  cam = L.camFollow(S.player, VW, VH, WW, WH);
+}
 $('#pickBtn').onclick = openPick;
+$('#modeSolo').onclick = () => { pickMode = 'solo'; refreshPick(); };
+$('#modeFriend').onclick = () => { pickMode = 'friend'; refreshPick(); const n = $('#nameInput'); (n.value ? $('#codeInput') : n).focus(); };
 
-/* ---------- 허수아비 모드 ---------- */
-function setDummyMode(m){
+/* ---------- 👫 친구랑 연습: 방 만들기 · 들어가기 · 나가기 ---------- */
+try { $('#nameInput').value = localStorage.getItem('magic.name') || ''; } catch (e) {}
+const fMsg = m => { $('#fMsg').textContent = m; };
+function getName(){
+  const n = $('#nameInput').value.replace(/\s+/g, ' ').trim().slice(0, 10);
+  if (!n){ fMsg('닉네임을 먼저 적어 주세요.'); $('#nameInput').focus(); return null; }
+  try { localStorage.setItem('magic.name', n); } catch (e) {}
+  return n;
+}
+function setNetBusy(b){ $('#createBtn').disabled = b; $('#joinBtn').disabled = b; }
+async function goOnline(make){
+  const name = getName(); if (!name) return;
+  if (!window.MagicNet){ fMsg('온라인 연결 파일을 못 불러왔어요. 새로고침해 주세요.'); return; }
+  setNetBusy(true); fMsg(make ? '방을 만드는 중…' : '들어가는 중…');
+  try {
+    const conn = make ? await MagicNet.create(name) : await MagicNet.join($('#codeInput').value.trim(), name);
+    startNet(conn);
+    fMsg('');
+  } catch (e) { console.error(e); fMsg(e && e.message ? e.message : '서버에 연결하지 못했어요.'); }
+  finally { setNetBusy(false); }
+}
+$('#createBtn').onclick = () => goOnline(true);
+$('#joinBtn').onclick = () => goOnline(false);
+$('#codeInput').addEventListener('keydown', e => { if (e.key === 'Enter') goOnline(false); });
+$('#codeInput').addEventListener('input', e => { e.target.value = e.target.value.replace(/\D/g, '').slice(0, 4); });
+$('#nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('#codeInput').focus(); });
+
+function startNet(conn){
+  net = conn;
+  net.on.event = onNetEvent;
+  net.on.state = onNetState;
+  net.on.leave = pid => { const o = S.others.get(pid); if (o) addFeed(`👋 ${o.name} 님이 나갔어요`, '#cfd6e6'); S.others.delete(pid); };
+  net.on.dummies = onNetDummies;
+  net.on.mode = m => showDummyMode(m);
+  net.on.host = () => { renderRoomBar(); if (net && net.isHost()) for (const d of S.dummies){ d.nextShot = 0; } };
+  S.others.clear(); S.shots = []; S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; S.feed = []; S.tint = null;
+  S.player.team = net.created ? 'red' : 'blue';           // 처음엔 방장 빨강, 들어온 친구 파랑 (언제든 바꿀 수 있음)
+  resetMe(); clearCharge(); S.busy = null;
+  for (const d of S.dummies) Object.assign(d, {hp: d.max, deadUntil: 0, fx: [], pull: null, x: d.baseX, y: d.baseY, tx: d.baseX, ty: d.baseY});
+  try { sessionStorage.setItem('magic.code', net.code); } catch (e) {}
+  document.body.classList.add('online');
+  $('#subTitle').textContent = '친구랑 연습';
+  addFeed(net.created ? `🏠 방을 만들었어요! 코드 ${net.code}` : `🏠 ${net.code} 방에 들어왔어요`, '#ffd84a');
+  renderRoomBar(); refreshPick();
+}
+async function leaveNet(){
+  if (!net) return;
+  const n = net; net = null;
+  S.others.clear(); S.shots = []; S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; S.feed = []; S.tint = null;
+  S.player.team = 'solo'; resetMe(); clearCharge(); S.busy = null;
+  try { sessionStorage.removeItem('magic.code'); } catch (e) {}
+  document.body.classList.remove('online');
+  $('#subTitle').textContent = '연습판';
+  renderRoomBar(); refreshPick(); castMsg('방에서 나왔어요. 혼자 연습 중', 'good');
+  await n.leave();
+}
+$('#leaveBtn').onclick = $('#leaveBtn2').onclick = () => { if (confirm('방에서 나갈까요?')) leaveNet(); };
+window.addEventListener('pagehide', () => { if (net) net.leave(); });
+
+function setTeam(team){
+  if (!net || S.player.team === team) return;
+  S.player.team = team; resetMe(); clearCharge(); S.busy = null;
+  castMsg(`${TEAMS[team].name}이 됐어요!`, 'good'); renderTeamBtns(); renderRoomBar(); focusSpell();
+}
+$('#teamRed').onclick = () => setTeam('red');
+$('#teamBlue').onclick = () => setTeam('blue');
+$('#teamBtn').onclick = () => setTeam(S.player.team === 'red' ? 'blue' : 'red');
+function renderTeamBtns(){ $('#teamRed').classList.toggle('on', S.player.team === 'red'); $('#teamBlue').classList.toggle('on', S.player.team === 'blue'); }
+function renderRoomBar(){
+  $('#roomBar').hidden = !net;
+  if (!net) return;
+  $('#barCode').textContent = net.code;
+  const tb = $('#teamBtn'), tm = TEAMS[S.player.team];
+  tb.textContent = `${tm.name} ⇄`; tb.style.color = tm.color;
+  renderRoomList();
+}
+// 방 사람들: 이름 · 캐릭터 · 팀 색 (👑 방장)
+function renderRoomList(){
+  if (!net) return;
+  const people = [{id: net.pid, name: net.name, team: S.player.team, cls}].concat(others());
+  const html = people.map(o => {
+    const crown = o.id === net.hostId() ? '👑' : '', me = o.id === net.pid ? ' (나)' : '';
+    return `<span class="chip" style="--tc:${(TEAMS[o.team] || {}).color || '#fff'}">${crown}${o.cls ? o.cls.icon : ''} ${esc(o.name)}${me}</span>`;
+  }).join('');
+  for (const id of ['#barList', '#roomList']){ const el = $(id); if (el && el.dataset.html !== html){ el.innerHTML = html; el.dataset.html = html; } }
+}
+const esc = s => String(s).replace(/[&<>"']/g, ch => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[ch]));
+
+/* ---------- 허수아비 모드 (온라인이면 방 전체가 같이 바뀜) ---------- */
+function showDummyMode(m){
   S.dummyMode = m;
   $('#dStill').classList.toggle('on', m === 'still'); $('#dMove').classList.toggle('on', m === 'move'); $('#dAttack').classList.toggle('on', m === 'attack');
-  focusSpell();
 }
+function setDummyMode(m){ showDummyMode(m); if (net) net.setMode(m); focusSpell(); }
 $('#dStill').onclick = () => setDummyMode('still');
 $('#dMove').onclick = () => setDummyMode('move');
 $('#dAttack').onclick = () => setDummyMode('attack');
@@ -924,7 +1315,9 @@ applyUnlimited();
 /* ---------- 시작 ---------- */
 function loop(){ update(); draw(); updateHud(); requestAnimationFrame(loop); }
 buildBook(); fit(); openPick();
+try { const c = sessionStorage.getItem('magic.code'); if (c){ $('#codeInput').value = c; pickMode = 'friend'; refreshPick(); } } catch (e) {}
 requestAnimationFrame(loop);
 
-window.__magic = {S, mouse, submitSpell, rightClick, choose, CLASSES, OBSTACLES, step(){ update(); draw(); updateHud(); }, get cls(){ return cls; }, get cam(){ return cam; }, get unlimited(){ return unlimited; }, setUnlimited(v){ unlimited = !!v; applyUnlimited(); }};
+window.__magic = {S, mouse, submitSpell, rightClick, choose, CLASSES, OBSTACLES, step(){ update(); draw(); updateHud(); }, get cls(){ return cls; }, get cam(){ return cam; },
+  get unlimited(){ return unlimited; }, setUnlimited(v){ unlimited = !!v; applyUnlimited(); }, get net(){ return net; }, setTeam, leaveNet};
 })();

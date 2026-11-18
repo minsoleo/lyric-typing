@@ -1,7 +1,7 @@
 /* 숲속의 한바탕 — 캐릭터와 스킬 표 (정리본: docs/캐릭터-스킬표.md)
    ★ 캐릭터·스킬 이름을 바꾸고 싶으면 여기 name만 고치면 돼요. (id는 그대로 두기)
    스킬 type:
-     shot      날아가는 공격 (pull: 맞으면 끌어옴, freeze: 묶음)
+     shot      날아가는 공격 (pull: 맞으면 끌어옴)
      dash      돌진 (dmg: 지나가며 피해, boom: 멈춘 자리에서 폭발, healAll: 아군 모두 회복)
      slash     swing초 동안 every초마다 앞을 베고(한 번에 dmg), 다 휘두르면 뒤로 물러남
      wall      바위벽 세우기 (적이 쏜 공격을 막음)
@@ -13,6 +13,7 @@
      zone      바닥에 회복 샘
      slowfield 나를 따라다니는 넓은 범위: 안에 들어온 적은 느려짐 + 나 강해짐 (time 동안 유지)
      sanctum   성역: 아군 회복 + 적 피해·나약함
+   ally: 'one' = 가장 가까운 아군 한 명에게 (근처에 없으면 나) · 'near' = 나 + 주변 아군 모두
    fx kind: atk(주는 피해 +) · def(받는 피해 −) · speed(이동 속도 +) · basic(평타 피해 +) · reach(근접 공격 거리 +)
    cd = 쓴 뒤 다시 쓸 수 있을 때까지(초), color = 장전됐을 때 빛나는 색, look = 날아가는 모양
    궁극기(ult)는 대기 시간 대신 게이지(MAGIC_ULT)가 가득 차야 쓸 수 있음
@@ -25,12 +26,12 @@ window.MAGIC_CLASSES = [
     basic: {name: '강철 베기', melee: true, cd: 0.9, dmg: 12, reach: 95, arc: 120},
     spells: [
       {id: 'rockwall', type: 'wall',   name: '바위벽',     cd: 10, desc: '5초 동안 적의 공격을 막는 벽',     color: '#c9b08a', dist: 95, length: 230, time: 5},
-      {id: 'guard',    type: 'buff',   name: '수호의 방패', cd: 12, desc: '8초 동안 받는 피해 40% 감소',      color: '#9fd3ff', time: 8, ally: true, fx: [{kind: 'def', value: 0.4}]},
+      {id: 'guard',    type: 'buff',   name: '수호의 방패', cd: 12, desc: '8초 동안 받는 피해 40% 감소',      color: '#9fd3ff', time: 8, ally: 'one', fx: [{kind: 'def', value: 0.4}]},
       {id: 'chain',    type: 'shot',   name: '강철 사슬',   cd: 9,  desc: '맞은 적을 끌어옴 · 피해 10',       color: '#cfd6e6', look: 'chain', dmg: 10, speed: 1400, radius: 12, range: 650, pull: true},
       {id: 'crash',    type: 'dash',   name: '파쇄 돌격',   cd: 8,  desc: '멀리 돌진 후 폭발 · 피해 20',      color: '#ffb36b', reach: 460, dmg: 0, boom: {area: 130, dmg: 20}},
       {id: 'flurry',   type: 'flurry', name: '검의 폭풍',   cd: 14, desc: '3초 동안 검 연타 · 한 대에 5',     color: '#ffcf6b', time: 3, every: 0.25, dmg: 5, reach: 110, arc: 120}
     ],
-    ult: {id: 'legion', type: 'buff', name: '꺾이지 않는 강철 군단의 함성', desc: '8초 동안 받는 피해 −50% · 공격 거리 +50% · 공격력 +30% · 속도 +25% · 평타 2배', color: '#ffd84a', time: 8, ally: true,
+    ult: {id: 'legion', type: 'buff', name: '꺾이지 않는 강철 군단의 함성', desc: '8초 동안 받는 피해 −50% · 공격 거리 +50% · 공격력 +30% · 속도 +25% · 평타 2배', color: '#ffd84a', time: 8, ally: 'near',
       fx: [{kind: 'def', value: 0.5}, {kind: 'reach', value: 0.5}, {kind: 'atk', value: 0.3}, {kind: 'speed', value: 0.25}, {kind: 'basic', value: 1}]}
   },
   {
@@ -42,7 +43,7 @@ window.MAGIC_CLASSES = [
       {id: 'rush',   type: 'dash',    name: '질풍 베기',   cd: 8,  desc: '멀리 달려가며 지나간 적 모두 피해 22', color: '#b9a3ff', reach: 520, dmg: 22, wide: 34},
       {id: 'throat', type: 'leap',    name: '목 긋기',     cd: 10, desc: '화면 안 가리킨 적 등 뒤로 · 피해 22',  color: '#ff6b8b', screen: true, dmg: 22},
       {id: 'shadow', type: 'stealth', name: '그림자 은신', cd: 16, desc: 'Enter만 쳐도 바로! 15초 투명 · 속도 2배', color: '#8f86b8', instant: true, time: 15, fx: [{kind: 'speed', value: 1}]},
-      {id: 'oath',   type: 'buff',    name: '칼끝의 맹세', cd: 14, desc: '6초 동안 공격력 +40%',                 color: '#ff9ad5', time: 6, ally: true, fx: [{kind: 'atk', value: 0.4}]}
+      {id: 'oath',   type: 'buff',    name: '칼끝의 맹세', cd: 14, desc: '6초 동안 공격력 +40%',                 color: '#ff9ad5', time: 6, ally: 'near', fx: [{kind: 'atk', value: 0.4}]}
     ],
     ult: {id: 'stopworld', type: 'slowfield', name: '멈춰 버린 세계를 가르는 칼날', desc: '12초 동안 나를 따라다니는 넓은 범위 · 안의 적 느려짐 · 나 속도 +30% · 피해 +40%', color: '#c7b8ff', time: 12, area: 650, slow: 0.5,
       fx: [{kind: 'speed', value: 0.3}, {kind: 'atk', value: 0.4}]}
@@ -56,7 +57,7 @@ window.MAGIC_CLASSES = [
       {id: 'spring', type: 'zone',   name: '생명의 샘',   cd: 14, desc: '바닥에 7초 동안 회복 샘 · 체력 42',     color: '#5cf0b0', reach: 500, area: 120, heal: 42, time: 7},
       {id: 'spear',  type: 'shot',   name: '빛의 창',     cd: 3,  desc: '빛의 창을 던짐 · 피해 20',               color: '#fff6b0', look: 'spear', dmg: 20, speed: 660, radius: 10, range: 800},
       {id: 'flash',  type: 'stun',   name: '숲속의 섬광', cd: 12, desc: '가리킨 적 2.5초 기절',                   color: '#fffbd0', reach: 650, time: 2.5},
-      {id: 'bless',  type: 'buff',   name: '수호의 축복', cd: 12, desc: '체력 20 회복 · 5초 동안 받는 피해 30% 감소', color: '#bff7ff', heal: 20, time: 5, ally: true, fx: [{kind: 'def', value: 0.3}]}
+      {id: 'bless',  type: 'buff',   name: '수호의 축복', cd: 12, desc: '체력 20 회복 · 5초 동안 받는 피해 30% 감소', color: '#bff7ff', heal: 20, time: 5, ally: 'one', fx: [{kind: 'def', value: 0.3}]}
     ],
     ult: {id: 'sanctum', type: 'sanctum', name: '모든 어둠을 몰아내는 새벽의 성역', desc: '10초 동안 넓은 성역 · 아군 회복 80 · 적 피해 50 + 나약함', color: '#fff0a0', reach: 500, area: 320, time: 10, heal: 80, dmg: 50, weak: 0.3}
   }

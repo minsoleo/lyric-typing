@@ -114,11 +114,40 @@ canvas{display:block;border-radius:16px;box-shadow:var(--shadow);cursor:crosshai
 .card.last{border-color:var(--c)}
 @media(max-width:800px){.cards{grid-template-columns:1fr}}
 @media(prefers-reduced-motion:reduce){.cast.shake,.skills li.ult.ready{animation:none}}
+/* 👫 친구랑 연습 */
+.pick{overflow:auto;justify-content:safe center}
+.modes{display:flex;gap:8px;margin-bottom:12px}
+.modes button{font-size:16px;padding:9px 18px;border-radius:99px}
+.friend{width:min(780px,100%);margin:0 0 14px;padding:12px 16px;border-radius:16px;background:var(--panel);border:2px solid var(--line);box-shadow:var(--shadow)}
+.friend .row{gap:8px}
+.friend input{font:800 16px "Malgun Gothic",sans-serif;color:var(--text);background:var(--field);border:2px solid var(--line);border-radius:10px;padding:7px 10px;outline:none}
+.friend input:focus{border-color:var(--accent)}
+#nameInput{width:150px} #codeInput{width:130px;letter-spacing:4px;text-align:center}
+.friend .or{color:var(--dim);font-size:13px;font-weight:800}
+.friend .big{font-size:15px;font-weight:800}
+#fMsg{margin:8px 0 0;min-height:18px;font-size:13px;font-weight:800;color:var(--pend)}
+.friend .help{margin:6px 0 0;font-size:12.5px;color:var(--dim)}
+#roomCode{font:400 28px "Black Han Sans",sans-serif;letter-spacing:3px;color:var(--gold);margin:0 4px}
+#teamRed.on{background:#ff5d5d;border-color:#ff5d5d;color:#fff} #teamBlue.on{background:#4fa3ff;border-color:#4fa3ff;color:#fff}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;border-radius:99px;border:2px solid var(--tc);font-size:12.5px;font-weight:800;color:var(--text);background:var(--panel2);white-space:nowrap}
+#roomList{margin-top:8px}
+#cardsBox{display:flex;flex-direction:column;align-items:center;max-width:100%}
+.roombar{display:flex;align-items:center;gap:8px;min-width:0;flex:1;justify-content:flex-end;overflow:hidden}
+.roombar .code{flex:none;font-weight:800;font-size:13px;color:var(--dim)} .roombar .code b{color:var(--gold);font-size:16px;letter-spacing:1px}
+#barList{flex-wrap:nowrap;overflow:hidden;min-width:0}
+.roombar button{padding:4px 10px;font-size:13px;font-weight:800}
 </style>
 </head>
 <body>
 <header>
-  <h1 class="display">🌲 숲속의 한바탕 <small>연습판</small></h1>
+  <h1 class="display">🌲 숲속의 한바탕 <small id="subTitle">연습판</small></h1>
+  <div class="roombar" id="roomBar" hidden>
+    <span class="code">🏠 방 <b id="barCode"></b></span>
+    <div class="chips" id="barList"></div>
+    <button id="teamBtn" type="button" title="빨강 팀 ⇄ 파랑 팀">팀</button>
+    <button id="leaveBtn" type="button">🚪 방 나가기</button>
+  </div>
   <div class="row">
     <button id="themeBtn" type="button"></button>
     <a class="btn" href="./">타자연습으로</a>
@@ -147,12 +176,37 @@ canvas{display:block;border-radius:16px;box-shadow:var(--shadow);cursor:crosshai
 </div>
 <!-- 캐릭터 고르기 -->
 <div class="pick" id="pick" hidden>
-  <h2 class="display">캐릭터 고르기</h2>
-  <p class="sub">캐릭터마다 스킬 5개와 궁극기 1개가 있어요. 🌟 궁극기는 싸우면 게이지가 차올라요.</p>
-  <div class="cards" id="cards"></div>
+  <div class="modes" id="modes"><button id="modeSolo" type="button" class="on">🎯 혼자 연습</button><button id="modeFriend" type="button">👫 친구랑 연습</button></div>
+  <div class="friend" id="friendBox" hidden>
+    <div id="fEntry">
+      <div class="row">
+        <input id="nameInput" maxlength="10" placeholder="닉네임" autocomplete="off" aria-label="닉네임">
+        <button id="createBtn" type="button" class="big">🏠 방 만들기</button>
+        <span class="or">또는</span>
+        <input id="codeInput" inputmode="numeric" maxlength="4" placeholder="방 코드" autocomplete="off" aria-label="방 코드 4자리">
+        <button id="joinBtn" type="button" class="big">들어가기</button>
+      </div>
+      <p class="help">한 명이 방을 만들고, 나온 숫자 4자리를 친구에게 알려 주면 돼요. 허수아비도 같이 있고, 같은 팀이면 아군 · 다른 팀이면 적이에요.</p>
+      <p id="fMsg"></p>
+    </div>
+    <div id="fRoom" hidden>
+      <div class="row">방 코드 <b id="roomCode"></b><span class="or">← 친구에게 알려 주세요</span>
+        <span style="flex:1"></span>내 팀 <button id="teamRed" type="button">빨강 팀</button><button id="teamBlue" type="button">파랑 팀</button>
+        <button id="leaveBtn2" type="button">🚪 나가기</button></div>
+      <div class="chips" id="roomList"></div>
+    </div>
+  </div>
+  <div id="cardsBox">
+    <h2 class="display">캐릭터 고르기</h2>
+    <p class="sub">캐릭터마다 스킬 5개와 궁극기 1개가 있어요. 🌟 궁극기는 싸우면 게이지가 차올라요.</p>
+    <div class="cards" id="cards"></div>
+  </div>
 </div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <script src="magic-spells.js"></script>
 <script src="magic-logic.js"></script>
+<script src="magic-net.js"></script>
 <script src="magic.js"></script>
 </body>
 </html>
