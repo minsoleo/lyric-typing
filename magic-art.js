@@ -27,7 +27,9 @@ const SHEETS = {props: {src: 'art/trees-rocks.webp'},   // 나무 3 (위) · 바
                 'icons-dealer': {src: 'art/icons-dealer.webp', max: 128},
                 'icons-healer': {src: 'art/icons-healer.webp', max: 128},
                 things: {src: 'art/things.webp', max: 200}};     // 덩굴 화살 · 사슬 갈고리 · 바위 기둥
-const stand = {}, walk = {}, tiles = {}, sheets = {};
+// 빛 효과 (검은 배경, 가로·세로 칸이 고르게): 0 칼자국 1 폭발 2 치유 / 3 기절 별 4 빛의 창 5 빨간 구슬 / 6 순간 이동 7 섬광 8 마법진
+const GLOWS = {fx: {src: 'art/fx.webp', cols: 3, rows: 3, max: 300}};
+const stand = {}, walk = {}, tiles = {}, sheets = {}, glows = {};
 
 // 그림 주소에 판 번호(MAGIC_V)를 붙여서, 그림을 바꿔 올리면 브라우저가 새로 받게 함
 const load = src => new Promise(res => { const img = new Image(); img.onload = () => res(img); img.onerror = () => res(null); img.src = src + (window.MAGIC_V ? '?v=' + window.MAGIC_V : ''); });
@@ -143,6 +145,32 @@ function makeSheet(img, max){
 }
 const sheetReady = Promise.all(Object.entries(SHEETS).map(async ([id, f]) => { const img = await load(f.src); if (img) sheets[id] = makeSheet(img, f.max); }));
 
+// 빛 효과 자르기: 칸을 고르게 나누고, 검은색은 투명하게 (밝을수록 진하게 보임 → 어느 바닥에서도 빛처럼)
+function makeGlow(img, cols, rows, max){
+  const w = img.naturalWidth, h = img.naturalHeight;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const g = c.getContext('2d', {willReadFrequently: true}); g.drawImage(img, 0, 0);
+  const im = g.getImageData(0, 0, w, h), d = im.data;
+  for (let i = 0; i < d.length; i += 4){
+    const m = Math.max(d[i], d[i + 1], d[i + 2]);
+    if (m < 14){ d[i + 3] = 0; continue; }
+    const a = m / 255;
+    d[i] = Math.min(255, d[i] / a); d[i + 1] = Math.min(255, d[i + 1] / a); d[i + 2] = Math.min(255, d[i + 2] / a); d[i + 3] = Math.round(a * 255);
+  }
+  g.putImageData(im, 0, 0);
+  const s = {c, d, w, h}, parts = [], cw = w / cols, chh = h / rows;
+  for (let r = 0; r < rows; r++) for (let q = 0; q < cols; q++){
+    const x0 = Math.round(q * cw), x1 = Math.round((q + 1) * cw) - 1, y0 = Math.round(r * chh), y1 = Math.round((r + 1) * chh) - 1;
+    let a = x1, b = x0, top = y1, bot = y0;
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (d[(y * w + x) * 4 + 3] > 40){ if (x < a) a = x; if (x > b) b = x; if (y < top) top = y; if (y > bot) bot = y; }
+    if (b <= a){ parts.push(null); continue; }
+    const box = {x0: a, x1: b, y0: top, y1: bot}, k = Math.min(1, max / Math.max(b - a + 1, bot - top + 1));
+    const part = cut(s, box, top, bot, k); part.ax = part.img.width / 2; parts.push(part);
+  }
+  return parts;
+}
+const glowReady = Promise.all(Object.entries(GLOWS).map(async ([id, f]) => { const img = await load(f.src); if (img) glows[id] = makeGlow(img, f.cols, f.rows, f.max); }));
+
 // 타일: 정해진 크기로 줄여 둠 (반복 무늬로 깔 때 그대로 씀)
 function makeTile(img, size){
   const c = document.createElement('canvas'); c.width = c.height = size;
@@ -166,7 +194,8 @@ window.MagicArt = {
   sheet: id => sheets[id] || null,            // [{img, ax}, …] 여러 개 든 그림
   // 스킬 아이콘 그림 주소 (없으면 null): 캐릭터 id, 몇 번째(0~4 스킬, 5 궁극기)
   icon: (cid, i) => { const s = sheets['icons-' + cid]; if (!s || !s[i]) return null; return s[i].url || (s[i].url = s[i].img.toDataURL()); },
-  ready: Promise.all([ready, tileReady, sheetReady]),
+  glow: id => glows[id] || null,              // 빛 효과 [{img}, …] (검은색은 투명)
+  ready: Promise.all([ready, tileReady, sheetReady, glowReady]),
   url: id => stand[id] ? stand[id].img.toDataURL() : null
 };
 })();

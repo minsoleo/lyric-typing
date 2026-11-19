@@ -295,7 +295,7 @@ function fxLabel(f){
     : f.kind === 'reach' ? '📏 공격 거리 +' + pct : f.kind === 'basic' ? '👊 평타 ' + (1 + f.value) + '배' : '';
 }
 function explode(at, o, t, color){
-  addFx({type: 'ring', x: r1(at.x), y: r1(at.y), r: o.area, t0: t, life: 0.5, color}, true);
+  addFx({type: 'ring', kind: 'boom', x: r1(at.x), y: r1(at.y), r: o.area, t0: t, life: 0.5, color}, true);
   for (const e of enemies()) if (dist(e, at) < o.area + e.r) dealHit(e, o.dmg, t, {color});
 }
 function breakStealth(t){
@@ -907,6 +907,11 @@ function drawGroundFx(t){
   }
   for (const s of S.sanctums){
     const k = Math.min(1, (t - s.t0) / 0.3), fade = Math.min(1, (s.until - t) / 0.5);
+    if (glow(8)){                                        // 새벽의 성역: 금빛 마법진이 천천히 돌아감
+      ctx.globalAlpha = fade * 0.18; ctx.fillStyle = '#fff0a0'; circle(s.x, s.y, s.r * k);
+      ctx.globalAlpha = 1; drawGlow(8, s.x, s.y, s.r * 2 * k, t * 0.35, fade * 0.6);   // 바닥이 보이게 조금 투명하게
+      continue;
+    }
     ctx.globalAlpha = fade;
     const g = ctx.createRadialGradient(s.x, s.y, 10, s.x, s.y, s.r * k);
     g.addColorStop(0, 'rgba(255,250,215,.55)'); g.addColorStop(1, 'rgba(255,230,140,.12)');
@@ -978,7 +983,7 @@ function drawDummy(d, t){
   if (t < d.frozenUntil){
     if (d.frozenKind === 'stun'){
       ctx.fillStyle = '#fff6a8'; ctx.font = '800 20px "Malgun Gothic",sans-serif'; ctx.textAlign = 'center';
-      for (let i = 0; i < 3; i++){ const a = t * 5 + i * 2.1; ctx.fillText('★', d.x + Math.cos(a) * 24, top + 6 + Math.sin(a) * 6); }
+      if (!drawStunStars(d.x, top + 2, t)) for (let i = 0; i < 3; i++){ const a = t * 5 + i * 2.1; ctx.fillText('★', d.x + Math.cos(a) * 24, top + 6 + Math.sin(a) * 6); }
     } else { ctx.fillStyle = 'rgba(150,220,255,.45)'; roundRect(d.x - 42, top, 84, h, 12); ctx.fill(); }
   }
   bar(d.x, top - 12, 70, d.hp / d.max, '#ff5d73');
@@ -1191,6 +1196,8 @@ function drawShots(){
     const by = s.owner === 'me' ? S.player : S.others.get(s.pid);   // 사슬은 던진 사람과 이어져 있음
     if (s.look === 'chain' && by) drawChain(by, s);
     ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(Math.atan2(s.vy, s.vx));
+    if (s.look === 'spear' && drawGlow(4, -14, 0, 86, 0, 1)){ ctx.restore(); continue; }                 // 빛의 창
+    if (s.look === 'enemy' && drawGlow(5, 0, 0, s.r * 4.2, s.trav * 0.03, 1)){ ctx.restore(); continue; }  // 허수아비의 빨간 구슬
     const tg = THING[s.look] !== undefined && thing(THING[s.look]);
     if (tg){                                             // 그림이 있으면 그림으로 (끝이 날아가는 쪽을 향함)
       const w = THING_W[s.look], h = w * tg.img.height / tg.img.width;
@@ -1215,10 +1222,38 @@ function drawShots(){
     ctx.restore();
   }
 }
+/* 빛 효과 그림 (art/fx.webp 9칸): 0 칼자국 1 폭발 2 치유 3 기절 별 4 빛의 창 5 빨간 구슬 6 순간 이동 7 섬광 8 마법진 */
+const glow = i => { const g = window.MagicArt && MagicArt.glow ? MagicArt.glow('fx') : null; return g && g[i] ? g[i] : null; };
+// 가운데 (x, y)에 긴 쪽이 size가 되게, rot만큼 돌려서
+function drawGlow(i, x, y, size, rot, alpha){
+  const g = glow(i); if (!g) return false;
+  const img = g.img, s = size / Math.max(img.width, img.height), w = img.width * s, h = img.height * s;
+  const was = ctx.globalAlpha; ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+  ctx.save(); ctx.translate(x, y); if (rot) ctx.rotate(rot); ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore();
+  ctx.globalAlpha = was;
+  return true;
+}
+// 효과 하나를 그림으로 그릴 수 있으면 그리고 true
+function glowFx(f, k){
+  const fade = 1 - k;
+  switch (f.type){
+    case 'swing': return drawGlow(0, f.x + Math.cos(f.a) * f.r * 0.62, f.y + Math.sin(f.a) * f.r * 0.62, f.r * (1.15 + 0.25 * k), f.a, fade);
+    case 'ring': return f.kind === 'boom' && drawGlow(1, f.x, f.y - f.r * 0.2, f.r * 2 * (0.55 + 0.6 * k), 0, 1 - k * k);
+    case 'heal': return drawGlow(2, f.x, f.y - 30 - k * 30, 96, 0, fade);
+    case 'blink': return drawGlow(6, f.x, f.y - 20, 80 + k * 30, 0, fade);
+    case 'smoke': return drawGlow(6, f.x, f.y - 20, 70 + k * 40, k * 1.5, fade * 0.85);
+    case 'flash': return drawGlow(7, f.x, f.y - 20, 80 + k * 100, k * 0.6, fade);
+    case 'cut': return drawGlow(0, f.x, f.y - 24, 100, -0.7 + k * 0.4, fade);
+  }
+  return false;
+}
+// 기절 별: 머리 위에서 빙글 (그림이 없으면 false → ★ 글자로)
+const drawStunStars = (x, y, t) => drawGlow(3, x, y, 62, Math.sin(t * 4) * 0.25, 1);
 function drawFx(t){
   for (const f of S.fx){
     const k = (t - f.t0) / f.life;
     ctx.globalAlpha = Math.max(0, 1 - k);
+    if (glowFx(f, k)){ ctx.globalAlpha = 1; continue; }
     if (f.type === 'mark'){ ctx.strokeStyle = '#5fe1ff'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(f.x, f.y, 6 + k * 14, 0, Math.PI * 2); ctx.stroke(); }
     else if (f.type === 'puff' || f.type === 'poof'){
       ctx.fillStyle = f.look === 'rock' ? '#c4ab86' : f.look === 'enemy' ? '#ff8a8a' : f.look === 'arrow' ? '#9fe08f' : f.look === 'spear' ? '#fff6b0' : '#ffffff';
@@ -1326,7 +1361,7 @@ function drawRemote(o, t){
   }
   if (t < o.frozenUntil){
     ctx.fillStyle = '#fff6a8'; ctx.font = '800 20px "Malgun Gothic",sans-serif'; ctx.textAlign = 'center';
-    for (let i = 0; i < 3; i++){ const a = t * 5 + i * 2.1; ctx.fillText('★', o.x + Math.cos(a) * 24, topOf(o, o.cls) - 30 + Math.sin(a) * 6); }
+    if (!drawStunStars(o.x, topOf(o, o.cls) - 30, t)) for (let i = 0; i < 3; i++){ const a = t * 5 + i * 2.1; ctx.fillText('★', o.x + Math.cos(a) * 24, topOf(o, o.cls) - 30 + Math.sin(a) * 6); }
   }
   const top = topOf(o, o.cls);
   bar(o.x, top - 10, 64, o.hp / o.max, enemy ? '#ff5d73' : '#5ce08a');
