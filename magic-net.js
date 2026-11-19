@@ -78,7 +78,7 @@ function connect(code, name, created){
     setMode(m){ if (!closed) ref.child('dmode').set(m).catch(() => {}); },
     serverNow: () => Date.now() + offset,
     setMatch(m){ if (!closed) ref.child('match').set(m ? clean(m) : null).catch(() => {}); },
-    endMatch(winner){ if (!closed) ref.child('match').update({over: Date.now() + offset, winner}).catch(() => {}); },   // 판 끝내기 (승리 팀 또는 'draw')
+    endMatch(winner, why){ if (!closed) ref.child('match').update(clean({over: Date.now() + offset, winner, why})).catch(() => {}); },   // 판 끝내기 (승리 팀 또는 'draw', why: 'left' = 상대 팀이 모두 나감)
     setGmode(m){ if (!closed) ref.child('gmode').set(m).catch(() => {}); },
     publishObj(o){ if (!closed && host === pid) ref.child('obj').set(o ? clean(o) : null).catch(() => {}); },
     addScore(team){ if (!closed) ref.child('match/score/' + team).transaction(v => (v || 0) + 1).catch(() => {}); },

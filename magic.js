@@ -1885,7 +1885,11 @@ function objTick(){
     const r = L.flagRate(matchElapsed(), match.len);
     if (r !== lastRate){ if (lastRate) { castMsg(`🚩 이제 깃발을 들면 1초에 ${r}점!`, 'good'); addFeed(`🚩 이제 1초에 ${r}점!`, '#ffd84a'); } lastRate = r; }
   }
-  if (!net.isHost() || !obj) return;
+  if (!net.isHost()) return;
+  // 한 팀이 모두 나가면 남은 팀이 그 자리에서 이김 (모든 모드)
+  const ps = people(), red = ps.some(q => q.team === 'red'), blue = ps.some(q => q.team === 'blue');
+  if (red !== blue){ const w = red ? 'red' : 'blue'; announce(`🏆 상대 팀이 모두 나가서 ${TEAMS[w].name}이 이겼어요!`, TEAMS[w].color); net.endMatch(w, 'left'); return; }
+  if (!obj) return;
   if (mmode() === 'flag') flagTick(dt);
   else if (mmode() === 'zone' && obj.zones) zoneTick(dt);
   else return;
@@ -1945,7 +1949,7 @@ function showResult(){
   $('#resTitle').textContent = win ? `${TEAMS[win].name} 승리!` : '무승부!';
   $('#resTitle').style.color = win ? TEAMS[win].color : '#ffd84a';
   const unit = mmode() === 'zone' ? '🔒 ' : '';
-  $('#resScore').innerHTML = (mmode() === 'zone' ? '<small>완전 점령한 구역</small><br>' : mmode() === 'flag' ? '<small>깃발 점수</small><br>' : '')
+  $('#resScore').innerHTML = (match.why === 'left' ? '<small>상대 팀이 모두 나갔어요</small><br>' : '') + (mmode() === 'zone' ? '<small>완전 점령한 구역</small><br>' : mmode() === 'flag' ? '<small>깃발 점수</small><br>' : '')
     + `<span style="color:${TEAMS.red.color}">빨강 ${unit}${red}</span> : <span style="color:${TEAMS.blue.color}">${unit}${blue} 파랑</span>`;
   const rows = [{id: net.pid, name: net.name, team: S.player.team, cls, k: S.stats.kills, de: S.stats.deaths, dm: Math.round(S.stats.dmg)}].concat(others());
   rows.sort((a, b) => (a.team === b.team ? 0 : a.team === 'red' ? -1 : 1) || b.k - a.k || b.dm - a.dm);
