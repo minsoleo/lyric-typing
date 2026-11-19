@@ -76,7 +76,20 @@ let net = null;                                    // 친구랑 연습 중이면
 const isAuth = () => !net || net.isHost();         // 허수아비를 계산하는 컴퓨터 (혼자면 나, 온라인이면 방장)
 // ⚔ 대결: match = {id, startAt, endAt, len, score} (서버 시계, ms)
 let match = null, matchId = null;
-const phase = () => { if (!net || !match) return null; const n = net.serverNow(); return n < match.startAt ? 'count' : n < match.endAt ? 'play' : 'end'; };
+// 대결 모드 (방장이 고름): 킬내기전은 숲 맵, 깃발쟁·점령전은 넓은 맵
+const MODES = {kill: {name: '⚔ 킬내기전', goal: '상대 팀을 많이 쓰러뜨리면 이겨요'}, flag: {name: '🚩 깃발쟁', goal: '깃발을 오래 들고 있으면 이겨요'},
+  zone: {name: '🏳 점령전', goal: '구역 2곳을 먼저 완전 점령하면 이겨요'}};
+const MODE_MAP = {kill: 'forest', flag: 'wide', zone: 'wide'};
+let gmode = 'kill', obj = null;                     // obj: 방장이 계산한 깃발·점령 상태 (서버에서 받음)
+const mmode = () => (match && match.mode) || 'kill';
+// 준비(3·2·1) → 진행 → 끝 (점령전은 끝나는 시간이 없고, 방장이 승리를 쓰면 끝)
+const phase = () => {
+  if (!net || !match) return null;
+  const n = net.serverNow();
+  if (n < match.startAt) return 'count';
+  if (match.over || (match.endAt && n >= match.endAt)) return 'end';
+  return 'play';
+};
 const inMatch = () => !!phase();
 const locked = () => { const ph = phase(); return ph === 'count' || ph === 'end'; };   // 준비 중·끝난 뒤엔 못 움직임
 const unl = () => unlimited && !inMatch();         // 대결 중에는 무제한 꺼짐
@@ -1411,7 +1424,7 @@ function drawMinimap(){
 function draw(){
   const t = now(), base = scale * dpr;
   ctx.setTransform(base, 0, 0, base, -cam.x * base, -cam.y * base);
-  drawGround(t); drawGroundFx(t); drawObstacles(); drawFx(t);
+  drawGround(t); drawObjectives(t); drawGroundFx(t); drawObstacles(); drawFx(t);
   const p = S.player;
   if (p.target && !p.deadUntil){ ctx.strokeStyle = 'rgba(95,225,255,.35)'; ctx.setLineDash([6, 8]); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.target.x, p.target.y); ctx.stroke(); ctx.setLineDash([]); }
   drawWorld(t); drawShots(); drawFloats(t);
@@ -1421,6 +1434,40 @@ function draw(){
     ctx.fillStyle = `rgba(${S.tint.color},${a})`; ctx.fillRect(0, 0, VW, VH);
   }
   drawMinimap(); drawFeed(t); drawMatchHud();
+}
+
+/* ---------- 🚩 깃발 · 🏳 점령 구역 그리기 ---------- */
+// 지금 맵에 보일 것: 온라인이면 방 모드, 혼자면 넓은 맵에서 둘 다 (구경용)
+const objMode = () => net ? (inMatch() ? mmode() : gmode) : (MAP.zones ? 'both' : null);
+function drawObjectives(t){
+  const om = objMode(); if (!om || om === 'kill') return;
+  const live = inMatch() && obj;                       // 대결 중이면 진짜 상태, 아니면 흐리게 (구경용)
+  if ((om === 'zone' || om === 'both') && MAP.zones) for (let i = 0; i < MAP.zones.length; i++) drawZone(MAP.zones[i], live && obj.zones ? obj.zones[i] : null, t);
+  if ((om === 'flag' || om === 'both') && MAP.flag && !(live && obj.flag)) drawFlag(MAP.flag.x, MAP.flag.y, null, t, 0.35);
+}
+// 구역 원 (z: 점령 상태, 없으면 흐린 구경용)
+function drawZone(a, z, t){
+  if (!inView(a.x, a.y, a.r + 40)) return;
+  ctx.save();
+  ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI * 2); ctx.fill();
+  ctx.setLineDash([14, 12]); ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.stroke(); ctx.setLineDash([]);
+  if (!z){
+    ctx.font = '800 18px "Malgun Gothic",sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,.55)';
+    ctx.fillText('🏳 점령 구역', a.x, a.y - 6); ctx.font = '700 14px "Malgun Gothic",sans-serif'; ctx.fillText('대결을 시작하면 켜져요', a.x, a.y + 18);
+  }
+  ctx.restore();
+}
+// 깃발: 막대 + 천 (team: 든 사람 팀 색, 없으면 흰색) · alpha: 흐리게
+function drawFlag(x, y, team, t, alpha){
+  if (!inView(x, y, 120)) return;
+  const was = ctx.globalAlpha; ctx.globalAlpha = was * (alpha === undefined ? 1 : alpha);
+  const bob = team ? 0 : Math.sin(t * 3) * 4, top = y - 84 + bob, wave = Math.sin(t * 6) * 5;
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x, y + 4, 16, 6, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#5b3b1c'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y + bob); ctx.lineTo(x, top); ctx.stroke();
+  ctx.fillStyle = team ? TEAMS[team].color : '#ffffff'; ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(x + 2, top); ctx.quadraticCurveTo(x + 24, top + 4 + wave, x + 46, top + 10); ctx.quadraticCurveTo(x + 24, top + 18 - wave, x + 2, top + 30); ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#ffd84a'; ctx.beginPath(); ctx.arc(x, top - 2, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.globalAlpha = was;
 }
 
 /* ---------- 친구 그리기 (온라인) ---------- */
@@ -1645,6 +1692,8 @@ function startNet(conn){
   net.on.dummies = onNetDummies;
   net.on.mode = m => showDummyMode(m);
   net.on.match = onMatch;
+  net.on.gmode = onGmode;
+  net.on.obj = o => { obj = o; };
   net.on.host = () => { renderRoomBar(); if (net && net.isHost()) for (const d of S.dummies){ d.nextShot = 0; } };
   S.others.clear(); S.shots = []; S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; S.feed = []; S.tint = null;
   S.player.team = net.created ? 'red' : 'blue';           // 처음엔 방장 빨강, 들어온 친구 파랑 (언제든 바꿀 수 있음)
@@ -1658,7 +1707,9 @@ function startNet(conn){
 }
 async function leaveNet(){
   if (!net) return;
-  const n = net; net = null; match = null; matchId = null; $('#result').hidden = true;
+  const n = net; net = null; match = null; matchId = null; $('#result').hidden = true; gmode = 'kill'; obj = null;
+  let solo = 'forest'; try { const m = localStorage.getItem('magic.map'); if (m && MAPS[m]) solo = m; } catch (e) {}
+  setMap(solo);                                       // 혼자 연습 때 고른 맵으로
   S.others.clear(); S.shots = []; S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; S.feed = []; S.tint = null;
   S.player.team = 'solo'; resetMe(); clearCharge(); S.busy = null;
   try { sessionStorage.removeItem('magic.code'); } catch (e) {}
@@ -1688,6 +1739,8 @@ function renderRoomBar(){
   tb.textContent = `${tm.name} ⇄`; tb.style.color = tm.color;
   const host = net.isHost(), m = inMatch();
   $('#matchBox').hidden = !host || m;
+  $('#gmode').value = gmode; $('#matchLen').hidden = gmode === 'zone';   // 점령전은 제한 시간 없음
+  $('#gmodeTag').textContent = host && !m ? '' : MODES[m ? mmode() : gmode].name;
   tb.disabled = m; $('#teamRed').disabled = m; $('#teamBlue').disabled = m;
   for (const id of ['#dStill', '#dMove', '#dAttack']) $(id).disabled = m;
   $('#againBtn').hidden = $('#practiceBtn').hidden = !host; $('#resWait').hidden = host;
@@ -1728,6 +1781,14 @@ $('#infBtn').onclick = () => {
 applyUnlimited();
 
 /* ---------- ⚔ 대결 ---------- */
+// 방장이 모드를 바꾸면: 그 모드의 맵으로 (연습 중에도 바로)
+function onGmode(m){
+  const was = gmode; gmode = MODES[m] ? m : 'kill';
+  setMap(MODE_MAP[gmode]);
+  if (was !== gmode) addFeed(`🗺 ${MODES[gmode].name} — ${MAP.name}으로 바뀌었어요`, '#ffd84a');
+  renderRoomBar();
+}
+$('#gmode').onchange = e => { if (net && net.isHost() && !inMatch()) net.setGmode(e.target.value); focusSpell(); };
 function onMatch(m){
   const had = !!match;
   match = m && m.startAt && m.endAt ? m : null;
@@ -1741,7 +1802,7 @@ function startMatchLocal(){
   S.cds = {}; S.ult = 0; S.busy = null; S.lockUntil = 0; clearCharge(); inp.value = '';
   S.shots = []; S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; S.tint = null;
   resetMe(); $('#result').hidden = true; focusSpell();
-  addFeed(`⚔ ${Math.round(match.len / 60)}분 대결! 상대 팀을 많이 쓰러뜨리면 이겨요`, '#ffd84a');
+  addFeed(`${MODES[mmode()].name}${match.len ? ` ${Math.round(match.len / 60)}분` : ''}! ${MODES[mmode()].goal}`, '#ffd84a');
 }
 function onPhase(ph){
   renderRoomBar(); applyUnlimited(); document.body.classList.toggle('matching', !!ph);
@@ -1753,8 +1814,9 @@ function startMatch(){
   if (!net || !net.isHost()) return;
   const teams = [S.player.team].concat(others().map(o => o.team));
   if (!teams.includes('red') || !teams.includes('blue')){ castMsg('빨강·파랑 팀에 한 명 이상씩 있어야 대결할 수 있어요', 'bad'); return; }
-  const len = +$('#matchLen').value || 180, start = net.serverNow() + 3500;
-  net.setMatch({id: 'm' + Math.random().toString(36).slice(2, 8), startAt: start, endAt: start + len * 1000, len, score: {red: 0, blue: 0}});
+  const len = +$('#matchLen').value || 180, start = net.serverNow() + 3500, m = {id: 'm' + Math.random().toString(36).slice(2, 8), mode: gmode, startAt: start, len, score: {red: 0, blue: 0}};
+  if (gmode === 'zone') delete m.len; else m.endAt = start + len * 1000;   // 점령전: 제한 시간 없음
+  net.setMatch(m);
 }
 $('#matchBtn').onclick = startMatch;
 $('#againBtn').onclick = startMatch;
@@ -1786,9 +1848,9 @@ function drawMatchHud(){
     ctx.font = '400 150px "Black Han Sans","Malgun Gothic",sans-serif'; ctx.lineWidth = 10; ctx.strokeStyle = 'rgba(0,0,0,.6)';
     const txt = left > 0 ? String(left) : '시작!';
     ctx.strokeText(txt, VW / 2, VH / 2 + 50); ctx.fillStyle = '#ffd84a'; ctx.fillText(txt, VW / 2, VH / 2 + 50);
-    ctx.font = '800 26px "Malgun Gothic",sans-serif'; ctx.fillStyle = '#ffffff'; ctx.fillText(`나는 ${TEAMS[S.player.team].name}! 상대 팀을 많이 쓰러뜨리면 이겨요`, VW / 2, VH / 2 + 110);
+    ctx.font = '800 26px "Malgun Gothic",sans-serif'; ctx.fillStyle = '#ffffff'; ctx.fillText(`나는 ${TEAMS[S.player.team].name}! ${MODES[mmode()].goal}`, VW / 2, VH / 2 + 110);
   }
-  const left = Math.max(0, Math.ceil((match.endAt - Math.max(n, match.startAt)) / 1000));
+  const left = match.endAt ? Math.max(0, Math.ceil((match.endAt - Math.max(n, match.startAt)) / 1000)) : 0;
   const time = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
   const w = 360, x = VW / 2 - w / 2, y = 14;
   ctx.fillStyle = 'rgba(6,20,12,.85)'; roundRect(x, y, w, 64, 16); ctx.fill();

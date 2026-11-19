@@ -151,7 +151,8 @@ button:disabled{opacity:.45;cursor:not-allowed}
 body.matching .hint{display:none}
 button.go{background:var(--gold);border-color:var(--gold);color:var(--gold-text);font-weight:800}
 .matchbox{display:flex;gap:4px;flex:none}
-#matchLen{font:inherit;font-size:13px;font-weight:800;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:3px 6px}
+.gmodetag{flex:none;font-size:13px;font-weight:800;color:#ffd84a;white-space:nowrap}
+#gmode,#matchLen{font:inherit;font-size:13px;font-weight:800;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:3px 6px}
 /* ⚔ 대결 결과 */
 .result{position:fixed;inset:0;z-index:15;display:flex;align-items:center;justify-content:center;padding:16px;background:rgba(3,16,9,.55);overflow:auto}
 .resbox{width:min(640px,100%);padding:18px 22px;border-radius:20px;background:var(--panel);border:3px solid var(--gold);box-shadow:var(--shadow);text-align:center}
@@ -173,7 +174,8 @@ button.go{background:var(--gold);border-color:var(--gold);color:var(--gold-text)
   <div class="roombar" id="roomBar" hidden>
     <span class="code">🏠 방 <b id="barCode"></b></span>
     <div class="chips" id="barList"></div>
-    <span class="matchbox" id="matchBox" hidden><select id="matchLen" aria-label="대결 시간"><option value="120">2분</option><option value="180" selected>3분</option><option value="300">5분</option></select><button id="matchBtn" type="button" class="go">⚔ 대결 시작</button></span>
+    <span class="gmodetag" id="gmodeTag"></span>
+    <span class="matchbox" id="matchBox" hidden><select id="gmode" aria-label="대결 모드"><option value="kill">⚔ 킬내기전</option><option value="flag">🚩 깃발쟁</option><option value="zone">🏳 점령전</option></select><select id="matchLen" aria-label="대결 시간"><option value="120">2분</option><option value="180" selected>3분</option><option value="300">5분</option></select><button id="matchBtn" type="button" class="go">⚔ 대결 시작</button></span>
     <button id="teamBtn" type="button" title="빨강 팀 ⇄ 파랑 팀">팀</button>
     <button id="leaveBtn" type="button">🚪 방 나가기</button>
   </div>

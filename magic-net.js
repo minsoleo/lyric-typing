@@ -3,7 +3,9 @@
      game: 'magic', createdAt, host(방장 pid), dmode(허수아비 모드),
      st:  {pid: 각자 내 캐릭터 상태 (0.1초마다 덮어씀)},
      dum: [허수아비 상태 — 방장만 씀],
-     match: {id, startAt, endAt, len, score: {red, blue}} — ⚔ 대결 중일 때만 (시간은 서버 시계 기준)
+     gmode: 대결 모드 'kill'(킬내기전) | 'flag'(깃발쟁) | 'zone'(점령전) — 방장이 고름, 맵도 이걸 따라감
+     match: {id, mode, startAt, endAt(점령전은 없음), len, score: {red, blue}, over?, winner?} — ⚔ 대결 중일 때만 (시간은 서버 시계 기준)
+     obj: 깃발쟁 {flag, score} / 점령전 {zones} — 방장이 계산해서 0.2초마다 씀
      ev:  {신호: 맞았어요 / 회복 / 강화 / 날아가는 공격·벽·샘 그리기 …  5초 뒤 보낸 사람이 지움}
    }
    판 뒤집기와 같은 Firebase를 쓰고, game: 'magic' 으로 구분함 */
@@ -76,6 +78,9 @@ function connect(code, name, created){
     setMode(m){ if (!closed) ref.child('dmode').set(m).catch(() => {}); },
     serverNow: () => Date.now() + offset,
     setMatch(m){ if (!closed) ref.child('match').set(m ? clean(m) : null).catch(() => {}); },
+    endMatch(winner){ if (!closed) ref.child('match').update({over: Date.now() + offset, winner}).catch(() => {}); },   // 판 끝내기 (승리 팀 또는 'draw')
+    setGmode(m){ if (!closed) ref.child('gmode').set(m).catch(() => {}); },
+    publishObj(o){ if (!closed && host === pid) ref.child('obj').set(o ? clean(o) : null).catch(() => {}); },
     addScore(team){ if (!closed) ref.child('match/score/' + team).transaction(v => (v || 0) + 1).catch(() => {}); },
     leave
   };
@@ -99,6 +104,9 @@ function connect(code, name, created){
     fire('event', v);
   });
   const hostRef = ref.child('host'), modeRef = ref.child('dmode'), dumRef = ref.child('dum'), matchRef = ref.child('match');
+  const gmodeRef = ref.child('gmode'), objRef = ref.child('obj');
+  gmodeRef.on('value', s => fire('gmode', s.val() || 'kill'));
+  objRef.on('value', s => fire('obj', s.val()));
   matchRef.on('value', s => fire('match', s.val()));
   hostRef.on('value', s => { host = s.val(); fire('host', host); checkHost(); });
   modeRef.on('value', s => fire('mode', s.val() || 'still'));
@@ -123,7 +131,7 @@ function connect(code, name, created){
   async function leave(){
     if (closed) return;
     closed = true; clearInterval(timer);
-    stq.off(); evq.off(); hostRef.off(); modeRef.off(); dumRef.off(); matchRef.off(); info.off('value', onInfo);
+    stq.off(); evq.off(); hostRef.off(); modeRef.off(); dumRef.off(); matchRef.off(); gmodeRef.off(); objRef.off(); info.off('value', onInfo);
     try {
       await stRef.onDisconnect().cancel();
       await stRef.remove();
