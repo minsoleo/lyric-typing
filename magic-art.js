@@ -4,6 +4,7 @@
    - 걷는 그림:   art/<이름>-walk.webp (가로로 4칸: 왼발 앞 → 모음 → 오른발 앞 → 모음)
                   빈 세로줄을 찾아 칸을 자동으로 나누고, 4칸 모두 발 높이·머리 위치를 맞춤
    - 그림이 아직 안 왔거나 못 불러오면 null → 게임은 코드로 그린 모습으로 대신 그림
+   - 바닥 무늬: art/grass.webp(풀밭), art/dirt.webp(흙길) — 이어 붙이는 타일
    - 그림은 모두 "오른쪽을 보는" 모습. 왼쪽을 볼 땐 게임에서 좌우로 뒤집어 그림 */
 (function(){
 'use strict';
@@ -14,7 +15,9 @@ const FILES = {
   healer: {stand: 'art/sera.webp', walk: 'art/sera-walk.webp', fix: [{x0: 130, y0: 615, x1: 205, y1: 692, color: [250, 236, 220]}]}
 };
 const MAX = 360;                 // 줄여 둘 최대 크기(픽셀)
-const stand = {}, walk = {};
+// 바닥 무늬 (이어 붙이는 타일): 맵에서 한 장이 차지할 크기(픽셀)
+const TILES = {grass: {src: 'art/grass.webp', size: 420}, dirt: {src: 'art/dirt.webp', size: 260}};
+const stand = {}, walk = {}, tiles = {};
 
 const load = src => new Promise(res => { const img = new Image(); img.onload = () => res(img); img.onerror = () => res(null); img.src = src; });
 
@@ -98,6 +101,15 @@ function makeWalk(img, fixes){
   return boxes.map(b => cut(s, b, y0, y1, k));
 }
 
+// 타일: 정해진 크기로 줄여 둠 (반복 무늬로 깔 때 그대로 씀)
+function makeTile(img, size){
+  const c = document.createElement('canvas'); c.width = c.height = size;
+  const g = c.getContext('2d'); g.imageSmoothingQuality = 'high';
+  g.drawImage(img, 0, 0, size, size);
+  return c;
+}
+const tileReady = Promise.all(Object.entries(TILES).map(async ([id, t]) => { const img = await load(t.src); if (img) tiles[id] = makeTile(img, t.size); }));
+
 const ready = Promise.all(Object.entries(FILES).map(async ([id, f]) => {
   try {
     const a = await load(f.stand); if (a) stand[id] = makeStand(a);
@@ -108,7 +120,8 @@ const ready = Promise.all(Object.entries(FILES).map(async ([id, f]) => {
 window.MagicArt = {
   get: id => stand[id] || null,               // {img, ax}
   walk: id => walk[id] || null,               // [{img, ax} × 4] 또는 null
-  ready,
+  tile: id => tiles[id] || null,              // 바닥 무늬 캔버스
+  ready: Promise.all([ready, tileReady]),
   url: id => stand[id] ? stand[id].img.toDataURL() : null
 };
 })();

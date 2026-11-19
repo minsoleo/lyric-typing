@@ -713,18 +713,38 @@ function updateDummies(t, dt){
 function roundRect(x, y, w, h, r){ ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
 function circle(x, y, r){ ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
 const inView = (x, y, pad) => x > cam.x - pad && x < cam.x + VW + pad && y > cam.y - pad && y < cam.y + VH + pad;
+// 바닥 무늬: 타일 그림을 반복 무늬로 (한 번 만들어 두고 계속 씀)
+const GROUND_DIM = 0.18;                                 // 풀밭을 얼마나 어둡게 누를지 (0이면 그림 그대로)
+const patterns = {};
+function tilePattern(id){
+  if (patterns[id]) return patterns[id];
+  const c = window.MagicArt && MagicArt.tile ? MagicArt.tile(id) : null;
+  return c ? (patterns[id] = ctx.createPattern(c, 'repeat')) : null;
+}
 function drawGround(t){
-  const g = ctx.createLinearGradient(0, 0, 0, WH);
-  g.addColorStop(0, '#2c6440'); g.addColorStop(1, '#1d4a2c');
-  ctx.fillStyle = g; ctx.fillRect(0, 0, WW, WH);
-  ctx.fillStyle = 'rgba(255,255,255,.025)';
-  const x0 = Math.floor(cam.x / 80) * 80, y0 = Math.floor(cam.y / 80) * 80;
-  for (let x = x0; x < cam.x + VW + 80; x += 80) for (let y = y0; y < cam.y + VH + 80; y += 80) if (((x + y) / 80) % 2 === 0) ctx.fillRect(x, y, 80, 80);
+  const grass = tilePattern('grass'), dirt = tilePattern('dirt');
+  if (grass){                                            // 풀밭 그림 (art/grass.webp)을 타일처럼 깔고, 캐릭터가 잘 보이게 살짝 어둡게
+    ctx.fillStyle = grass; ctx.fillRect(cam.x - 2, cam.y - 2, VW + 4, VH + 4);
+    ctx.fillStyle = `rgba(0,28,12,${GROUND_DIM})`; ctx.fillRect(cam.x - 2, cam.y - 2, VW + 4, VH + 4);
+  } else {                                               // 그림이 없으면 예전처럼 색으로
+    const g = ctx.createLinearGradient(0, 0, 0, WH);
+    g.addColorStop(0, '#2c6440'); g.addColorStop(1, '#1d4a2c');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, WW, WH);
+    ctx.fillStyle = 'rgba(255,255,255,.025)';
+    const x0 = Math.floor(cam.x / 80) * 80, y0 = Math.floor(cam.y / 80) * 80;
+    for (let x = x0; x < cam.x + VW + 80; x += 80) for (let y = y0; y < cam.y + VH + 80; y += 80) if (((x + y) / 80) % 2 === 0) ctx.fillRect(x, y, 80, 80);
+  }
   // 흙길
   ctx.lineCap = 'round';
-  ctx.strokeStyle = 'rgba(140,105,60,.45)'; ctx.lineWidth = 76;
-  ctx.beginPath(); ctx.moveTo(250, 900); ctx.bezierCurveTo(1100, 700, 1700, 1250, 3000, 850); ctx.stroke();
-  ctx.strokeStyle = 'rgba(190,150,95,.35)'; ctx.lineWidth = 50; ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(250, 900); ctx.bezierCurveTo(1100, 700, 1700, 1250, 3000, 850);
+  if (dirt){                                             // 흙길 그림 (art/dirt.webp) + 가장자리 살짝 어두운 테두리
+    ctx.strokeStyle = 'rgba(35,50,15,.45)'; ctx.lineWidth = 90; ctx.stroke();
+    ctx.strokeStyle = dirt; ctx.lineWidth = 78; ctx.stroke();
+    ctx.strokeStyle = `rgba(0,28,12,${GROUND_DIM * 0.7})`; ctx.stroke();
+  } else {
+    ctx.strokeStyle = 'rgba(140,105,60,.45)'; ctx.lineWidth = 76; ctx.stroke();
+    ctx.strokeStyle = 'rgba(190,150,95,.35)'; ctx.lineWidth = 50; ctx.stroke();
+  }
   // 가운데 공터: 이끼 낀 돌 둘레
   ctx.fillStyle = 'rgba(120,170,90,.22)'; circle(WW / 2, WH / 2, 170);
   for (let i = 0; i < 14; i++){
@@ -734,6 +754,7 @@ function drawGround(t){
   // 풀·꽃·버섯·덤불
   for (const d of DECOR){
     if (!inView(d.x, d.y, 40)) continue;
+    if (d.kind === 'grass' && grass) continue;           // 풀밭 그림에 이미 풀잎이 있음
     if (d.kind === 'grass'){
       ctx.strokeStyle = d.hue > 0.5 ? '#4f9a5c' : '#3f8a4f'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(d.x - 6, d.y); ctx.lineTo(d.x - 9, d.y - 12); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x, d.y - 15); ctx.moveTo(d.x + 6, d.y); ctx.lineTo(d.x + 10, d.y - 11); ctx.stroke();
