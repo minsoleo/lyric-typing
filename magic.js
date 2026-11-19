@@ -798,6 +798,12 @@ function drawObstacle(o){
       ctx.globalAlpha = 1;
       return;
     }
+    const pond = o.kind === 'pond' && window.MagicArt && MagicArt.sheet && MagicArt.sheet('pond');
+    if (pond && pond[0]){                                // 연못 그림 (art/pond.webp): 물 부분이 부딪히는 칸에 맞게 조금 크게
+      const img = pond[0].img, w = o.w * 1.55, h = w * img.height / img.width;
+      ctx.drawImage(img, o.x + o.w / 2 - w / 2, o.y + o.h / 2 - h / 2, w, h);
+      return;
+    }
     if (o.kind === 'pond'){
       ctx.fillStyle = '#5c7f3e'; ctx.beginPath(); ctx.ellipse(o.x + o.w / 2, o.y + o.h / 2, o.w / 2 + 18, o.h / 2 + 18, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#2b78a8'; ctx.beginPath(); ctx.ellipse(o.x + o.w / 2, o.y + o.h / 2, o.w / 2 + 8, o.h / 2 + 8, 0, 0, Math.PI * 2); ctx.fill();

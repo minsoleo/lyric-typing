@@ -18,7 +18,8 @@ const MAX = 360;                 // 줄여 둘 최대 크기(픽셀)
 // 바닥 무늬 (이어 붙이는 타일): 맵에서 한 장이 차지할 크기(픽셀)
 const TILES = {grass: {src: 'art/grass.webp', size: 420}, dirt: {src: 'art/dirt.webp', size: 260}};
 // 여러 개가 든 그림 (줄마다 왼쪽→오른쪽 순서로 자동으로 잘라 씀)
-const SHEETS = {props: 'art/trees-rocks.webp'};   // 나무 3 (위) · 바위 3 (아래)
+const SHEETS = {props: {src: 'art/trees-rocks.webp'},   // 나무 3 (위) · 바위 3 (아래)
+                pond: {src: 'art/pond.webp', max: 900}}; // 연못 1 (크게 그려서 선명하게)
 const stand = {}, walk = {}, tiles = {}, sheets = {};
 
 // 그림 주소에 판 번호(MAGIC_V)를 붙여서, 그림을 바꿔 올리면 브라우저가 새로 받게 함
@@ -116,7 +117,7 @@ function segments(has, len, gap, min){
   }
   return out;
 }
-function makeSheet(img){
+function makeSheet(img, max){
   const s = removeBg(img), parts = [];
   const rowHas = y => { for (let x = 0; x < s.w; x += 2) if (solid(s, x, y)) return true; return false; };
   for (const [ya, yb] of segments(rowHas, s.h, 10, 30)){
@@ -125,7 +126,7 @@ function makeSheet(img){
       const box = bbox(s, xa, xb);
       if (!box) continue;
       const b = {x0: box.x0, x1: box.x1, y0: Math.max(box.y0, ya), y1: Math.min(box.y1, yb)};
-      const k = Math.min(1, MAX / Math.max(b.x1 - b.x0 + 1, b.y1 - b.y0 + 1));
+      const k = Math.min(1, (max || MAX) / Math.max(b.x1 - b.x0 + 1, b.y1 - b.y0 + 1));
       const c = cut(s, b, b.y0, b.y1, k);
       c.ax = c.img.width / 2;   // 물건은 가운데 기준
       parts.push(c);
@@ -133,7 +134,7 @@ function makeSheet(img){
   }
   return parts;
 }
-const sheetReady = Promise.all(Object.entries(SHEETS).map(async ([id, src]) => { const img = await load(src); if (img) sheets[id] = makeSheet(img); }));
+const sheetReady = Promise.all(Object.entries(SHEETS).map(async ([id, f]) => { const img = await load(f.src); if (img) sheets[id] = makeSheet(img, f.max); }));
 
 // 타일: 정해진 크기로 줄여 둠 (반복 무늬로 깔 때 그대로 씀)
 function makeTile(img, size){
