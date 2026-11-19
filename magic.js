@@ -1404,6 +1404,13 @@ function drawMinimap(){
   }
   ctx.restore();
   ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1.5; roundRect(mx, my, mw, mh, 8); ctx.stroke();
+  // 🏳 점령 구역: 주인 팀 색 원
+  if (mmode() === 'zone' && inMatch() && obj && obj.zones) MAP.zones.forEach((a, i) => {
+    const z = obj.zones[i]; if (!z) return;
+    ctx.fillStyle = z.own ? TEAMS[z.own].color : 'rgba(255,255,255,.6)'; ctx.globalAlpha = z.lock ? 0.95 : 0.6;
+    ctx.beginPath(); ctx.arc(mx + a.x * k, my + a.y * k, Math.max(5, a.r * k), 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+    if (z.war){ ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 2; ctx.stroke(); }
+  });
   // 허수아비: 빨강·하양 과녁 점
   if (!inMatch()) for (const d of S.dummies){
     const x = mx + d.x * k, y = my + d.y * k;
@@ -1473,8 +1480,32 @@ function drawZone(a, z, t){
   if (!z){
     ctx.font = '800 18px "Malgun Gothic",sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,.55)';
     ctx.fillText('🏳 점령 구역', a.x, a.y - 6); ctx.font = '700 14px "Malgun Gothic",sans-serif'; ctx.fillText('대결을 시작하면 켜져요', a.x, a.y + 18);
+    ctx.restore(); return;
   }
+  const g = zoneGauge(z), col = z.own ? TEAMS[z.own].color : '#ffffff';
+  // 주인 팀 색으로 바닥 칠하기
+  if (z.own){ ctx.globalAlpha = 0.22; ctx.fillStyle = col; ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1; }
+  // 게이지 고리 (12시 방향부터 시계 방향)
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 14; ctx.beginPath(); ctx.arc(a.x, a.y, a.r + 12, 0, Math.PI * 2); ctx.stroke();
+  if (g.pct > 0){ ctx.strokeStyle = TEAMS[g.team].color; ctx.lineWidth = 10; ctx.beginPath(); ctx.arc(a.x, a.y, a.r + 12, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * g.pct / 100); ctx.stroke(); }
+  if (z.lock){ ctx.strokeStyle = col; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI * 2); ctx.stroke(); }
+  // 가운데 글씨
+  ctx.textAlign = 'center'; ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,.6)';
+  const big = (txt, y, c, size) => { ctx.font = `800 ${size}px "Malgun Gothic","Segoe UI Emoji",sans-serif`; ctx.strokeText(txt, a.x, y); ctx.fillStyle = c; ctx.fillText(txt, a.x, y); };
+  const ty = a.y - a.r + 52;                             // 글씨는 구역 위쪽에 (가운데 서 있는 사람에 안 가리게)
+  if (z.war) big('⚔ 전쟁 중', ty, Math.sin(t * 8) > 0 ? '#ffd84a' : '#ff9f43', 30);
+  else if (z.lock) big('🔒 완전 점령', ty, col, 26);
+  else big(`${g.label} ${Math.floor(g.pct)}%`, ty, g.pct > 0 ? TEAMS[g.team].color : 'rgba(255,255,255,.7)', 24);
   ctx.restore();
+}
+// 구역 고리에 보여 줄 게이지: 상대가 뺏는 중이면 그 게이지, 주인이 있으면 완전 점령 게이지, 없으면 앞선 팀의 점령 게이지
+function zoneGauge(z){
+  const o = z.own, other = o === 'red' ? 'blue' : 'red';
+  if (o && z.c[other] > 0) return {team: other, pct: z.c[other], label: '뺏는 중'};
+  if (o) return {team: o, pct: z.h[o], label: '완전 점령까지'};
+  const team = z.c.red >= z.c.blue ? 'red' : 'blue';
+  return {team, pct: z.c[team], label: '점령 중'};
 }
 // 깃발: 막대 + 천 (team: 든 사람 팀 색, 없으면 흰색) · alpha: 흐리게
 function drawFlag(x, y, team, t, alpha, height){
@@ -1803,6 +1834,8 @@ applyUnlimited();
    0.2초마다 (창이 뒤로 숨어서 화면 그리기가 멈춰도 계속) 방장이 계산해서 obj를 서버에 올림.
    방장이 바뀌면 새 방장이 서버에서 받아 둔 obj부터 이어서 계산 */
 const FLAG_PICK = 60, OBJ_EVERY = 200;
+let ZONE_RATE = 100 / 40;                          // 🏳 1명이 구역에 서 있으면 40초에 0→100%
+const ZNAME = ['왼쪽', '가운데', '오른쪽'];
 let objLast = performance.now() / 1000, lastRate = 0;
 // 깃발·구역 계산에 쓰는 사람들 (나 + 친구들, 친구는 마지막으로 받은 위치)
 function people(){
@@ -1831,6 +1864,19 @@ function flagTick(dt){
     if (id){ const h = ps.find(q => q.id === id); f.by = id; f.tm = h.team; f.nm = h.name; announce(`🚩 ${h.name} 님(${TEAMS[h.team].name})이 깃발을 잡았어요!`, TEAMS[h.team].color); }
   }
 }
+function zoneTick(dt){
+  const ps = people().filter(q => !q.dead);              // 살아 있는 사람만 셈 (그림자 은신 중이어도 셈)
+  obj.zones = MAP.zones.map((a, i) => {
+    const prev = obj.zones[i] || L.newZone(), inside = ps.filter(q => Math.hypot(q.x - a.x, q.y - a.y) <= a.r);
+    const z = L.zoneStep(prev, inside.filter(q => q.team === 'red').length, inside.filter(q => q.team === 'blue').length, dt, ZONE_RATE);
+    if (z.war && !prev.war) announce(`⚔ ${ZNAME[i]} 구역에서 전쟁 중!`, '#ffd84a');
+    if (z.own && z.own !== prev.own) announce(`🏳 ${TEAMS[z.own].name}이 ${ZNAME[i]} 구역을 ${prev.own ? '빼앗았어요!' : '점령했어요!'}`, TEAMS[z.own].color);
+    if (z.lock && !prev.lock) announce(`🔒 ${TEAMS[z.own].name}이 ${ZNAME[i]} 구역을 완전 점령했어요!`, TEAMS[z.own].color);
+    return z;
+  });
+  const w = L.zoneWinner(obj.zones);
+  if (w){ announce(`🏆 ${TEAMS[w].name}이 구역 2곳을 완전 점령했어요!`, TEAMS[w].color); net.endMatch(w); }
+}
 function objTick(){
   const wall = performance.now() / 1000, dt = Math.min(2, wall - objLast); objLast = wall;
   if (!net || phase() !== 'play') { lastRate = 0; return; }
@@ -1841,6 +1887,7 @@ function objTick(){
   }
   if (!net.isHost() || !obj) return;
   if (mmode() === 'flag') flagTick(dt);
+  else if (mmode() === 'zone' && obj.zones) zoneTick(dt);
   else return;
   net.publishObj(obj);
 }
@@ -1857,7 +1904,7 @@ function onGmode(m){
 $('#gmode').onchange = e => { if (net && net.isHost() && !inMatch()) net.setGmode(e.target.value); focusSpell(); };
 function onMatch(m){
   const had = !!match;
-  match = m && m.startAt && m.endAt ? m : null;
+  match = m && m.startAt ? m : null;                 // 점령전은 endAt 없음
   if (match && match.id !== matchId){ matchId = match.id; startMatchLocal(); }
   if (!match && had){ matchId = null; $('#result').hidden = true; castMsg('🎯 연습으로 돌아왔어요', 'good'); addFeed('🎯 연습으로 돌아왔어요', '#bff7c8'); resetMe(); }
   lastPhase = undefined;   // 다음 화면 갱신 때 버튼들 다시 정리
@@ -1889,13 +1936,17 @@ function startMatch(){
 $('#matchBtn').onclick = startMatch;
 $('#againBtn').onclick = startMatch;
 $('#practiceBtn').onclick = () => { if (net && net.isHost()){ net.setMatch(null); net.publishObj(null); } };
-const score = tm => mmode() === 'flag' ? Math.floor(((obj && obj.score) || {})[tm] || 0) : ((match && match.score) || {})[tm] || 0;
+const locks = tm => ((obj && obj.zones) || []).filter(z => z && z.lock && z.own === tm).length;   // 🏳 완전 점령한 구역 수
+const score = tm => mmode() === 'zone' ? locks(tm) : mmode() === 'flag' ? Math.floor(((obj && obj.score) || {})[tm] || 0) : ((match && match.score) || {})[tm] || 0;
 function showResult(){
   const red = score('red'), blue = score('blue');
-  const win = red > blue ? 'red' : blue > red ? 'blue' : null;
+  // 승리 팀: 방장이 정해 둔 게 있으면 그것 (점령전 · 한 팀이 모두 나감), 아니면 점수로
+  const win = match.winner && match.winner !== 'draw' ? match.winner : match.winner === 'draw' ? null : red > blue ? 'red' : blue > red ? 'blue' : null;
   $('#resTitle').textContent = win ? `${TEAMS[win].name} 승리!` : '무승부!';
   $('#resTitle').style.color = win ? TEAMS[win].color : '#ffd84a';
-  $('#resScore').innerHTML = `<span style="color:${TEAMS.red.color}">빨강 ${red}</span> : <span style="color:${TEAMS.blue.color}">${blue} 파랑</span>`;
+  const unit = mmode() === 'zone' ? '🔒 ' : '';
+  $('#resScore').innerHTML = (mmode() === 'zone' ? '<small>완전 점령한 구역</small><br>' : mmode() === 'flag' ? '<small>깃발 점수</small><br>' : '')
+    + `<span style="color:${TEAMS.red.color}">빨강 ${unit}${red}</span> : <span style="color:${TEAMS.blue.color}">${unit}${blue} 파랑</span>`;
   const rows = [{id: net.pid, name: net.name, team: S.player.team, cls, k: S.stats.kills, de: S.stats.deaths, dm: Math.round(S.stats.dmg)}].concat(others());
   rows.sort((a, b) => (a.team === b.team ? 0 : a.team === 'red' ? -1 : 1) || b.k - a.k || b.dm - a.dm);
   const mvp = rows.slice().sort((a, b) => b.k - a.k || b.dm - a.dm)[0];
@@ -1920,15 +1971,31 @@ function drawMatchHud(){
   }
   const left = match.endAt ? Math.max(0, Math.ceil((match.endAt - Math.max(n, match.startAt)) / 1000)) : 0;
   const time = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
-  const w = 360, x = VW / 2 - w / 2, y = 14;
-  ctx.fillStyle = 'rgba(6,20,12,.85)'; roundRect(x, y, w, 64, 16); ctx.fill();
+  const w = 360, x = VW / 2 - w / 2, y = 14, bh = mmode() === 'zone' ? 86 : 64;   // 점령전은 구역 이름까지 들어가게 조금 높게
+  ctx.fillStyle = 'rgba(6,20,12,.85)'; roundRect(x, y, w, bh, 16); ctx.fill();
   ctx.strokeStyle = 'rgba(255,216,74,.6)'; ctx.lineWidth = 2; ctx.stroke();
   ctx.font = '800 13px "Malgun Gothic",sans-serif';
-  ctx.fillStyle = TEAMS.red.color; ctx.fillText('빨강 팀', x + 52, y + 20);
-  ctx.fillStyle = TEAMS.blue.color; ctx.fillText('파랑 팀', x + w - 52, y + 20);
+  const tl = mmode() === 'zone' ? ' 🔒' : '';
+  ctx.fillStyle = TEAMS.red.color; ctx.fillText('빨강 팀' + tl, x + 52, y + 20);
+  ctx.fillStyle = TEAMS.blue.color; ctx.fillText('파랑 팀' + tl, x + w - 52, y + 20);
   ctx.font = '400 32px "Black Han Sans","Malgun Gothic",sans-serif';
   ctx.fillStyle = TEAMS.red.color; ctx.fillText(String(score('red')), x + 52, y + 54);
   ctx.fillStyle = TEAMS.blue.color; ctx.fillText(String(score('blue')), x + w - 52, y + 54);
+  if (mmode() === 'zone'){                              // 🏳 시간 대신 구역 3칸 (왼쪽·가운데·오른쪽)
+    const zs = (obj && obj.zones) || [];
+    for (let i = 0; i < 3; i++){
+      const z = zs[i] || L.newZone(), cx = VW / 2 + (i - 1) * 62, cy = y + 36, g = zoneGauge(z);
+      ctx.fillStyle = z.own ? TEAMS[z.own].color : 'rgba(255,255,255,.18)'; ctx.globalAlpha = z.lock ? 1 : 0.55;
+      ctx.beginPath(); ctx.arc(cx, cy, 20, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
+      if (g.pct > 0 && !z.lock){ ctx.strokeStyle = TEAMS[g.team].color; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(cx, cy, 24, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * g.pct / 100); ctx.stroke(); }
+      if (z.war){ ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, 20, 0, Math.PI * 2); ctx.stroke(); }
+      ctx.font = '800 15px "Malgun Gothic","Segoe UI Emoji",sans-serif'; ctx.fillStyle = '#ffffff';
+      ctx.fillText(z.lock ? '🔒' : z.war ? '⚔' : `${Math.floor(g.pct)}`, cx, cy + 5);
+      ctx.font = '700 11px "Malgun Gothic",sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.fillText(ZNAME[i], cx, cy + 41);
+    }
+    if (ph === 'end'){ ctx.font = '800 14px "Malgun Gothic",sans-serif'; ctx.fillStyle = '#ffd84a'; ctx.fillText('끝!', VW / 2, y + 104); }
+    return;
+  }
   ctx.fillStyle = ph === 'end' ? '#ffd84a' : left <= 10 ? '#ff7b7b' : '#ffffff';
   ctx.font = '400 34px "Black Han Sans","Malgun Gothic",sans-serif';
   ctx.fillText(ph === 'end' ? '끝!' : time, VW / 2, y + 46);
@@ -1948,6 +2015,6 @@ if (window.MagicArt) MagicArt.ready.then(() => { buildBook(); if (!$('#pick').hi
 try { const c = sessionStorage.getItem('magic.code'); if (c){ $('#codeInput').value = c; pickMode = 'friend'; refreshPick(); } } catch (e) {}
 requestAnimationFrame(loop);
 
-window.__magic = {get obj(){ return obj; }, people: () => net ? people() : [], S, mouse, submitSpell, rightClick, choose, CLASSES, get OBSTACLES(){ return OBSTACLES; }, get map(){ return MAP; }, setMap, get mmBg(){ return mmBg; }, step(){ update(); draw(); updateHud(); }, get cls(){ return cls; }, get cam(){ return cam; },
+window.__magic = {get obj(){ return obj; }, set zoneRate(v){ ZONE_RATE = v; }, get zoneRate(){ return ZONE_RATE; }, people: () => net ? people() : [], S, mouse, submitSpell, rightClick, choose, CLASSES, get OBSTACLES(){ return OBSTACLES; }, get map(){ return MAP; }, setMap, get mmBg(){ return mmBg; }, step(){ update(); draw(); updateHud(); }, get cls(){ return cls; }, get cam(){ return cam; },
   get unlimited(){ return unlimited; }, setUnlimited(v){ unlimited = !!v; applyUnlimited(); }, get net(){ return net; }, setTeam, leaveNet, startMatch, get match(){ return match; }, phase};
 })();
