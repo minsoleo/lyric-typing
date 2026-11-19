@@ -857,6 +857,7 @@ function topOf(e, c){
      (걸음 빠르기는 실제로 움직인 거리에 맞춤 → 빨리 걸으면 빨리 뒤뚱)
    - 서 있기: 숨쉬듯 아주 살짝 커졌다 작아짐
    - 공격: 앞으로 쑥 내밀며 기울임 / 돌진: 앞으로 숙이고 길쭉하게 */
+const WALK_STEP = {tank: 16, dealer: 13, healer: 13};   // 클수록 걸음 그림이 천천히 바뀜 (가데온은 묵직하게)
 const MOTION = {sway: 0.05, hop: 3.5, squash: 0.025, attack: 0.14, dash: 0.12};   // 처음 값의 절반쯤
 function drawSprite(p, t, art, c){
   if (Math.abs(p.face.x) > 0.15) p.look = p.face.x < 0 ? -1 : 1;   // 위·아래로 갈 땐 보던 쪽 그대로
@@ -869,7 +870,7 @@ function drawSprite(p, t, art, c){
   p.walkK = Math.max(0, Math.min(1, (p.walkK || 0) + (walking ? 0.2 : -0.12)));     // 걷기 ↔ 서 있기 부드럽게 바뀜
   if (walking){
     const before = Math.floor((p.walkT || 0) / Math.PI);
-    p.walkT = (p.walkT || 0) + Math.min(moved, 12) / 13;
+    p.walkT = (p.walkT || 0) + Math.min(moved, 12) / (WALK_STEP[c.id] || 13);
     if (Math.floor(p.walkT / Math.PI) !== before && inView(p.x, p.y, 0)) S.fx.push({type: 'dust', x: p.x - dir * 6, y: p.y + p.r * 0.95, t0: t, life: 0.35});   // 발걸음 먼지
   }
   const k = p.walkK, ph = p.walkT || 0;

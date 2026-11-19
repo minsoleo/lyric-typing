@@ -8,8 +8,8 @@
 (function(){
 'use strict';
 const FILES = {
-  tank: {stand: 'art/gadeon.webp'},
-  dealer: {stand: 'art/rave.webp'},
+  tank: {stand: 'art/gadeon.webp', walk: 'art/gadeon-walk.webp'},
+  dealer: {stand: 'art/rave.webp', walk: 'art/rave-walk.webp'},
   // 걷기 1번 칸 다리에 묻은 붉은 얼룩을 피부색으로 덮음 (지피티 그림 실수)
   healer: {stand: 'art/sera.webp', walk: 'art/sera-walk.webp', fix: [{x0: 130, y0: 615, x1: 205, y1: 692, color: [250, 236, 220]}]}
 };
