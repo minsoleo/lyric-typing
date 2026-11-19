@@ -45,17 +45,14 @@ applyTheme();
 const tree = (x, y, s = 80) => ({x, y, w: s, h: s, kind: 'tree'});
 const rock = (x, y, w, h) => ({x, y, w, h, kind: 'rock'});
 const LEFT = [
-  // 위·아래 가장자리 숲
-  tree(140, 140, 90), tree(420, 80), tree(760, 120, 96), tree(1100, 90), tree(1390, 170, 90),
-  tree(380, 1650), tree(760, 1610, 96), tree(1150, 1680, 90), tree(1400, 1560),
-  // 왼쪽 가장자리 (출발 자리 위·아래)
-  tree(80, 500), tree(110, 1190, 90), tree(90, 1560),
-  // 안쪽 숲: 길 위쪽 · 길 아래쪽
-  tree(330, 320), tree(1240, 420), tree(640, 1270), tree(1180, 1320, 90),
-  // 바위
-  rock(720, 440, 110, 70), rock(300, 1210, 130, 80), rock(1300, 990, 100, 66), rock(1380, 560, 100, 66)
+  // 숨을 곳은 적게: 왼쪽 절반에 나무 6그루 · 바위 4개를 맵 전체에 고르게 (위 · 길가 · 아래)
+  tree(300, 300), tree(800, 250, 90), tree(1250, 330),
+  tree(1050, 520),
+  tree(250, 1350, 90), tree(750, 1450), tree(1200, 1500, 90),
+  rock(560, 560, 110, 70), rock(1380, 520, 100, 66),
+  rock(420, 1150, 130, 80), rock(1300, 1050, 100, 66)
 ];
-const CENTER = [tree(1560, 50), tree(1555, 1690, 90), {x: 1450, y: 1170, w: 300, h: 190, kind: 'pond'}];
+const CENTER = [tree(1560, 280), {x: 1450, y: 1170, w: 300, h: 190, kind: 'pond'}];
 const mirror = o => Object.assign({}, o, {x: WW - o.x - o.w});
 const OBSTACLES = LEFT.concat(LEFT.map(mirror), CENTER);
 // 흙길: 왼쪽 출발 자리 → 가운데 → 오른쪽 출발 자리 (좌우 대칭 아치)
