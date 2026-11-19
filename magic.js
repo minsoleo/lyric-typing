@@ -515,6 +515,7 @@ function onNetEvent(ev){
     case 'wall': S.walls.push({pts: ev.pts || [], r: 22, t0: t, until: t + ev.tm, team: ev.team}); break;
     case 'zone': S.zones.push({x: ev.x, y: ev.y, r: ev.r, rate: ev.rate, until: t + ev.tm, t0: t, color: ev.c, acc: 0, team: ev.team}); break;
     case 'sanc': S.sanctums.push({x: ev.x, y: ev.y, r: ev.r, t0: t, until: t + ev.tm, healRate: ev.hr, team: ev.team, acc: 0}); break;
+    case 'feed': addFeed(ev.text, ev.c); break;          // 방장이 알려 주는 깃발·점령 소식
     case 'field': S.fields.push({owner: ev.f, x: ev.x, y: ev.y, r: ev.r, t0: t, until: t + ev.tm, color: ev.c}); break;
     case 'down':
       if (ev.by === net.pid) S.stats.kills++;
@@ -1418,6 +1419,12 @@ function drawMinimap(){
   // 지금 화면에 보이는 곳
   ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.5; ctx.strokeRect(mx + cam.x * k, my + cam.y * k, VW * k, VH * k);
   // 나: 내 캐릭터 색 + 흰 테두리, 조금 크게
+  // 🚩 깃발: 노란 테두리 점 (든 사람이 있으면 그 팀 색) — 모두에게 보임
+  if (mmode() === 'flag' && inMatch() && obj && obj.flag){
+    const h = flagHolder(), fx = h ? h.x : obj.flag.x, fy = h ? h.y : obj.flag.y;
+    ctx.fillStyle = h ? TEAMS[h.team].color : '#ffffff'; ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(mx + fx * k, my + fy * k, 6, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  }
   ctx.fillStyle = cls.color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
   ctx.beginPath(); ctx.arc(mx + S.player.x * k, my + S.player.y * k, 5.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
 }
@@ -1427,7 +1434,7 @@ function draw(){
   drawGround(t); drawObjectives(t); drawGroundFx(t); drawObstacles(); drawFx(t);
   const p = S.player;
   if (p.target && !p.deadUntil){ ctx.strokeStyle = 'rgba(95,225,255,.35)'; ctx.setLineDash([6, 8]); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.target.x, p.target.y); ctx.stroke(); ctx.setLineDash([]); }
-  drawWorld(t); drawShots(); drawFloats(t);
+  drawWorld(t); drawHeldFlag(t); drawShots(); drawFloats(t);
   ctx.setTransform(base, 0, 0, base, 0, 0);
   if (S.tint){   // 멈춰 버린 세계: 화면이 보랏빛으로
     const a = Math.min(1, (t - S.tint.t0) / 0.3) * Math.min(1, (S.tint.until - t) / 0.5) * 0.16;
@@ -1444,7 +1451,19 @@ function drawObjectives(t){
   const live = inMatch() && obj;                       // 대결 중이면 진짜 상태, 아니면 흐리게 (구경용)
   if ((om === 'zone' || om === 'both') && MAP.zones) for (let i = 0; i < MAP.zones.length; i++) drawZone(MAP.zones[i], live && obj.zones ? obj.zones[i] : null, t);
   if ((om === 'flag' || om === 'both') && MAP.flag && !(live && obj.flag)) drawFlag(MAP.flag.x, MAP.flag.y, null, t, 0.35);
+  if (om === 'flag' && live && obj.flag && !obj.flag.by){            // 바닥에 떨어진 깃발: 빛나는 고리 + 둥실
+    const f = obj.flag, k = 0.5 + Math.sin(t * 4) * 0.5;
+    ctx.strokeStyle = `rgba(255,216,74,${0.35 + k * 0.4})`; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(f.x, f.y + 4, FLAG_PICK, FLAG_PICK * 0.45, 0, 0, Math.PI * 2); ctx.stroke();
+    drawFlag(f.x, f.y, null, t, 1);
+  }
 }
+// 깃발을 든 사람: 등에 큰 깃발 (그림자 은신 중이어도 깃발은 보임)
+function flagHolder(){
+  if (!net || mmode() !== 'flag' || !inMatch() || !obj || !obj.flag || !obj.flag.by) return null;
+  const by = obj.flag.by, p = by === net.pid ? S.player : S.others.get(by);
+  return p ? {x: p.x, y: p.y, team: obj.flag.tm || p.team} : null;
+}
+function drawHeldFlag(t){ const h = flagHolder(); if (h) drawFlag(h.x - 24, h.y + 8, h.team, t, 1, 140); }
 // 구역 원 (z: 점령 상태, 없으면 흐린 구경용)
 function drawZone(a, z, t){
   if (!inView(a.x, a.y, a.r + 40)) return;
@@ -1458,10 +1477,10 @@ function drawZone(a, z, t){
   ctx.restore();
 }
 // 깃발: 막대 + 천 (team: 든 사람 팀 색, 없으면 흰색) · alpha: 흐리게
-function drawFlag(x, y, team, t, alpha){
-  if (!inView(x, y, 120)) return;
+function drawFlag(x, y, team, t, alpha, height){
+  if (!inView(x, y, 160)) return;
   const was = ctx.globalAlpha; ctx.globalAlpha = was * (alpha === undefined ? 1 : alpha);
-  const bob = team ? 0 : Math.sin(t * 3) * 4, top = y - 84 + bob, wave = Math.sin(t * 6) * 5;
+  const bob = team ? 0 : Math.sin(t * 3) * 4, top = y - (height || 84) + bob, wave = Math.sin(t * 6) * 5;
   ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x, y + 4, 16, 6, 0, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = '#5b3b1c'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y + bob); ctx.lineTo(x, top); ctx.stroke();
   ctx.fillStyle = team ? TEAMS[team].color : '#ffffff'; ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 2;
@@ -1693,7 +1712,7 @@ function startNet(conn){
   net.on.mode = m => showDummyMode(m);
   net.on.match = onMatch;
   net.on.gmode = onGmode;
-  net.on.obj = o => { obj = o; };
+  net.on.obj = o => { obj = o; if (phase() === 'end' && !$('#result').hidden) showResult(); };   // 끝난 뒤 마지막 점수가 오면 결과 다시
   net.on.host = () => { renderRoomBar(); if (net && net.isHost()) for (const d of S.dummies){ d.nextShot = 0; } };
   S.others.clear(); S.shots = []; S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; S.feed = []; S.tint = null;
   S.player.team = net.created ? 'red' : 'blue';           // 처음엔 방장 빨강, 들어온 친구 파랑 (언제든 바꿀 수 있음)
@@ -1780,6 +1799,53 @@ $('#infBtn').onclick = () => {
 };
 applyUnlimited();
 
+/* ---------- 🚩 깃발쟁 · 🏳 점령전 규칙 (방장이 계산) ----------
+   0.2초마다 (창이 뒤로 숨어서 화면 그리기가 멈춰도 계속) 방장이 계산해서 obj를 서버에 올림.
+   방장이 바뀌면 새 방장이 서버에서 받아 둔 obj부터 이어서 계산 */
+const FLAG_PICK = 60, OBJ_EVERY = 200;
+let objLast = performance.now() / 1000, lastRate = 0;
+// 깃발·구역 계산에 쓰는 사람들 (나 + 친구들, 친구는 마지막으로 받은 위치)
+function people(){
+  const me = S.player, out = [{id: net.pid, x: me.x, y: me.y, dead: !!me.deadUntil, team: me.team, name: net.name}];
+  for (const o of S.others.values()) if (o.team) out.push({id: o.id, x: o.tx === undefined ? o.x : o.tx, y: o.ty === undefined ? o.y : o.ty, dead: !!o.dead, team: o.team, name: o.name});
+  return out;
+}
+const matchElapsed = () => (net.serverNow() - match.startAt) / 1000;
+// 모두에게 알리기 (나도 보고, 친구들에게도 보냄)
+function announce(text, color){ addFeed(text, color); send({k: 'feed', text, c: color}); }
+function flagTick(dt){
+  const f = obj.flag; if (!f) return;
+  const ps = people();
+  if (f.by){
+    const h = ps.find(q => q.id === f.by);
+    if (!h || h.dead){                                   // 든 사람이 쓰러지거나 나감 → 그 자리에 떨어짐
+      announce(`🚩 ${h ? h.name : f.nm || '친구'} 님이 깃발을 떨어뜨렸어요!`, '#ffd84a');
+      f.by = null; delete f.tm; delete f.nm;
+    } else {
+      f.x = Math.round(h.x); f.y = Math.round(h.y);
+      obj.score[h.team] = (obj.score[h.team] || 0) + L.flagRate(matchElapsed(), match.len) * dt;
+    }
+  }
+  if (!f.by){
+    const id = L.flagPickup(f, ps, FLAG_PICK);
+    if (id){ const h = ps.find(q => q.id === id); f.by = id; f.tm = h.team; f.nm = h.name; announce(`🚩 ${h.name} 님(${TEAMS[h.team].name})이 깃발을 잡았어요!`, TEAMS[h.team].color); }
+  }
+}
+function objTick(){
+  const wall = performance.now() / 1000, dt = Math.min(2, wall - objLast); objLast = wall;
+  if (!net || phase() !== 'play') { lastRate = 0; return; }
+  // 깃발 점수 배수가 바뀌면 모두의 화면에 알림
+  if (mmode() === 'flag' && match.len){
+    const r = L.flagRate(matchElapsed(), match.len);
+    if (r !== lastRate){ if (lastRate) { castMsg(`🚩 이제 깃발을 들면 1초에 ${r}점!`, 'good'); addFeed(`🚩 이제 1초에 ${r}점!`, '#ffd84a'); } lastRate = r; }
+  }
+  if (!net.isHost() || !obj) return;
+  if (mmode() === 'flag') flagTick(dt);
+  else return;
+  net.publishObj(obj);
+}
+setInterval(objTick, OBJ_EVERY);
+
 /* ---------- ⚔ 대결 ---------- */
 // 방장이 모드를 바꾸면: 그 모드의 맵으로 (연습 중에도 바로)
 function onGmode(m){
@@ -1816,12 +1882,14 @@ function startMatch(){
   if (!teams.includes('red') || !teams.includes('blue')){ castMsg('빨강·파랑 팀에 한 명 이상씩 있어야 대결할 수 있어요', 'bad'); return; }
   const len = +$('#matchLen').value || 180, start = net.serverNow() + 3500, m = {id: 'm' + Math.random().toString(36).slice(2, 8), mode: gmode, startAt: start, len, score: {red: 0, blue: 0}};
   if (gmode === 'zone') delete m.len; else m.endAt = start + len * 1000;   // 점령전: 제한 시간 없음
+  // 깃발쟁·점령전: 방장이 처음 상태를 먼저 올림 (킬내기전은 없음)
+  net.publishObj(gmode === 'flag' ? {flag: {x: MAP.flag.x, y: MAP.flag.y, by: null}, score: {red: 0, blue: 0}} : gmode === 'zone' ? {zones: MAP.zones.map(() => L.newZone())} : null);
   net.setMatch(m);
 }
 $('#matchBtn').onclick = startMatch;
 $('#againBtn').onclick = startMatch;
-$('#practiceBtn').onclick = () => { if (net && net.isHost()) net.setMatch(null); };
-const score = tm => ((match && match.score) || {})[tm] || 0;
+$('#practiceBtn').onclick = () => { if (net && net.isHost()){ net.setMatch(null); net.publishObj(null); } };
+const score = tm => mmode() === 'flag' ? Math.floor(((obj && obj.score) || {})[tm] || 0) : ((match && match.score) || {})[tm] || 0;
 function showResult(){
   const red = score('red'), blue = score('blue');
   const win = red > blue ? 'red' : blue > red ? 'blue' : null;
@@ -1864,6 +1932,11 @@ function drawMatchHud(){
   ctx.fillStyle = ph === 'end' ? '#ffd84a' : left <= 10 ? '#ff7b7b' : '#ffffff';
   ctx.font = '400 34px "Black Han Sans","Malgun Gothic",sans-serif';
   ctx.fillText(ph === 'end' ? '끝!' : time, VW / 2, y + 46);
+  if (mmode() === 'flag' && ph === 'play'){            // 🚩 지금 1초에 몇 점인지
+    const r = L.flagRate(matchElapsed(), match.len), h = flagHolder();
+    ctx.font = '800 14px "Malgun Gothic",sans-serif'; ctx.fillStyle = '#ffd84a';
+    ctx.fillText(`🚩 1초에 ${r}점${h ? ` · ${TEAMS[h.team].name}이 들고 있어요` : ' · 깃발이 바닥에 있어요'}`, VW / 2, y + 84);
+  }
 }
 
 /* ---------- 시작 ---------- */
@@ -1875,6 +1948,6 @@ if (window.MagicArt) MagicArt.ready.then(() => { buildBook(); if (!$('#pick').hi
 try { const c = sessionStorage.getItem('magic.code'); if (c){ $('#codeInput').value = c; pickMode = 'friend'; refreshPick(); } } catch (e) {}
 requestAnimationFrame(loop);
 
-window.__magic = {S, mouse, submitSpell, rightClick, choose, CLASSES, get OBSTACLES(){ return OBSTACLES; }, get map(){ return MAP; }, setMap, get mmBg(){ return mmBg; }, step(){ update(); draw(); updateHud(); }, get cls(){ return cls; }, get cam(){ return cam; },
+window.__magic = {get obj(){ return obj; }, people: () => net ? people() : [], S, mouse, submitSpell, rightClick, choose, CLASSES, get OBSTACLES(){ return OBSTACLES; }, get map(){ return MAP; }, setMap, get mmBg(){ return mmBg; }, step(){ update(); draw(); updateHud(); }, get cls(){ return cls; }, get cam(){ return cam; },
   get unlimited(){ return unlimited; }, setUnlimited(v){ unlimited = !!v; applyUnlimited(); }, get net(){ return net; }, setTeam, leaveNet, startMatch, get match(){ return match; }, phase};
 })();
