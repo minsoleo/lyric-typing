@@ -23,7 +23,8 @@ const SHEETS = {props: {src: 'art/trees-rocks.webp'},   // 나무 3 (위) · 바
                 decor: {src: 'art/decor.webp', max: 160},  // 풀2·낮은 덤불 / 꽃 분홍·노랑·하늘 / 버섯 빨강·갈색·둥근 덤불
                 dummy: {src: 'art/dummy.webp', max: 300},  // 허수아비 1
                 // 스킬 아이콘: 캐릭터마다 6개 (스킬 1~5 + 궁극기), 위 3개 · 아래 3개
-                'icons-tank': {src: 'art/icons-tank.webp', max: 128}};
+                'icons-tank': {src: 'art/icons-tank.webp', max: 128},
+                'icons-dealer': {src: 'art/icons-dealer.webp', max: 128}};
 const stand = {}, walk = {}, tiles = {}, sheets = {};
 
 // 그림 주소에 판 번호(MAGIC_V)를 붙여서, 그림을 바꿔 올리면 브라우저가 새로 받게 함
