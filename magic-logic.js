@@ -124,6 +124,54 @@
     return sp.time || 0;
   }
 
+  /* ---------- 🚩 깃발쟁 ---------- */
+  // 1초에 오르는 점수: 대결 시간의 처음 3/6은 1점, 다음 2/6은 2점, 마지막 1/6은 3점 (시간 비율 3 : 2 : 1)
+  function flagRate(elapsed, len){
+    if (elapsed < len * 3 / 6) return 1;
+    if (elapsed < len * 5 / 6) return 2;
+    return 3;
+  }
+  // 바닥에 떨어진 깃발을 누가 줍나: radius 안에 있는 살아 있는 사람 중 가장 가까운 사람 (없으면 null)
+  function flagPickup(flag, people, radius){
+    if (!flag || flag.by) return null;
+    let best = null, bd = radius;
+    for (const p of people){
+      if (p.dead) continue;
+      const d = Math.hypot(p.x - flag.x, p.y - flag.y);
+      if (d <= bd){ bd = d; best = p.id; }
+    }
+    return best;
+  }
+
+  /* ---------- 🏳 점령전 ----------
+     구역 하나 = {own: 주인 팀, c: 팀마다 1턴(점령하기) 게이지, h: 팀마다 2턴(완전 점령) 게이지, war: 전쟁 중, lock: 완전 점령}
+     게이지는 0~100, rate = 1명이 1초에 채우는 % */
+  const newZone = () => ({own: null, c: {red: 0, blue: 0}, h: {red: 0, blue: 0}, war: false, lock: false});
+  const other = tm => tm === 'red' ? 'blue' : 'red';
+  // dt초 동안의 변화를 계산한 새 구역 (넘긴 구역은 안 바꿈)
+  function zoneStep(z, nRed, nBlue, dt, rate){
+    const o = {own: z.own, c: {red: z.c.red, blue: z.c.blue}, h: {red: z.h.red, blue: z.h.blue}, war: false, lock: !!z.lock};
+    if (o.lock) return o;                                      // 완전 점령: 더 안 바뀜
+    if (nRed > 0 && nBlue > 0){ o.war = true; return o; }      // 두 팀이 같이 있으면 전쟁 중: 모두 멈춤
+    const T = nRed > 0 ? 'red' : nBlue > 0 ? 'blue' : null, n = T === 'red' ? nRed : nBlue;
+    if (T && o.own === T){
+      o.h[T] = Math.min(100, o.h[T] + (1 + n) * rate * dt);    // 우리 구역 위: 저절로 차는 1명분 + 서 있는 사람 수
+    } else if (T){
+      o.c[T] = Math.min(100, o.c[T] + n * rate * dt);          // 남의 구역·주인 없는 구역: 서 있는 사람 수만큼 (주인 팀 2턴은 멈춤)
+      if (o.c[T] >= 100){ o.own = T; o.c[other(T)] = 0; }      // 점령 완료 → 상대의 1턴은 0, 상대의 2턴 기록은 그대로
+    } else if (o.own){
+      o.h[o.own] = Math.min(100, o.h[o.own] + rate * dt);      // 아무도 없음: 주인 팀 2턴이 1명분으로 저절로
+    }
+    if (o.own && o.h[o.own] >= 100) o.lock = true;
+    return o;
+  }
+  // 완전 점령한 구역이 2곳 이상인 팀 (없으면 null)
+  function zoneWinner(zones){
+    for (const tm of ['red', 'blue']) if (zones.filter(z => z.lock && z.own === tm).length >= 2) return tm;
+    return null;
+  }
+
   window.MagicLogic = {norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
-    addEffect, effectSum, takenMult, pruneEffects, removeTag, calcDamage, inArc, pickTarget, wallPoints, gainUlt, busyTime};
+    addEffect, effectSum, takenMult, pruneEffects, removeTag, calcDamage, inArc, pickTarget, wallPoints, gainUlt, busyTime,
+    flagRate, flagPickup, newZone, zoneStep, zoneWinner};
 })();

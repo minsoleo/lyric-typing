@@ -108,6 +108,50 @@ t('clampToWorld: 맵 밖으로 못 나감', () => { const r = L.clampToWorld({x:
 t('camFollow: 맵 가운데서는 캐릭터가 화면 가운데', () => { const c = L.camFollow({x: 1600, y: 900}, 1600, 900, 3200, 1800); return c.x === 800 && c.y === 450; });
 t('camFollow: 맵 끝에서는 맵 밖이 안 보이게 멈춤', () => { const a = L.camFollow({x: 50, y: 50}, 1600, 900, 3200, 1800), b = L.camFollow({x: 3190, y: 1790}, 1600, 900, 3200, 1800); return a.x === 0 && a.y === 0 && b.x === 1600 && b.y === 900; });
 
+// ---------- 깃발쟁 · 점령전 ----------
+const R = 100 / 40;
+const Z = o => { const z = L.newZone(); Object.assign(z.c, o.c); Object.assign(z.h, o.h); return Object.assign(z, o, {c: z.c, h: z.h}); };
+const step = (z, r, b, dt) => L.zoneStep(z, r, b, dt, R);
+t('flagRate: 3분 → 0~89초 1점, 90~149초 2점, 150초~ 3점', () =>
+  [0, 89.9].every(e => L.flagRate(e, 180) === 1) && L.flagRate(90, 180) === 2 && L.flagRate(149.9, 180) === 2 && L.flagRate(150, 180) === 3 && L.flagRate(179, 180) === 3);
+t('flagRate: 2분 → 60초부터 2점, 100초부터 3점', () => L.flagRate(59, 120) === 1 && L.flagRate(60, 120) === 2 && L.flagRate(100, 120) === 3);
+t('flagPickup: 60 안 가장 가까운 산 사람', () => {
+  const f = {x: 0, y: 0, by: null}, A = {id: 'A', x: 50, y: 0}, B = {id: 'B', x: 30, y: 0};
+  return L.flagPickup(f, [A, B], 60) === 'B' && L.flagPickup(f, [A, Object.assign({}, B, {dead: true})], 60) === 'A'
+    && L.flagPickup(f, [{id: 'A', x: 70, y: 0}, {id: 'B', x: 0, y: 75}], 60) === null && L.flagPickup({x: 0, y: 0, by: 'A'}, [A, B], 60) === null;
+});
+t('zoneStep: 빨강 1명 20초 → 1턴 50%, 주인 없음', () => { const z = step(L.newZone(), 1, 0, 20); return near(z.c.red, 50) && z.own === null; });
+t('zoneStep: 빨강 2명 20초 → 점령 완료', () => { const z = step(L.newZone(), 2, 0, 20); return z.own === 'red' && z.c.red === 100; });
+t('zoneStep: 두 팀이 같이 있으면 전쟁 중, 아무것도 안 바뀜', () => {
+  const z = step(Z({c: {red: 30, blue: 10}}), 1, 2, 10), z2 = step(z, 1, 0, 1);
+  return z.war === true && z.c.red === 30 && z.c.blue === 10 && z2.war === false;
+});
+t('zoneStep: 점령한 구역은 아무도 없어도 2턴이 40초 속도로 참', () => near(step(Z({own: 'red', c: {red: 100}}), 0, 0, 20).h.red, 50));
+t('zoneStep: 우리 팀 2명이 서 있으면 3명분', () => near(step(Z({own: 'red', c: {red: 100}}), 2, 0, 10).h.red, 75));
+t('zoneStep: 상대 혼자 있으면 우리 2턴은 멈추고 상대 1턴이 참', () => {
+  const z = step(Z({own: 'red', c: {red: 100}, h: {red: 60}}), 0, 1, 20);
+  return z.h.red === 60 && near(z.c.blue, 50) && z.own === 'red';
+});
+t('zoneStep: 뺏기면 진 팀 1턴은 0, 2턴 기록은 남음', () => {
+  const z = step(Z({own: 'red', c: {red: 100}, h: {red: 60}}), 0, 1, 40);
+  return z.own === 'blue' && z.c.red === 0 && z.h.red === 60 && z.h.blue === 0;
+});
+t('zoneStep: 다시 뺏으면 남아 있던 2턴부터 이어서', () => {
+  const lost = step(Z({own: 'red', c: {red: 100}, h: {red: 60}}), 0, 1, 40), back = step(lost, 1, 0, 40), done = step(back, 0, 0, 16);
+  return back.own === 'red' && near(done.h.red, 100) && done.lock === true;
+});
+t('zoneStep: 주인 없는 구역을 먼저 채우면 상대 1턴은 0', () => { const z = step(Z({c: {red: 90, blue: 80}}), 0, 1, 10); return z.own === 'blue' && z.c.red === 0; });
+t('zoneStep: 완전 점령되면 더 안 바뀜', () => {
+  const z = step(Z({own: 'red', c: {red: 100}, h: {red: 100}, lock: true}), 0, 3, 100);
+  return z.own === 'red' && z.c.blue === 0 && z.lock === true;
+});
+t('zoneStep: 큰 dt도 100에서 멈춤', () => { const z = step(L.newZone(), 1, 0, 999); return z.c.red === 100 && z.h.red === 0; });
+t('zoneStep: 원래 구역 객체는 안 바뀜', () => { const z = L.newZone(); step(z, 1, 0, 10); return z.c.red === 0 && z.own === null; });
+t('zoneWinner: 완전 점령 2곳 팀이 승리, 1곳씩이면 없음', () => {
+  const lr = Z({own: 'red', lock: true}), lb = Z({own: 'blue', lock: true});
+  return L.zoneWinner([lr, lr, L.newZone()]) === 'red' && L.zoneWinner([lr, lb, L.newZone()]) === null;
+});
+
 out.insertAdjacentHTML('afterbegin', `<h2 id="sum">${fail ? 'FAIL' : 'ALL PASS'} — ${pass} pass, ${fail} fail</h2>`);
 </script>
 </body>
