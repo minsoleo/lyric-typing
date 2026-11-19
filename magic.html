@@ -87,6 +87,14 @@ canvas{display:block;border-radius:16px;box-shadow:var(--shadow);cursor:crosshai
 .skills li.ult{border-style:dashed;border-color:rgba(255,201,40,.6)}
 .skills li.ult b{font-size:13px;padding-right:38px}
 .skills li.ult i{background:var(--gold);opacity:.7}
+/* 스킬 아이콘이 있을 때: 왼쪽 아이콘 + 오른쪽 이름·설명 */
+.skills li.has-ico{display:flex;align-items:center;gap:7px;text-align:left;padding:4px 8px 6px 5px}
+.skills li .ico{flex:none;width:40px;height:40px;object-fit:contain}
+.skills li .txt{min-width:0;flex:1}
+.skills li.cool .ico,.skills li.locked .ico{filter:grayscale(.75) brightness(.7)}
+.skills li.charged .ico,.skills li.using .ico{filter:drop-shadow(0 0 5px rgba(255,201,40,.9))}
+.card li.has-ico{list-style:none;margin-left:-18px;display:flex;align-items:center;gap:6px}
+.card li img{width:20px;height:20px;object-fit:contain;flex:none}
 .skills li.using{border-color:#ffffff;box-shadow:0 0 0 3px rgba(255,255,255,.3),var(--shadow)}
 .skills li.using em{color:var(--text)}
 .skills li.using i{background:#ffffff}
@@ -236,11 +244,11 @@ button.go{background:var(--gold);border-color:var(--gold);color:var(--gold-text)
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <!-- ★ 고친 뒤 올릴 때 아래 v=… 숫자를 바꾸면, 친구들 브라우저가 예전 파일을 쓰지 않고 새로 받아요 -->
-<script>window.MAGIC_V = '20261119f';</script>
-<script src="magic-spells.js?v=20261119f"></script>
-<script src="magic-logic.js?v=20261119f"></script>
-<script src="magic-net.js?v=20261119f"></script>
-<script src="magic-art.js?v=20261119f"></script>
-<script src="magic.js?v=20261119f"></script>
+<script>window.MAGIC_V = '20261119g';</script>
+<script src="magic-spells.js?v=20261119g"></script>
+<script src="magic-logic.js?v=20261119g"></script>
+<script src="magic-net.js?v=20261119g"></script>
+<script src="magic-art.js?v=20261119g"></script>
+<script src="magic.js?v=20261119g"></script>
 </body>
 </html>

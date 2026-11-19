@@ -21,7 +21,9 @@ const TILES = {grass: {src: 'art/grass.webp', size: 420}, dirt: {src: 'art/dirt.
 const SHEETS = {props: {src: 'art/trees-rocks.webp'},   // 나무 3 (위) · 바위 3 (아래)
                 pond: {src: 'art/pond.webp', max: 900},  // 연못 1 (크게 그려서 선명하게)
                 decor: {src: 'art/decor.webp', max: 160},  // 풀2·낮은 덤불 / 꽃 분홍·노랑·하늘 / 버섯 빨강·갈색·둥근 덤불
-                dummy: {src: 'art/dummy.webp', max: 300}}; // 허수아비 1
+                dummy: {src: 'art/dummy.webp', max: 300},  // 허수아비 1
+                // 스킬 아이콘: 캐릭터마다 6개 (스킬 1~5 + 궁극기), 위 3개 · 아래 3개
+                'icons-tank': {src: 'art/icons-tank.webp', max: 128}};
 const stand = {}, walk = {}, tiles = {}, sheets = {};
 
 // 그림 주소에 판 번호(MAGIC_V)를 붙여서, 그림을 바꿔 올리면 브라우저가 새로 받게 함
@@ -159,6 +161,8 @@ window.MagicArt = {
   walk: id => walk[id] || null,               // [{img, ax} × 4] 또는 null
   tile: id => tiles[id] || null,              // 바닥 무늬 캔버스
   sheet: id => sheets[id] || null,            // [{img, ax}, …] 여러 개 든 그림
+  // 스킬 아이콘 그림 주소 (없으면 null): 캐릭터 id, 몇 번째(0~4 스킬, 5 궁극기)
+  icon: (cid, i) => { const s = sheets['icons-' + cid]; if (!s || !s[i]) return null; return s[i].url || (s[i].url = s[i].img.toDataURL()); },
   ready: Promise.all([ready, tileReady, sheetReady]),
   url: id => stand[id] ? stand[id].img.toDataURL() : null
 };

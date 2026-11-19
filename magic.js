@@ -1302,6 +1302,8 @@ function drawFeed(t){
 }
 
 /* ---------- 아래 스킬 막대 · 체력 · 기록 ---------- */
+// 스킬 아이콘 (art/icons-<캐릭터>.webp): 스킬 순서대로 0~4, 궁극기 5
+const iconOf = (c, sp) => window.MagicArt && MagicArt.icon ? MagicArt.icon(c.id, sp === c.ult ? 5 : c.spells.indexOf(sp)) : null;
 function buildBook(){
   const ul = $('#book'); ul.textContent = ''; ul.style.setProperty('--cols', `repeat(${cls.spells.length},minmax(0,1fr)) minmax(0,1.7fr)`);
   for (const sp of allSpells(cls)){
@@ -1310,7 +1312,14 @@ function buildBook(){
     li.title = `${isUlt ? '[궁극기] ' : ''}${sp.name}\n${sp.desc}\n${isUlt ? '싸우면 게이지가 차올라요' : '다시 쓰기까지 ' + sp.cd + '초'}`;
     const b = document.createElement('b'); b.textContent = sp.name;
     const s = document.createElement('span'); s.textContent = (isUlt ? '🌟 ' : '') + sp.desc;
-    li.append(b, s, document.createElement('em'), document.createElement('i')); ul.appendChild(li);
+    const pic = iconOf(cls, sp);
+    if (pic){                                            // 아이콘 그림이 있으면 왼쪽에 아이콘 + 오른쪽에 이름·설명
+      li.classList.add('has-ico');
+      const im = document.createElement('img'); im.className = 'ico'; im.src = pic; im.alt = '';
+      const box = document.createElement('div'); box.className = 'txt'; box.append(b, s);
+      li.append(im, box, document.createElement('em'), document.createElement('i'));
+    } else li.append(b, s, document.createElement('em'), document.createElement('i'));
+    ul.appendChild(li);
   }
 }
 let hudAt = 0;
@@ -1367,7 +1376,11 @@ function buildPick(){
     b.querySelector('.role').textContent = c.role; b.querySelector('b').textContent = c.name; b.querySelector('.title').textContent = c.title;
     b.querySelector('.about').textContent = c.about;
     const n = b.querySelectorAll('.nums span'); n[0].textContent = `❤ 체력 ${c.hp}`; n[1].textContent = `👟 속도 ${c.speed}`; n[2].textContent = c.basic.melee ? '👊 근접' : '🏹 원거리';
-    for (const sp of allSpells(c)){ const li = document.createElement('li'); li.textContent = sp === c.ult ? '🌟 ' + sp.name : sp.name; if (sp === c.ult) li.className = 'u'; b.querySelector('ul').appendChild(li); }
+    for (const sp of allSpells(c)){
+      const li = document.createElement('li'), pic = iconOf(c, sp);
+      if (pic){ const im = document.createElement('img'); im.src = pic; im.alt = ''; li.appendChild(im); li.classList.add('has-ico'); }
+      li.append(sp === c.ult ? '🌟 ' + sp.name : sp.name); if (sp === c.ult) li.classList.add('u'); b.querySelector('ul').appendChild(li);
+    }
     b.onclick = () => choose(c);
     box.appendChild(b);
   }
@@ -1599,7 +1612,7 @@ function drawMatchHud(){
 /* ---------- 시작 ---------- */
 function loop(){ update(); draw(); updateHud(); requestAnimationFrame(loop); }
 buildBook(); fit(); openPick();
-if (window.MagicArt) MagicArt.ready.then(() => { if (!$('#pick').hidden) buildPick(); });   // 그림이 다 오면 고르기 카드에도
+if (window.MagicArt) MagicArt.ready.then(() => { buildBook(); if (!$('#pick').hidden) buildPick(); });   // 그림이 다 오면 스킬 칸·고르기 카드에도
 try { const c = sessionStorage.getItem('magic.code'); if (c){ $('#codeInput').value = c; pickMode = 'friend'; refreshPick(); } } catch (e) {}
 requestAnimationFrame(loop);
 
