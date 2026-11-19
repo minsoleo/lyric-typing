@@ -765,10 +765,13 @@ function drawGround(t){
     ctx.strokeStyle = 'rgba(140,105,60,.45)'; ctx.lineWidth = 76; ctx.stroke();
     ctx.strokeStyle = 'rgba(190,150,95,.35)'; ctx.lineWidth = 50; ctx.stroke();
   }
-  // 가운데 공터: 이끼 낀 돌 둘레
+  // 가운데 공터: 작은 바위들이 동그랗게 둘러싼 이끼 공터 (바위 그림이 있으면 그림으로)
   ctx.fillStyle = 'rgba(120,170,90,.22)'; circle(WW / 2, WH / 2, 170);
+  const props = window.MagicArt && MagicArt.sheet ? MagicArt.sheet('props') : null;
   for (let i = 0; i < 14; i++){
     const a = i / 14 * Math.PI * 2, x = WW / 2 + Math.cos(a) * 170, y = WH / 2 + Math.sin(a) * 170;
+    const rock = props && props[i % 2 ? PROP.rockFlat : PROP.rockMid];
+    if (rock){ const w = i % 2 ? 46 : 38, h = w * rock.img.height / rock.img.width; ctx.drawImage(rock.img, x - w / 2, y + 8 - h, w, h); continue; }
     ctx.fillStyle = '#7f8a7a'; circle(x, y, 13); ctx.fillStyle = '#7fb069'; circle(x - 3, y - 4, 6);
   }
   // 풀·꽃·버섯·덤불 (art/decor.webp가 있으면 그림으로, 바닥 쪽을 기준으로 세워 그림)
@@ -1354,20 +1357,62 @@ function drawFloats(t){
     ctx.globalAlpha = 1;
   }
 }
+/* 작은 지도: 맵 그림(풀밭·흙길·연못·나무·바위)을 한 번 작게 그려 두고, 그 위에 사람·허수아비 점만 매번 그림 */
+const MM_W = 240, MM_RES = 2.5;                          // 작은 지도 가로 크기 · 선명하게 그릴 배율
+let mmBg = null;
+function buildMinimap(){
+  const A = window.MagicArt;
+  if (!A || !A.tile || !A.tile('grass') || !A.sheet('props') || !A.sheet('pond')) return null;   // 그림이 다 오면 만듦
+  const k = MM_W / WW * MM_RES, c = document.createElement('canvas');
+  c.width = Math.round(WW * k); c.height = Math.round(WH * k);
+  const g = c.getContext('2d'); g.imageSmoothingQuality = 'high';
+  const grass = g.createPattern(A.tile('grass'), 'repeat'); grass.setTransform(new DOMMatrix().scale(k * 1.6));   // 지도에선 풀 무늬를 조금 크게
+  g.fillStyle = grass; g.fillRect(0, 0, c.width, c.height);
+  g.fillStyle = 'rgba(0,28,12,.28)'; g.fillRect(0, 0, c.width, c.height);
+  g.save(); g.scale(k, k);
+  g.lineCap = 'round'; g.beginPath(); g.moveTo(250, 900); g.bezierCurveTo(1100, 700, 1700, 1250, 3000, 850);
+  g.strokeStyle = 'rgba(35,50,15,.6)'; g.lineWidth = 110; g.stroke(); g.strokeStyle = '#c98f5a'; g.lineWidth = 90; g.stroke();
+  g.fillStyle = 'rgba(150,200,110,.35)'; g.beginPath(); g.arc(WW / 2, WH / 2, 180, 0, Math.PI * 2); g.fill();
+  const pond = (A.sheet('pond') || [])[0];
+  for (const o of OBSTACLES){
+    const art = o.kind === 'pond' ? pond : propOf(o), cx = o.x + o.w / 2;
+    if (!art){ g.fillStyle = o.kind === 'pond' ? '#3d94c9' : '#9fa69c'; g.fillRect(o.x, o.y, o.w, o.h); continue; }
+    if (o.kind === 'pond'){ const w = o.w * 1.55, h = w * art.img.height / art.img.width; g.drawImage(art.img, cx - w / 2, o.y + o.h / 2 - h / 2, w, h); continue; }
+    const tree = o.kind === 'tree', w = o.w * (tree ? 2.2 : 1.5), h = w * art.img.height / art.img.width, base = o.y + o.h;
+    g.drawImage(art.img, cx - w / 2, base - h, w, h);
+  }
+  g.restore();
+  return c;
+}
 function drawMinimap(){
-  const mw = 220, mh = mw * WH / WW, mx = VW - mw - 16, my = VH - mh - 16, k = mw / WW;
-  ctx.fillStyle = 'rgba(6,20,12,.75)'; roundRect(mx - 4, my - 4, mw + 8, mh + 8, 10); ctx.fill();
-  ctx.fillStyle = 'rgba(44,100,64,.95)'; ctx.fillRect(mx, my, mw, mh);
-  for (const o of OBSTACLES){ ctx.fillStyle = o.kind === 'pond' ? '#3d94c9' : o.kind === 'rock' ? '#9fa69c' : '#17552d'; ctx.fillRect(mx + o.x * k, my + o.y * k, Math.max(3, o.w * k), Math.max(3, o.h * k)); }
-  if (!inMatch()) for (const d of S.dummies){ ctx.fillStyle = d.deadUntil ? 'rgba(255,255,255,.35)' : '#ff8a5c'; ctx.beginPath(); ctx.arc(mx + d.x * k, my + d.y * k, 3.5, 0, Math.PI * 2); ctx.fill(); }
+  const mw = MM_W, mh = mw * WH / WW, mx = VW - mw - 16, my = VH - mh - 16, k = mw / WW;
+  if (!mmBg) mmBg = buildMinimap();
+  ctx.fillStyle = 'rgba(6,20,12,.8)'; roundRect(mx - 5, my - 5, mw + 10, mh + 10, 12); ctx.fill();
+  ctx.save(); roundRect(mx, my, mw, mh, 8); ctx.clip();
+  if (mmBg) ctx.drawImage(mmBg, mx, my, mw, mh);
+  else {
+    ctx.fillStyle = 'rgba(44,100,64,.95)'; ctx.fillRect(mx, my, mw, mh);
+    for (const o of OBSTACLES){ ctx.fillStyle = o.kind === 'pond' ? '#3d94c9' : o.kind === 'rock' ? '#9fa69c' : '#17552d'; ctx.fillRect(mx + o.x * k, my + o.y * k, Math.max(3, o.w * k), Math.max(3, o.h * k)); }
+  }
+  ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1.5; roundRect(mx, my, mw, mh, 8); ctx.stroke();
+  // 허수아비: 빨강·하양 과녁 점
+  if (!inMatch()) for (const d of S.dummies){
+    const x = mx + d.x * k, y = my + d.y * k;
+    if (d.deadUntil){ ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill(); continue; }
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(x, y, 4, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#e04a3a'; ctx.beginPath(); ctx.arc(x, y, 2.4, 0, Math.PI * 2); ctx.fill();
+  }
   for (const o of S.others.values()){                 // 친구: 우리 팀은 초록, 다른 팀은 팀 색 (숨으면 안 보임)
     if (o.dead || (o.stealth && o.team !== S.player.team)) continue;
     ctx.fillStyle = o.team === S.player.team ? '#5ce08a' : (TEAMS[o.team] || {}).color || '#fff';
     ctx.beginPath(); ctx.arc(mx + o.x * k, my + o.y * k, 4.5, 0, Math.PI * 2); ctx.fill();
   }
-  ctx.fillStyle = cls.color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
-  ctx.beginPath(); ctx.arc(mx + S.player.x * k, my + S.player.y * k, 5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.strokeRect(mx + cam.x * k, my + cam.y * k, VW * k, VH * k);
+  // 지금 화면에 보이는 곳
+  ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = 1.5; ctx.strokeRect(mx + cam.x * k, my + cam.y * k, VW * k, VH * k);
+  // 나: 내 캐릭터 색 + 흰 테두리, 조금 크게
+  ctx.fillStyle = cls.color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.arc(mx + S.player.x * k, my + S.player.y * k, 5.5, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
 }
 function draw(){
   const t = now(), base = scale * dpr;
