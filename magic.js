@@ -39,27 +39,37 @@ function applyTheme(){
 $('#themeBtn').onclick = () => { theme = theme === 'light' ? 'dark' : 'light'; applyTheme(); try { localStorage.setItem('lyricTyping.theme', theme); } catch (e) {} focusSpell(); };
 applyTheme();
 
-/* ---------- 숲 맵 ---------- */
+/* ---------- 숲 맵 ----------
+   ★ 왼쪽·오른쪽이 똑같은(거울처럼 대칭인) 맵: 빨강 팀은 왼쪽, 파랑 팀은 오른쪽에서 시작하니까 지형이 공평하게.
+     LEFT에 왼쪽 절반만 적으면 오른쪽은 자동으로 거울처럼 만들어짐. CENTER는 가운데(x 1600)에 걸친 것 */
 const tree = (x, y, s = 80) => ({x, y, w: s, h: s, kind: 'tree'});
-const OBSTACLES = [
-  tree(180, 160), tree(330, 300), tree(140, 1450, 90), tree(360, 1580), tree(1250, 650), tree(1900, 1060), tree(2650, 260), tree(2900, 520),
-  tree(2700, 1500, 90), tree(2050, 300), tree(620, 120, 96), tree(1020, 210), tree(1320, 110, 100), tree(1760, 170, 90), tree(2380, 140),
-  tree(3020, 150, 96), tree(3060, 820), tree(2620, 900), tree(1720, 1610, 100), tree(1100, 1650, 90), tree(600, 1690), tree(2230, 1620, 96),
-  tree(3040, 1640), tree(110, 700), tree(100, 1060, 90), tree(1700, 760), tree(820, 1560), tree(2920, 1230),
-  {x: 760, y: 420, w: 110, h: 70, kind: 'rock'}, {x: 780, y: 1300, w: 130, h: 80, kind: 'rock'}, {x: 1500, y: 260, w: 140, h: 70, kind: 'rock'},
-  {x: 1450, y: 1450, w: 150, h: 80, kind: 'rock'}, {x: 1080, y: 1000, w: 90, h: 64, kind: 'rock'}, {x: 2350, y: 1250, w: 120, h: 76, kind: 'rock'},
-  {x: 2950, y: 1100, w: 110, h: 70, kind: 'rock'},
-  {x: 2150, y: 700, w: 300, h: 190, kind: 'pond'}
+const rock = (x, y, w, h) => ({x, y, w, h, kind: 'rock'});
+const LEFT = [
+  // 위·아래 가장자리 숲
+  tree(140, 140, 90), tree(420, 80), tree(760, 120, 96), tree(1100, 90), tree(1390, 170, 90),
+  tree(380, 1650), tree(760, 1610, 96), tree(1150, 1680, 90), tree(1400, 1560),
+  // 왼쪽 가장자리 (출발 자리 위·아래)
+  tree(80, 500), tree(110, 1190, 90), tree(90, 1560),
+  // 안쪽 숲: 길 위쪽 · 길 아래쪽
+  tree(330, 320), tree(1240, 420), tree(640, 1270), tree(1180, 1320, 90),
+  // 바위
+  rock(720, 440, 110, 70), rock(300, 1210, 130, 80), rock(1300, 990, 100, 66), rock(1380, 560, 100, 66)
 ];
+const CENTER = [tree(1560, 50), tree(1555, 1690, 90), {x: 1450, y: 1170, w: 300, h: 190, kind: 'pond'}];
+const mirror = o => Object.assign({}, o, {x: WW - o.x - o.w});
+const OBSTACLES = LEFT.concat(LEFT.map(mirror), CENTER);
+// 흙길: 왼쪽 출발 자리 → 가운데 → 오른쪽 출발 자리 (좌우 대칭 아치)
+const PATH = [250, 900, 1000, 650, 2200, 650, 2950, 900];
+const tracePath = g => { g.beginPath(); g.moveTo(PATH[0], PATH[1]); g.bezierCurveTo(PATH[2], PATH[3], PATH[4], PATH[5], PATH[6], PATH[7]); };
 const WALLS = OBSTACLES, BLOCKERS = OBSTACLES.filter(o => o.kind !== 'pond');
 // 꾸미기(풀·꽃·버섯·덤불): 부딪히지 않음. 매번 같은 자리에 나오게 정해진 난수 사용
 const DECOR = (() => {
   let s = 20261118; const rnd = () => { s = (s * 1103515245 + 12345) % 2147483648; return s / 2147483648; };
   const out = [], kinds = ['grass', 'grass', 'grass', 'flower', 'flower', 'mush', 'bush'];
-  for (let i = 0; i < 420; i++){
-    const x = rnd() * WW, y = rnd() * WH, kind = kinds[Math.floor(rnd() * kinds.length)];
+  for (let i = 0; i < 210; i++){                        // 왼쪽 절반에 뿌리고 오른쪽은 거울처럼
+    const x = rnd() * WW / 2, y = rnd() * WH, kind = kinds[Math.floor(rnd() * kinds.length)], hue = rnd();
     if (L.pointInRects(x, y, 30, OBSTACLES)) continue;
-    out.push({x, y, kind, hue: rnd()});
+    out.push({x, y, kind, hue}, {x: WW - x, y, kind, hue});
   }
   return out;
 })();
@@ -80,7 +90,7 @@ const unl = () => unlimited && !inMatch();         // 대결 중에는 무제한
 const S = {
   player: null,
   others: new Map(),                               // 친구들 (pid → 받은 상태)
-  dummies: [makeDummy(1000, 880, 0), makeDummy(2250, 1080, 1), makeDummy(2550, 500, 2)],
+  dummies: [makeDummy(950, 1080, 0), makeDummy(2250, 1080, 1), makeDummy(1600, 960, 2)],   // 왼쪽·오른쪽·가운데 (대칭)
   dummyMode: 'still',
   shots: [], zones: [], walls: [], sanctums: [], fields: [], fx: [], floats: [], feed: [], tint: null,
   cds: {}, lastBasic: undefined, lockUntil: 0, charged: null, busy: null, ult: 0,
@@ -756,7 +766,7 @@ function drawGround(t){
   }
   // 흙길
   ctx.lineCap = 'round';
-  ctx.beginPath(); ctx.moveTo(250, 900); ctx.bezierCurveTo(1100, 700, 1700, 1250, 3000, 850);
+  tracePath(ctx);
   if (dirt){                                             // 흙길 그림 (art/dirt.webp) + 가장자리 살짝 어두운 테두리
     ctx.strokeStyle = 'rgba(35,50,15,.45)'; ctx.lineWidth = 90; ctx.stroke();
     ctx.strokeStyle = dirt; ctx.lineWidth = 78; ctx.stroke();
@@ -764,15 +774,6 @@ function drawGround(t){
   } else {
     ctx.strokeStyle = 'rgba(140,105,60,.45)'; ctx.lineWidth = 76; ctx.stroke();
     ctx.strokeStyle = 'rgba(190,150,95,.35)'; ctx.lineWidth = 50; ctx.stroke();
-  }
-  // 가운데 공터: 작은 바위들이 동그랗게 둘러싼 이끼 공터 (바위 그림이 있으면 그림으로)
-  ctx.fillStyle = 'rgba(120,170,90,.22)'; circle(WW / 2, WH / 2, 170);
-  const props = window.MagicArt && MagicArt.sheet ? MagicArt.sheet('props') : null;
-  for (let i = 0; i < 14; i++){
-    const a = i / 14 * Math.PI * 2, x = WW / 2 + Math.cos(a) * 170, y = WH / 2 + Math.sin(a) * 170;
-    const rock = props && props[i % 2 ? PROP.rockFlat : PROP.rockMid];
-    if (rock){ const w = i % 2 ? 46 : 38, h = w * rock.img.height / rock.img.width; ctx.drawImage(rock.img, x - w / 2, y + 8 - h, w, h); continue; }
-    ctx.fillStyle = '#7f8a7a'; circle(x, y, 13); ctx.fillStyle = '#7fb069'; circle(x - 3, y - 4, 6);
   }
   // 풀·꽃·버섯·덤불 (art/decor.webp가 있으면 그림으로, 바닥 쪽을 기준으로 세워 그림)
   const decor = window.MagicArt && MagicArt.sheet && MagicArt.sheet('decor');
@@ -808,7 +809,7 @@ const PROP = {tree: [0, 1, 2], rockBig: 3, rockMid: 4, rockFlat: 5};
 function propOf(o){
   const sh = window.MagicArt && MagicArt.sheet ? MagicArt.sheet('props') : null;
   if (!sh || sh.length < 6) return null;
-  if (o.kind === 'tree') return sh[PROP.tree[Math.abs(Math.round(o.x * 7 + o.y * 13)) % 3]];   // 자리마다 정해진 나무 모양
+  if (o.kind === 'tree') return sh[PROP.tree[Math.abs(Math.round(Math.min(o.x, WW - o.x - o.w) * 7 + o.y * 13)) % 3]];   // 자리마다 정해진 나무 모양 (거울 자리는 같은 나무)
   return sh[o.w / o.h >= 1.8 ? PROP.rockFlat : o.w >= 130 ? PROP.rockBig : PROP.rockMid];
 }
 // 바닥에 붙은 것(연못)은 먼저, 나무·바위는 캐릭터와 함께 아래쪽에 있는 것이 앞에 보이게(drawWorld에서) 그림
@@ -1370,9 +1371,8 @@ function buildMinimap(){
   g.fillStyle = grass; g.fillRect(0, 0, c.width, c.height);
   g.fillStyle = 'rgba(0,28,12,.28)'; g.fillRect(0, 0, c.width, c.height);
   g.save(); g.scale(k, k);
-  g.lineCap = 'round'; g.beginPath(); g.moveTo(250, 900); g.bezierCurveTo(1100, 700, 1700, 1250, 3000, 850);
+  g.lineCap = 'round'; tracePath(g);
   g.strokeStyle = 'rgba(35,50,15,.6)'; g.lineWidth = 110; g.stroke(); g.strokeStyle = '#c98f5a'; g.lineWidth = 90; g.stroke();
-  g.fillStyle = 'rgba(150,200,110,.35)'; g.beginPath(); g.arc(WW / 2, WH / 2, 180, 0, Math.PI * 2); g.fill();
   const pond = (A.sheet('pond') || [])[0];
   for (const o of OBSTACLES){
     const art = o.kind === 'pond' ? pond : propOf(o), cx = o.x + o.w / 2;
