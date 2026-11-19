@@ -4,14 +4,14 @@
      shot      날아가는 공격 (pull: 맞으면 끌어옴)
      dash      돌진 (dmg: 지나가며 피해, boom: 멈춘 자리에서 폭발, healAll: 아군 모두 회복)
      slash     swing초 동안 every초마다 앞을 베고(한 번에 dmg), 다 휘두르면 뒤로 물러남
-     wall      바위벽 세우기 (적이 쏜 공격을 막음)
+     wall      바위벽 세우기 (적이 쏜 공격을 막고, 아무도 지나갈 수 없음)
      flurry    정해진 시간 동안 주먹 연타
      buff      나(와 아군)를 강하게 (fx 목록)
      stealth   투명해지고 빨라짐 (instant: 장전 없이 Enter만 쳐도 바로)
      leap      가리킨 적 등 뒤로 순간 이동 + 피해 (screen: 화면 안이면 거리 상관없음)
      stun      가리킨 적 기절
      zone      바닥에 회복 샘
-     slowfield 나를 따라다니는 넓은 범위: 안에 들어온 적은 느려짐 + 나 강해짐 (time 동안 유지)
+     slowfield 쓴 자리(내 위치)에 넓은 범위가 time 동안 남음: 안에 들어온 적은 느려짐 + 나 강해짐
      sanctum   성역: 아군 회복 + 적 피해·나약함
    ally: 'one' = 가장 가까운 아군 한 명에게 (근처에 없으면 나) · 'near' = 나 + 주변 아군 모두
    fx kind: atk(주는 피해 +) · def(받는 피해 −) · speed(이동 속도 +) · basic(평타 피해 +) · reach(근접 공격 거리 +)
@@ -23,7 +23,7 @@ window.MAGIC_CLASSES = [
   {
     id: 'tank', role: '탱커', name: '가데온', title: '강철 수호자', icon: '🛡', color: '#f08a24', dark: '#8a4a12', hp: 160, speed: 165, r: 26,
     about: '검과 방패를 든 기사. 아군을 지키며 맨 앞에서 싸워요. 튼튼하고 느려요.',
-    basic: {name: '강철 베기', melee: true, cd: 0.9, dmg: 12, reach: 120, arc: 120},
+    basic: {name: '강철 베기', melee: true, cd: 0.9, dmg: 10, reach: 120, arc: 120},
     spells: [
       {id: 'rockwall', type: 'wall',   name: '바위벽',     cd: 10, desc: '5초 동안 적의 공격을 막는 벽',     color: '#c9b08a', dist: 95, length: 230, time: 5},
       {id: 'guard',    type: 'buff',   name: '수호의 방패', cd: 12, desc: '8초 동안 받는 피해 40% 감소',      color: '#9fd3ff', time: 8, ally: 'one', fx: [{kind: 'def', value: 0.4}]},
@@ -45,7 +45,7 @@ window.MAGIC_CLASSES = [
       {id: 'shadow', type: 'stealth', name: '그림자 은신', cd: 16, desc: 'Enter만 쳐도 바로! 15초 투명 · 속도 2배', color: '#8f86b8', instant: true, time: 15, fx: [{kind: 'speed', value: 1}]},
       {id: 'oath',   type: 'buff',    name: '칼끝의 맹세', cd: 14, desc: '6초 동안 공격력 +40%',                 color: '#ff9ad5', time: 6, ally: 'near', fx: [{kind: 'atk', value: 0.4}]}
     ],
-    ult: {id: 'stopworld', type: 'slowfield', name: '멈춰 버린 세계를 가르는 칼날', desc: '12초 동안 나를 따라다니는 넓은 범위 · 안의 적 느려짐 · 나 속도 +30% · 피해 +40%', color: '#c7b8ff', time: 12, area: 650, slow: 0.5,
+    ult: {id: 'stopworld', type: 'slowfield', name: '멈춰 버린 세계를 가르는 칼날', desc: '쓴 자리에 12초 동안 넓은 범위 · 안의 적 느려짐 · 나 속도 +30% · 피해 +40%', color: '#c7b8ff', time: 12, area: 650, slow: 0.5,
       fx: [{kind: 'speed', value: 0.3}, {kind: 'atk', value: 0.4}]}
   },
   {
@@ -53,7 +53,7 @@ window.MAGIC_CLASSES = [
     about: '덩굴 활을 든 숲의 요정. 가장 빠르고 아군을 회복시켜요.',
     basic: {name: '덩굴 화살', cd: 0.7, dmg: 6, speed: 580, radius: 7, range: 460, look: 'arrow', allyHeal: 5},
     spells: [
-      {id: 'sprint', type: 'dash',   name: '질주',       cd: 10, desc: '앞으로 달려감 · 아군 모두 체력 15 회복', color: '#9dffb0', reach: 260, dmg: 0, healAll: 15},
+      {id: 'sprint', type: 'dash',   name: '질주',       cd: 10, desc: '앞으로 달려감 · 아군 모두 체력 15 회복', color: '#9dffb0', reach: 400, dmg: 0, healAll: 15},
       {id: 'spring', type: 'zone',   name: '생명의 샘',   cd: 14, desc: '바닥에 7초 동안 회복 샘 · 체력 42',     color: '#5cf0b0', reach: 500, area: 120, heal: 42, time: 7},
       {id: 'spear',  type: 'shot',   name: '빛의 창',     cd: 3,  desc: '빛의 창을 던짐 · 피해 20',               color: '#fff6b0', look: 'spear', dmg: 20, speed: 660, radius: 10, range: 800},
       {id: 'flash',  type: 'stun',   name: '숲속의 섬광', cd: 12, desc: '가리킨 적 2.5초 기절',                   color: '#fffbd0', reach: 650, time: 2.5},

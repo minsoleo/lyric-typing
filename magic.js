@@ -237,6 +237,17 @@ function rightClick(){
   } else basicAttack(t);
 }
 const busyLeft = t => S.busy ? Math.max(0, S.busy.until - t) : 0;
+// 바위벽 기둥은 아무도 지나갈 수 없음: 기둥과 겹치면 바깥으로 밀어냄
+function pushWalls(pos, r){
+  let x = pos.x, y = pos.y;
+  for (const w of S.walls) for (const q of w.pts){
+    const dx = x - q.x, dy = y - q.y, d = Math.hypot(dx, dy), min = r + w.r;
+    if (d >= min) continue;
+    if (d < 0.01){ x = q.x + min; continue; }
+    x = q.x + dx / d * min; y = q.y + dy / d * min;
+  }
+  return {x, y};
+}
 
 /* ---------- 스킬 효과 (type별) ---------- */
 function aimDir(from){
@@ -355,10 +366,10 @@ function castSpell(sp, t, target){
       break;
     }
     case 'slowfield':
-      // 범위가 time초 동안 나를 따라다니며 유지됨 → 안에 들어온 적은 계속 느려짐
+      // 쓴 자리(내 위치)를 중심으로 범위가 time초 동안 남음 → 안에 들어온 적은 계속 느려짐
       S.fields = S.fields.filter(f => !(f.owner === 'me' && f.id === sp.id));
-      S.fields.push({id: sp.id, owner: 'me', r: sp.area, slow: sp.slow, t0: t, until: t + sp.time, next: t, color: sp.color});
-      send({k: 'field', r: sp.area, tm: sp.time, c: sp.color});
+      S.fields.push({id: sp.id, owner: 'me', x: p.x, y: p.y, r: sp.area, slow: sp.slow, t0: t, until: t + sp.time, next: t, color: sp.color});
+      send({k: 'field', x: r1(p.x), y: r1(p.y), r: sp.area, tm: sp.time, c: sp.color});
       buffMe(sp.fx, sp.time, sp.id, 0, sp.color, t);
       addFx({type: 'ring', x: r1(p.x), y: r1(p.y), r: sp.area, t0: t, life: 0.8, color: sp.color}, true);
       S.tint = {until: t + sp.time, t0: t, color: '90,60,190'};
@@ -486,7 +497,7 @@ function onNetEvent(ev){
     case 'wall': S.walls.push({pts: ev.pts || [], r: 22, t0: t, until: t + ev.tm, team: ev.team}); break;
     case 'zone': S.zones.push({x: ev.x, y: ev.y, r: ev.r, rate: ev.rate, until: t + ev.tm, t0: t, color: ev.c, acc: 0, team: ev.team}); break;
     case 'sanc': S.sanctums.push({x: ev.x, y: ev.y, r: ev.r, t0: t, until: t + ev.tm, healRate: ev.hr, team: ev.team, acc: 0}); break;
-    case 'field': S.fields.push({owner: ev.f, r: ev.r, t0: t, until: t + ev.tm, color: ev.c}); break;
+    case 'field': S.fields.push({owner: ev.f, x: ev.x, y: ev.y, r: ev.r, t0: t, until: t + ev.tm, color: ev.c}); break;
     case 'down':
       if (ev.by === net.pid) S.stats.kills++;
       addFeed(ev.by && ev.by !== 'dummy' ? `💥 ${nameOf(ev.by)} → ${ev.who}` : `💥 ${ev.who} 쓰러짐`, ev.by === net.pid ? '#ffd84a' : '#ffffff');
@@ -560,12 +571,12 @@ function update(){
   if (!p.deadUntil && !locked()){
     const spd = p.speed * Math.max(0.2, 1 + L.effectSum(p.fx, 'speed', t));
     if (p.pull){                                         // 강철 사슬에 끌려감
-      const m = L.moveToward(p, p.pull, PULL_SPEED * dt);
-      p.x = m.x; p.y = m.y;
-      if (m.arrived) p.pull = null;
+      const m = L.moveToward(p, p.pull, PULL_SPEED * dt), pos = pushWalls(m, p.r);
+      p.x = pos.x; p.y = pos.y;
+      if (m.arrived || Math.hypot(pos.x - m.x, pos.y - m.y) > 1) p.pull = null;   // 바위벽에 걸리면 멈춤
     } else if (p.dash){                                  // 돌진: 빠르게 미끄러지며 부딪힌 적에 피해
       const m = L.moveToward(p, p.dash.to, p.dash.speed * dt);
-      const pos = L.pushOut(m, p.r, WALLS);
+      const pos = pushWalls(L.pushOut(m, p.r, WALLS), p.r);
       const blocked = Math.hypot(pos.x - m.x, pos.y - m.y) > 1;
       p.x = pos.x; p.y = pos.y;
       if (p.dash.dmg) for (const e of enemies()) if (!p.dash.hit.has(e) && dist(e, p) < e.r + p.r + (p.dash.wide || 8)){ p.dash.hit.add(e); dealHit(e, p.dash.dmg, t, {color: p.dash.color}); }
@@ -575,7 +586,7 @@ function update(){
       const m = L.moveToward(p, p.target, spd * dt);
       const dx = m.x - p.x, dy = m.y - p.y, len = Math.hypot(dx, dy);
       if (len > 0.01 && !p.flurry) p.face = {x: dx / len, y: dy / len};
-      const pos = L.pushOut(L.clampToWorld(m, p.r, WW, WH), p.r, WALLS);
+      const pos = pushWalls(L.pushOut(L.clampToWorld(m, p.r, WW, WH), p.r, WALLS), p.r);
       if (Math.hypot(pos.x - p.x, pos.y - p.y) < spd * dt * 0.1 && !m.arrived) p.target = null;
       p.x = pos.x; p.y = pos.y;
       if (m.arrived) p.target = null;
@@ -614,11 +625,11 @@ function update(){
   S.sanctums = S.sanctums.filter(s => t < s.until);
   // 멈춰 버린 세계: 나를 따라다니는 범위 안의 적은 느려짐 (나가도 1초 동안은 느림)
   for (const f of S.fields){
-    if (f.owner !== 'me' || p.deadUntil || t < f.next) continue;
+    if (f.owner !== 'me' || t < f.next) continue;
     f.next = t + 0.5;
-    for (const e of enemies()) if (dist(e, p) < f.r + e.r) dealHit(e, 0, t, {slow: {v: f.slow, t: 1, tag: f.id}, noUlt: true});
+    for (const e of enemies()) if (dist(e, f) < f.r + e.r) dealHit(e, 0, t, {slow: {v: f.slow, t: 1, tag: f.id}, noUlt: true});
   }
-  S.fields = S.fields.filter(f => t < f.until && (f.owner === 'me' ? !p.deadUntil : S.others.has(f.owner)));
+  S.fields = S.fields.filter(f => t < f.until);
   S.walls = S.walls.filter(w => t < w.until);
   if (S.tint && t >= S.tint.until) S.tint = null;
   if (S.busy && t >= S.busy.until) S.busy = null;
@@ -688,9 +699,9 @@ function updateDummies(t, dt){
     if (d.deadUntil) continue;
     d.fx = L.pruneEffects(d.fx, t);
     if (d.pull){                                         // 강철 사슬에 끌려옴
-      const m = L.moveToward(d, d.pull, PULL_SPEED * dt);
-      d.x = m.x; d.y = m.y;
-      if (m.arrived){ d.pull = null; d.homeAt = t + 1.5; }
+      const m = L.moveToward(d, d.pull, PULL_SPEED * dt), q = pushWalls(m, d.r);
+      d.x = q.x; d.y = q.y;
+      if (m.arrived || Math.hypot(q.x - m.x, q.y - m.y) > 1){ d.pull = null; d.homeAt = t + 1.5; }
       continue;
     }
     const free = t >= d.frozenUntil, home = t >= d.homeAt, mult = Math.max(0.2, 1 + L.effectSum(d.fx, 'speed', t));
@@ -702,6 +713,7 @@ function updateDummies(t, dt){
         if (d.x < d.baseX - 220) d.dir = 1;
       } else d.x += (d.baseX - d.x) * Math.min(1, dt * 3);
     }
+    if (S.walls.length){ const q = pushWalls(d, d.r); d.x = q.x; d.y = q.y; }   // 허수아비도 바위벽을 못 지나감
     // 반격 모드: 가장 가까운 사람에게 공격을 쏨
     if (S.dummyMode === 'attack' && free && t >= d.nextShot){
       const who = people.filter(e => dist(e, d) < DUMMY_SIGHT).sort((a, b) => dist(a, d) - dist(b, d))[0];
@@ -938,7 +950,7 @@ function drawGroundFx(t){
     ctx.globalAlpha = 1;
   }
   for (const f of S.fields){
-    const p = f.owner === 'me' ? S.player : S.others.get(f.owner); if (!p) continue;   // 범위는 만든 사람을 따라다님
+    const p = f;                                         // 범위는 쓴 자리에 고정
     const k = Math.min(1, (t - f.t0) / 0.4), fade = Math.min(1, (f.until - t) / 0.6);
     if (drawArea(0, p.x, p.y, f.r * k, -t * 0.12, fade * 0.7)) continue;   // 멈춰 버린 세계: 보라 시계 마법진 (반대로 천천히 돎)
     ctx.globalAlpha = fade;
@@ -1050,7 +1062,7 @@ function topOf(e, c){
 const WALK_STEP = {tank: 16, dealer: 13, healer: 13};   // 클수록 걸음 그림이 천천히 바뀜 (가데온은 묵직하게)
 const DASH_TRAIL = {dealer: 3, tank: 4, healer: 5}, DASH_TRAIL_LEN = 170;   // 달려가는 꼬리 그림 번호 · 길이
 const MOTION = {sway: 0.05, hop: 3.5, squash: 0.025, attack: 0.14, dash: 0.12};   // 처음 값의 절반쯤
-function drawSprite(p, t, art, c){
+function drawSprite(p, t, art, c, invisible){
   if (Math.abs(p.face.x) > 0.15) p.look = p.face.x < 0 ? -1 : 1;   // 위·아래로 갈 땐 보던 쪽 그대로
   const dir = p.look || 1, h = SPRITE_H[c.id] || p.r * 3.8;
   // 이번 장면에서 움직인 거리 → 걸음
@@ -1065,6 +1077,7 @@ function drawSprite(p, t, art, c){
     p.walkT = (p.walkT || 0) + Math.min(moved, 12) / (WALK_STEP[c.id] || 13);
     if (Math.floor(p.walkT / Math.PI) !== before && inView(p.x, p.y, 0)) S.fx.push({type: 'dust', x: p.x - dir * 6, y: p.y + p.r * 0.95, t0: t, life: 0.35});   // 발걸음 먼지
   }
+  if (invisible) return;                                 // 그림자 은신: 발자국 먼지만 남기고 몸은 안 보임
   const k = p.walkK, ph = p.walkT || 0;
   // 걷는 그림(4칸)이 있으면 걸을 때 칸을 바꿔 가며 보여 줌 (한 칸 = 약 20픽셀 걸음). 그때 뒤뚱은 아주 작게
   const frames = window.MagicArt && MagicArt.walk(c.id), useWalk = !!frames && k > 0.5 && !dashing;
@@ -1094,9 +1107,11 @@ function drawSprite(p, t, art, c){
   if (legion) drawFx2(1, p.x, feet - h * 0.55, h * 1.55, 0, 0.5 + Math.sin(t * 6) * 0.12);   // 몸을 감싸는 주황 불꽃 기둥 (일렁임)
 }
 /* 그림이 없을 때 코드로 그리는 간단한 모습 */
-function drawHero(p, t, hc){
+// invisible: 그림자 은신 — 몸은 안 그리고 걸음(발자국 먼지)만 계산
+function drawHero(p, t, hc, invisible){
   const art = spriteOf(hc || cls);
-  if (art) return drawSprite(p, t, art, hc || cls);
+  if (art) return drawSprite(p, t, art, hc || cls, invisible);
+  if (invisible) return;
   const c = hc || cls, f = p.face, ang = Math.atan2(f.y, f.x), r = p.r;
   const L90 = {x: f.y, y: -f.x}, R90 = {x: -f.y, y: f.x};                    // 캐릭터 기준 왼손·오른손 쪽
   const sw = Math.min(1, Math.max(0, (t - p.swingAt) / 0.22)), swing = sw < 1 ? -1.2 + 2.4 * sw : 0;   // 휘두르는 중이면 무기가 돌아감
@@ -1179,6 +1194,12 @@ function drawPlayer(t){
     return;
   }
   const hidden = p.stealthUntil > t;
+  if (hidden){                                           // 그림자 은신: 완전히 투명, 걸으면 발자국 먼지만. 나에게만 체력 막대·👻 표시
+    drawHero(p, t, undefined, true);
+    const top = topOf(p); bar(p.x, top - 10, 64, p.hp / p.max, 'rgba(255,93,115,.5)');
+    ctx.font = '16px "Segoe UI Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.globalAlpha = 0.6; ctx.fillText('👻', p.x, top - 16); ctx.globalAlpha = 1;
+    return;
+  }
   ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(p.x, p.y + p.r + 2, p.r, 7, 0, 0, Math.PI * 2); ctx.fill();
   if (net) teamRing(p);
   if (L.takenMult(p.fx, t) < 1){ ctx.strokeStyle = 'rgba(95,225,255,.9)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 10 + Math.sin(t * 8) * 2, 0, Math.PI * 2); ctx.stroke(); }
@@ -1385,7 +1406,7 @@ function drawRemote(o, t){
     return;
   }
   const hidden = o.stealth;
-  if (hidden && enemy){ ctx.globalAlpha = 0.07; drawHero(o, t, o.cls); ctx.globalAlpha = 1; return; }   // 다른 팀이 숨으면 거의 안 보임
+  if (hidden){ drawHero(o, t, o.cls, true); return; }   // 그림자 은신: 완전히 투명 (걸으면 발자국 먼지만 보임)
   ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(o.x, o.y + o.r + 2, o.r, 7, 0, 0, Math.PI * 2); ctx.fill();
   teamRing(o);
   if (L.takenMult(o.fx, t) < 1){ ctx.strokeStyle = 'rgba(95,225,255,.9)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(o.x, o.y, o.r + 10 + Math.sin(t * 8) * 2, 0, Math.PI * 2); ctx.stroke(); }
