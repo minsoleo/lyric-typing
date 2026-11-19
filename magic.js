@@ -714,6 +714,9 @@ function roundRect(x, y, w, h, r){ ctx.beginPath(); ctx.roundRect ? ctx.roundRec
 function circle(x, y, r){ ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); }
 const inView = (x, y, pad) => x > cam.x - pad && x < cam.x + VW + pad && y > cam.y - pad && y < cam.y + VH + pad;
 // 바닥 무늬: 타일 그림을 반복 무늬로 (한 번 만들어 두고 계속 씀)
+// 장식 그림 고르기: decor.webp 9칸 중 몇 번째 / 맵에서 가로 크기(픽셀)
+const DECOR_ART = {grass: h => h < 0.2 ? 0 : 1, flower: h => h < 0.33 ? 3 : h < 0.66 ? 4 : 5, mush: h => h > 0.5 ? 6 : 7, bush: h => h < 0.5 ? 2 : 8};
+const DECOR_SIZE = {grass: 26, flower: 26, mush: 30, bush: 46};
 const GROUND_DIM = 0.18;                                 // 풀밭을 얼마나 어둡게 누를지 (0이면 그림 그대로)
 const patterns = {};
 function tilePattern(id){
@@ -751,9 +754,17 @@ function drawGround(t){
     const a = i / 14 * Math.PI * 2, x = WW / 2 + Math.cos(a) * 170, y = WH / 2 + Math.sin(a) * 170;
     ctx.fillStyle = '#7f8a7a'; circle(x, y, 13); ctx.fillStyle = '#7fb069'; circle(x - 3, y - 4, 6);
   }
-  // 풀·꽃·버섯·덤불
+  // 풀·꽃·버섯·덤불 (art/decor.webp가 있으면 그림으로, 바닥 쪽을 기준으로 세워 그림)
+  const decor = window.MagicArt && MagicArt.sheet && MagicArt.sheet('decor');
   for (const d of DECOR){
     if (!inView(d.x, d.y, 40)) continue;
+    if (decor && decor.length >= 9){
+      if (d.kind === 'grass' && d.hue > 0.4) continue;    // 풀밭 그림에 풀잎이 있어서 풀포기는 조금만
+      const i = DECOR_ART[d.kind](d.hue), size = DECOR_SIZE[d.kind], img = decor[i].img;
+      const w = size, h = w * img.height / img.width;
+      ctx.drawImage(img, d.x - w / 2, d.y - h, w, h);
+      continue;
+    }
     if (d.kind === 'grass' && grass) continue;           // 풀밭 그림에 이미 풀잎이 있음
     if (d.kind === 'grass'){
       ctx.strokeStyle = d.hue > 0.5 ? '#4f9a5c' : '#3f8a4f'; ctx.lineWidth = 3;
