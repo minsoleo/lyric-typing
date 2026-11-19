@@ -897,9 +897,25 @@ function bar(x, y, w, ratio, color){
   ctx.fillStyle = 'rgba(0,0,0,.55)'; roundRect(x - w / 2, y, w, 8, 4); ctx.fill();
   ctx.fillStyle = color; roundRect(x - w / 2 + 1, y + 1, (w - 2) * Math.max(0, ratio), 6, 3); ctx.fill();
 }
+/* 바닥 범위 그림 (art/areas.webp): 0 레이브 궁극기 · 1 생명의 샘. 그림의 원 테두리가 실제 범위에 맞게 RING배 크게 */
+const AREA_RING = [0.86, 0.94];
+function drawArea(i, x, y, r, rot, alpha){
+  const g = window.MagicArt && MagicArt.glow ? MagicArt.glow('areas') : null, a = g && g[i];
+  if (!a) return false;
+  const size = 2 * r / AREA_RING[i], img = a.img, s = size / Math.max(img.width, img.height), w = img.width * s, h = img.height * s;
+  const was = ctx.globalAlpha; ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+  ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore();
+  ctx.globalAlpha = was;
+  return true;
+}
 function drawGroundFx(t){
   for (const z of S.zones){
     const pulse = 0.5 + Math.sin(t * 5) * 0.15;
+    const zk = Math.min(1, (t - z.t0) / 0.3), zf = Math.min(1, (z.until - t) / 0.5);
+    if (drawArea(1, z.x, z.y, z.r * zk, t * 0.25, zf * (0.8 + Math.sin(t * 3) * 0.12))){   // 생명의 샘: 초록 원이 천천히 돌며 일렁임
+      ctx.globalAlpha = zf * 0.12; ctx.fillStyle = '#5cf0b0'; circle(z.x, z.y, z.r * zk); ctx.globalAlpha = 1;
+      continue;
+    }
     ctx.fillStyle = `rgba(92,240,176,${0.18 * pulse + 0.08})`; circle(z.x, z.y, z.r);
     ctx.strokeStyle = 'rgba(160,255,210,.8)'; ctx.lineWidth = 3; ctx.setLineDash([8, 6]);
     ctx.beginPath(); ctx.arc(z.x, z.y, z.r, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
@@ -924,6 +940,7 @@ function drawGroundFx(t){
   for (const f of S.fields){
     const p = f.owner === 'me' ? S.player : S.others.get(f.owner); if (!p) continue;   // 범위는 만든 사람을 따라다님
     const k = Math.min(1, (t - f.t0) / 0.4), fade = Math.min(1, (f.until - t) / 0.6);
+    if (drawArea(0, p.x, p.y, f.r * k, -t * 0.12, fade * 0.7)) continue;   // 멈춰 버린 세계: 보라 시계 마법진 (반대로 천천히 돎)
     ctx.globalAlpha = fade;
     ctx.fillStyle = 'rgba(140,110,255,.10)'; circle(p.x, p.y, f.r * k);
     ctx.strokeStyle = 'rgba(199,184,255,.85)'; ctx.lineWidth = 4; ctx.setLineDash([16, 12]);
