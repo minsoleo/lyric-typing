@@ -555,7 +555,7 @@ function onNetDummies(arr){
     d.pull = null;
   });
 }
-let sentAt = 0;
+let sentAt = 0, sentBeat = 0;
 function publish(t){
   if (!net || t - sentAt < SEND_EVERY) return;
   sentAt = t;
@@ -563,7 +563,7 @@ function publish(t){
   net.publish({n: net.name, tm: p.team, c: cls.id, x: Math.round(p.x), y: Math.round(p.y), hp: r1(p.hp), mx: p.max, fa: [r2(p.face.x), r2(p.face.y)],
     fx: p.fx.filter(f => f.until > t).map(f => [f.kind, f.value, r1(f.until - t)]), sh: p.stealthUntil > t ? 1 : 0,
     dd: p.deadUntil ? Math.max(0.1, r1(p.deadUntil - t)) : 0, ch: S.charged ? S.charged.spell.color : 0, sw: p.swings, fz: t < p.frozenUntil ? r1(p.frozenUntil - t) : 0,
-    k: S.stats.kills, de: S.stats.deaths, dm: Math.round(S.stats.dmg)});
+    k: S.stats.kills, de: S.stats.deaths, dm: Math.round(S.stats.dmg), hb: (sentBeat = (sentBeat + 1) % 1000)});   // hb: 살아 있다는 신호 (가만히 있어도 바뀜)
   if (net.isHost()) net.publishDummies(S.dummies.map(d => [Math.round(d.x), Math.round(d.y), Math.round(d.hp), d.deadUntil ? Math.max(0.1, r1(d.deadUntil - t)) : 0,
     t < d.frozenUntil ? r1(d.frozenUntil - t) : 0, d.frozenKind === 'stun' ? 1 : 0, L.effectSum(d.fx, 'speed', t) < 0 ? 1 : 0, L.effectSum(d.fx, 'atk', t) < 0 ? 1 : 0]));
 }
@@ -1499,14 +1499,7 @@ function drawZone(a, z, t){
   else big(`${g.label} ${Math.floor(g.pct)}%`, ty, g.pct > 0 ? TEAMS[g.team].color : 'rgba(255,255,255,.7)', 24);
   ctx.restore();
 }
-// 구역 고리에 보여 줄 게이지: 상대가 뺏는 중이면 그 게이지, 주인이 있으면 완전 점령 게이지, 없으면 앞선 팀의 점령 게이지
-function zoneGauge(z){
-  const o = z.own, other = o === 'red' ? 'blue' : 'red';
-  if (o && z.c[other] > 0) return {team: other, pct: z.c[other], label: '뺏는 중'};
-  if (o) return {team: o, pct: z.h[o], label: '완전 점령까지'};
-  const team = z.c.red >= z.c.blue ? 'red' : 'blue';
-  return {team, pct: z.c[team], label: '점령 중'};
-}
+const zoneGauge = L.zoneGauge;                     // 구역 고리에 보여 줄 게이지 (magic-logic.js)
 // 깃발: 막대 + 천 (team: 든 사람 팀 색, 없으면 흰색) · alpha: 흐리게
 function drawFlag(x, y, team, t, alpha, height){
   if (!inView(x, y, 160)) return;
@@ -1836,12 +1829,20 @@ applyUnlimited();
 const FLAG_PICK = 60, OBJ_EVERY = 200;
 let ZONE_RATE = 100 / 40;                          // 🏳 1명이 구역에 서 있으면 40초에 0→100%
 const ZNAME = ['왼쪽', '가운데', '오른쪽'];
-let objLast = performance.now() / 1000, lastRate = 0;
+let objLast = performance.now() / 1000, lastRate = 0, goneSince = null;
+const LEFT_GRACE = 5;                              // 한 팀이 5초 동안 계속 비어야 남은 팀 승리 (잠깐 끊긴 인터넷은 봐줌)
 // 깃발·구역 계산에 쓰는 사람들 (나 + 친구들, 친구는 마지막으로 받은 위치)
+// 창이 숨은 사람(다른 창으로 넘어감)은 게임이 멈춰서 소식이 끊김 → STALE초 넘게 소식이 없으면 깃발·구역 계산에서 뺌
+const STALE = 2;
 function people(){
-  const me = S.player, out = [{id: net.pid, x: me.x, y: me.y, dead: !!me.deadUntil, team: me.team, name: net.name}];
-  for (const o of S.others.values()) if (o.team) out.push({id: o.id, x: o.tx === undefined ? o.x : o.tx, y: o.ty === undefined ? o.y : o.ty, dead: !!o.dead, team: o.team, name: o.name});
-  return out;
+  const me = S.player, out = document.hidden ? [] : [{id: net.pid, x: me.x, y: me.y, dead: !!me.deadUntil, team: me.team, name: net.name}];
+  const fr = [...S.others.values()].filter(o => o.team).map(o => ({id: o.id, x: o.tx === undefined ? o.x : o.tx, y: o.ty === undefined ? o.y : o.ty, dead: !!o.dead, team: o.team, name: o.name, seen: o.seen}));
+  return out.concat(L.activePeople(fr, now(), STALE));
+}
+// 팀이 남아 있는지는 숨은 창도 셈 (방에 있으면 팀원)
+function teamsInRoom(){
+  const ts = [S.player.team].concat([...S.others.values()].map(o => o.team));
+  return {red: ts.includes('red'), blue: ts.includes('blue')};
 }
 const matchElapsed = () => (net.serverNow() - match.startAt) / 1000;
 // 모두에게 알리기 (나도 보고, 친구들에게도 보냄)
@@ -1879,7 +1880,7 @@ function zoneTick(dt){
 }
 function objTick(){
   const wall = performance.now() / 1000, dt = Math.min(2, wall - objLast); objLast = wall;
-  if (!net || phase() !== 'play') { lastRate = 0; return; }
+  if (!net || phase() !== 'play') { lastRate = 0; goneSince = null; return; }
   // 깃발 점수 배수가 바뀌면 모두의 화면에 알림
   if (mmode() === 'flag' && match.len){
     const r = L.flagRate(matchElapsed(), match.len);
@@ -1887,8 +1888,8 @@ function objTick(){
   }
   if (!net.isHost()) return;
   // 한 팀이 모두 나가면 남은 팀이 그 자리에서 이김 (모든 모드)
-  const ps = people(), red = ps.some(q => q.team === 'red'), blue = ps.some(q => q.team === 'blue');
-  if (red !== blue){ const w = red ? 'red' : 'blue'; announce(`🏆 상대 팀이 모두 나가서 ${TEAMS[w].name}이 이겼어요!`, TEAMS[w].color); net.endMatch(w, 'left'); return; }
+  const tr = teamsInRoom(), gone = L.teamGone(goneSince, tr.red, tr.blue, wall, LEFT_GRACE); goneSince = gone.since;
+  if (gone.winner){ const w = gone.winner; goneSince = null; announce(`🏆 상대 팀이 모두 나가서 ${TEAMS[w].name}이 이겼어요!`, TEAMS[w].color); net.endMatch(w, 'left'); return; }
   if (!obj) return;
   if (mmode() === 'flag') flagTick(dt);
   else if (mmode() === 'zone' && obj.zones) zoneTick(dt);

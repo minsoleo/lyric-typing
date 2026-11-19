@@ -152,6 +152,28 @@ t('zoneWinner: 완전 점령 2곳 팀이 승리, 1곳씩이면 없음', () => {
   return L.zoneWinner([lr, lr, L.newZone()]) === 'red' && L.zoneWinner([lr, lb, L.newZone()]) === null;
 });
 
+// ---------- 최종 검토에서 나온 것 ----------
+t('activePeople: 2초 넘게 소식이 없는 사람(창이 숨음)은 빼고, seen 없는 사람(나)은 남김', () => {
+  const r = L.activePeople([{id: 'a', seen: 10}, {id: 'b', seen: 7.5}, {id: 'c'}], 10, 2).map(q => q.id);
+  return r.join(',') === 'a,c';
+});
+t('zoneStep: 구역 안에 혼자 있는 팀을 in에 적음 (전쟁·빈 구역은 없음)', () =>
+  step(L.newZone(), 1, 0, 1).in === 'red' && step(L.newZone(), 0, 2, 1).in === 'blue' && !step(L.newZone(), 1, 1, 1).in && !step(L.newZone(), 0, 0, 1).in);
+t('zoneGauge: 뺏으려던 팀이 나가면 주인의 완전 점령 게이지를 보여 줌', () => {
+  const g = L.zoneGauge(Z({own: 'blue', c: {blue: 100, red: 30}, h: {blue: 50}}));
+  return g.team === 'blue' && g.pct === 50;
+});
+t('zoneGauge: 상대가 혼자 들어와 있으면 뺏는 게이지', () => {
+  const g = L.zoneGauge(Z({own: 'blue', c: {blue: 100, red: 30}, h: {blue: 50}, in: 'red'}));
+  return g.team === 'red' && g.pct === 30;
+});
+t('zoneGauge: 주인 없으면 앞선 팀의 점령 게이지', () => { const g = L.zoneGauge(Z({c: {red: 20, blue: 40}})); return g.team === 'blue' && g.pct === 40; });
+t('teamGone: 한 팀이 5초 동안 계속 비어야 남은 팀 승리', () => {
+  const a = L.teamGone(null, true, true, 100, 5), b = L.teamGone(null, true, false, 100, 5), c = L.teamGone(100, true, false, 104, 5),
+    d = L.teamGone(100, true, false, 105, 5), e = L.teamGone(100, true, true, 103, 5);
+  return a.since === null && !a.winner && b.since === 100 && !b.winner && !c.winner && d.winner === 'red' && e.since === null && !e.winner;
+});
+
 out.insertAdjacentHTML('afterbegin', `<h2 id="sum">${fail ? 'FAIL' : 'ALL PASS'} — ${pass} pass, ${fail} fail</h2>`);
 </script>
 </body>

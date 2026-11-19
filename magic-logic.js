@@ -154,6 +154,7 @@
     if (o.lock) return o;                                      // 완전 점령: 더 안 바뀜
     if (nRed > 0 && nBlue > 0){ o.war = true; return o; }      // 두 팀이 같이 있으면 전쟁 중: 모두 멈춤
     const T = nRed > 0 ? 'red' : nBlue > 0 ? 'blue' : null, n = T === 'red' ? nRed : nBlue;
+    o.in = T;                                                  // 지금 구역 안에 혼자 있는 팀 (고리에 무엇을 보여 줄지 정할 때 씀)
     if (T && o.own === T){
       o.h[T] = Math.min(100, o.h[T] + (1 + n) * rate * dt);    // 우리 구역 위: 저절로 차는 1명분 + 서 있는 사람 수
     } else if (T){
@@ -171,7 +172,24 @@
     return null;
   }
 
-  window.MagicLogic = {norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
+  // 구역 고리에 보여 줄 게이지: 상대가 혼자 들어와서 뺏는 중이면 그 게이지, 주인이 있으면 완전 점령 게이지, 없으면 앞선 팀의 점령 게이지
+  function zoneGauge(z){
+    const o = z.own, oth = o === 'red' ? 'blue' : 'red';
+    if (o && z.in === oth && z.c[oth] > 0) return {team: oth, pct: z.c[oth], label: '뺏는 중'};
+    if (o) return {team: o, pct: z.h[o], label: '완전 점령까지'};
+    const team = z.c.red >= z.c.blue ? 'red' : 'blue';
+    return {team, pct: z.c[team], label: '점령 중'};
+  }
+  // 창이 숨어서(다른 창으로 넘어감) limit초 넘게 소식이 없는 친구는 빼기 (seen이 없는 건 나)
+  const activePeople = (list, now, limit) => list.filter(q => q.seen === undefined || now - q.seen <= limit);
+  // 한 팀이 grace초 동안 계속 비어 있어야 남은 팀 승리 (잠깐 인터넷이 끊긴 건 봐줌)
+  function teamGone(since, hasRed, hasBlue, now, grace){
+    if (hasRed === hasBlue) return {since: null, winner: null};
+    const s = since === null || since === undefined ? now : since;
+    return {since: s, winner: now - s >= grace ? (hasRed ? 'red' : 'blue') : null};
+  }
+
+  window.MagicLogic = {zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
     addEffect, effectSum, takenMult, pruneEffects, removeTag, calcDamage, inArc, pickTarget, wallPoints, gainUlt, busyTime,
     flagRate, flagPickup, newZone, zoneStep, zoneWinner};
 })();
