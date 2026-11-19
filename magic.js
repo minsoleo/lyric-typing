@@ -458,6 +458,7 @@ function applyHit(e, out, o, t, by){
   if (o.slow) L.addEffect(e.fx, 'speed', -o.slow.v, t + o.slow.t, o.slow.tag);
   if (o.weak) L.addEffect(e.fx, 'atk', -o.weak.v, t + o.weak.t, o.weak.tag);
   if (o.pull){ e.pull = L.pushOut(L.clampToWorld(o.pull, e.r, WW, WH), e.r, WALLS); if (me){ e.target = null; e.dash = null; } }
+  if (me && L.breaksStealth(o, out)) breakStealth(t);   // 맞거나 사슬에 걸리면 그림자 은신이 풀림
   if (!(out > 0)) return 0;
   const m = L.takenMult(e.fx, t), dmg = Math.max(1, Math.round(out * m));
   return hurt(e, dmg, t, o.color, me && m < 1 ? ' 🛡' : '', by);

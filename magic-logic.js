@@ -202,7 +202,10 @@
     return ok.length ? ok[0].id : null;
   }
 
-  window.MagicLogic = {phaseKick, canAnnounce, aheadObj, nextHost, zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
+  // 그림자 은신이 풀리는 맞기: 피해를 받거나(방패로 막아도) 사슬에 끌려올 때 (느려짐·나약함만 걸리면 그대로)
+  const breaksStealth = (o, out) => out > 0 || !!(o && o.pull);
+
+  window.MagicLogic = {breaksStealth, phaseKick, canAnnounce, aheadObj, nextHost, zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
     addEffect, effectSum, takenMult, pruneEffects, removeTag, calcDamage, inArc, pickTarget, wallPoints, gainUlt, busyTime,
     flagRate, flagPickup, newZone, zoneStep, zoneWinner};
 })();

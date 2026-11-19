@@ -188,6 +188,9 @@ t('nextHost: 소식이 살아 있는 사람 중 가장 먼저 들어온 사람 (
   return L.nextHost(ps, 'me', 10, 2) === 'c' && L.nextHost([{id: 'me', j: 1, seen: 10}], 'me', 10, 2) === null;
 });
 
+t('breaksStealth: 피해를 받거나 사슬에 끌려오면 은신이 풀림, 느려짐만은 안 풀림', () =>
+  L.breaksStealth({}, 5) && L.breaksStealth({pull: {x: 1, y: 2}}, 0) && !L.breaksStealth({}, 0) && !L.breaksStealth({slow: {v: 0.3, t: 2}}, 0));
+
 out.insertAdjacentHTML('afterbegin', `<h2 id="sum">${fail ? 'FAIL' : 'ALL PASS'} — ${pass} pass, ${fail} fail</h2>`);
 </script>
 </body>
