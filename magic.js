@@ -842,12 +842,25 @@ function drawObstacle(o){
   }
 }
 // 나무·바위·허수아비·캐릭터를 아래쪽(발 위치)에 있는 것부터 그림 → 뒤에 있는 것은 가려짐
+// 날아가는 물건·바위 기둥 그림 (art/things.webp: 0 덩굴 화살 · 1 사슬 갈고리 · 2 바위 기둥)
+const THING = {arrow: 0, chain: 1}, THING_W = {arrow: 52, chain: 56};
+const thing = i => { const sh = window.MagicArt && MagicArt.sheet ? MagicArt.sheet('things') : null; return sh && sh[i] ? sh[i] : null; };
+// 바위벽 기둥 하나: 땅에서 솟아오르고, 끝날 때 흐려짐
+function drawPillar(w, q, t){
+  const img = thing(2).img, fade = Math.min(1, (w.until - t) / 0.4), rise = Math.min(1, (t - w.t0) / 0.15);
+  const h = 62 * rise, pw = 62 * img.width / img.height;
+  ctx.globalAlpha = fade;
+  ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(q.x + 3, q.y + 10, pw * 0.45, 8, 0, 0, Math.PI * 2); ctx.fill();
+  if (h > 1) ctx.drawImage(img, q.x - pw / 2, q.y + 12 - h, pw, h);
+  ctx.globalAlpha = 1;
+}
 function drawWorld(t){
   const items = [];
   for (const o of OBSTACLES) if (o.kind !== 'pond' && inView(o.x + o.w / 2, o.y + o.h / 2, 260)) items.push({y: o.y + o.h, f: () => drawObstacle(o)});
   if (!inMatch()) for (const d of S.dummies) items.push({y: d.y + d.r, f: () => drawDummy(d, t)});
   for (const o of S.others.values()) items.push({y: o.y + (o.r || 20), f: () => drawRemote(o, t)});
   items.push({y: S.player.y + S.player.r, f: () => drawPlayer(t)});
+  if (thing(2)) for (const w of S.walls) for (const q of w.pts) if (inView(q.x, q.y, 80)) items.push({y: q.y + 10, f: () => drawPillar(w, q, t)});
   items.sort((a, b) => a.y - b.y);
   for (const it of items) it.f();
 }
@@ -883,7 +896,7 @@ function drawGroundFx(t){
     ctx.beginPath(); ctx.arc(p.x, p.y, f.r * k, t * 0.4, t * 0.4 + Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
     ctx.globalAlpha = 1;
   }
-  for (const w of S.walls){
+  if (!thing(2)) for (const w of S.walls){               // 바위 기둥 그림이 없을 때만 (있으면 drawWorld에서 세워 그림)
     const fade = Math.min(1, (w.until - t) / 0.4), rise = Math.min(1, (t - w.t0) / 0.15);
     ctx.globalAlpha = fade;
     for (const q of w.pts){
@@ -1149,6 +1162,11 @@ function drawShots(){
     const by = s.owner === 'me' ? S.player : S.others.get(s.pid);   // 사슬은 던진 사람과 이어져 있음
     if (s.look === 'chain' && by){ ctx.strokeStyle = 'rgba(207,214,230,.85)'; ctx.lineWidth = 3; ctx.setLineDash([9, 5]); ctx.beginPath(); ctx.moveTo(by.x, by.y); ctx.lineTo(s.x, s.y); ctx.stroke(); ctx.setLineDash([]); }
     ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(Math.atan2(s.vy, s.vx));
+    const tg = THING[s.look] !== undefined && thing(THING[s.look]);
+    if (tg){                                             // 그림이 있으면 그림으로 (끝이 날아가는 쪽을 향함)
+      const w = THING_W[s.look], h = w * tg.img.height / tg.img.width;
+      ctx.drawImage(tg.img, -w * 0.75, -h / 2, w, h); ctx.restore(); continue;
+    }
     if (s.look === 'chain'){
       ctx.fillStyle = '#dfe5f0'; ctx.strokeStyle = '#7d8598'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(s.r * 1.4, 0); ctx.lineTo(-s.r * 0.4, s.r); ctx.lineTo(0, 0); ctx.lineTo(-s.r * 0.4, -s.r); ctx.closePath(); ctx.fill(); ctx.stroke();

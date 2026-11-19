@@ -25,7 +25,8 @@ const SHEETS = {props: {src: 'art/trees-rocks.webp'},   // 나무 3 (위) · 바
                 // 스킬 아이콘: 캐릭터마다 6개 (스킬 1~5 + 궁극기), 위 3개 · 아래 3개
                 'icons-tank': {src: 'art/icons-tank.webp', max: 128},
                 'icons-dealer': {src: 'art/icons-dealer.webp', max: 128},
-                'icons-healer': {src: 'art/icons-healer.webp', max: 128}};
+                'icons-healer': {src: 'art/icons-healer.webp', max: 128},
+                things: {src: 'art/things.webp', max: 200}};     // 덩굴 화살 · 사슬 갈고리 · 바위 기둥
 const stand = {}, walk = {}, tiles = {}, sheets = {};
 
 // 그림 주소에 판 번호(MAGIC_V)를 붙여서, 그림을 바꿔 올리면 브라우저가 새로 받게 함
