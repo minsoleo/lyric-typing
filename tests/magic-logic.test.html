@@ -174,6 +174,20 @@ t('teamGone: 한 팀이 5초 동안 계속 비어야 남은 팀 승리', () => {
   return a.since === null && !a.winner && b.since === 100 && !b.winner && !c.winner && d.winner === 'red' && e.since === null && !e.winner;
 });
 
+// ---------- 2026-11-20: 궁극기 게이지 초기화 버그 + 작은 문제 4개 ----------
+t('phaseKick: 대결 중(play→play) 점수가 바뀌어도 새로 시작하지 않음', () => L.phaseKick('play', 'play') === null);
+t('phaseKick: 3·2·1이 끝나 play가 될 때만 시작 (중간에 들어와도 시작)', () =>
+  L.phaseKick('count', 'play') === 'start' && L.phaseKick(null, 'play') === 'start' && L.phaseKick('play', 'count') === null);
+t('phaseKick: end는 같은 end여도 결과를 다시 그림', () => L.phaseKick('play', 'end') === 'end' && L.phaseKick('end', 'end') === 'end');
+t('canAnnounce: 같은 소식은 gap초가 지나야 다시', () =>
+  L.canAnnounce(undefined, 10, 6) && !L.canAnnounce(10, 15, 6) && L.canAnnounce(10, 16, 6));
+t('aheadObj: 다음 판 점수판(mid가 다름)이 먼저 오면 알아봄', () =>
+  L.aheadObj({mid: 'm2'}, 'm1') && !L.aheadObj({mid: 'm1'}, 'm1') && !L.aheadObj(null, 'm1') && !L.aheadObj({}, 'm1') && !L.aheadObj({mid: 'm2'}, null));
+t('nextHost: 소식이 살아 있는 사람 중 가장 먼저 들어온 사람 (나는 빼고)', () => {
+  const ps = [{id: 'me', j: 1, seen: 10}, {id: 'b', j: 5, seen: 10}, {id: 'a', j: 3, seen: 6}, {id: 'c', j: 4, seen: 9.5}];
+  return L.nextHost(ps, 'me', 10, 2) === 'c' && L.nextHost([{id: 'me', j: 1, seen: 10}], 'me', 10, 2) === null;
+});
+
 out.insertAdjacentHTML('afterbegin', `<h2 id="sum">${fail ? 'FAIL' : 'ALL PASS'} — ${pass} pass, ${fail} fail</h2>`);
 </script>
 </body>

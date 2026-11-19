@@ -81,6 +81,7 @@ function connect(code, name, created){
     endMatch(winner, why){ if (!closed) ref.child('match').update(clean({over: Date.now() + offset, winner, why})).catch(() => {}); },   // 판 끝내기 (승리 팀 또는 'draw', why: 'left' = 상대 팀이 모두 나감)
     setGmode(m){ if (!closed) ref.child('gmode').set(m).catch(() => {}); },
     publishObj(o){ if (!closed && host === pid) ref.child('obj').set(o ? clean(o) : null).catch(() => {}); },
+    handHost(to){ if (!closed && host === pid && to) hostRef.transaction(cur => cur === pid ? to : undefined).catch(() => {}); },   // 방장 넘겨주기 (창이 오래 숨었을 때)
     addScore(team){ if (!closed) ref.child('match/score/' + team).transaction(v => (v || 0) + 1).catch(() => {}); },
     leave
   };

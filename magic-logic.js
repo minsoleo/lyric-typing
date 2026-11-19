@@ -189,7 +189,20 @@
     return {since: s, winner: now - s >= grace ? (hasRed ? 'red' : 'blue') : null};
   }
 
-  window.MagicLogic = {zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
+  // 판 단계가 바뀔 때 할 일: 'start' = 게이지·대기 시간 처음부터 (3·2·1이 끝날 때만), 'end' = 결과 그리기, null = 아무것도 안 함
+  // (대결 중 점수가 바뀌어도 play→play라서 새로 시작하지 않음 — 궁극기 게이지가 0이 되던 버그)
+  const phaseKick = (prev, ph) => ph === 'end' ? 'end' : ph === 'play' && prev !== 'play' ? 'start' : null;
+  // 같은 소식을 gap초 안에 또 알리지 않기 (구역 가장자리에서 '전쟁 중'이 여러 번 뜨던 것)
+  const canAnnounce = (last, now, gap) => last === undefined || last === null || now - last >= gap;
+  // 다음 판의 점수판이 판보다 먼저 왔는지 ('한 판 더' 때 0:0 무승부가 잠깐 비치던 것)
+  const aheadObj = (o, curId) => !!(o && o.mid && curId && o.mid !== curId);
+  // 방장 창이 오래 숨어 있을 때 넘겨줄 사람: 소식이 살아 있는 사람 중 가장 먼저 들어온 사람 (나는 빼고)
+  function nextHost(list, me, now, limit){
+    const ok = list.filter(q => q.id !== me && q.seen !== undefined && now - q.seen <= limit).sort((a, b) => (a.j || 0) - (b.j || 0));
+    return ok.length ? ok[0].id : null;
+  }
+
+  window.MagicLogic = {phaseKick, canAnnounce, aheadObj, nextHost, zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
     addEffect, effectSum, takenMult, pruneEffects, removeTag, calcDamage, inArc, pickTarget, wallPoints, gainUlt, busyTime,
     flagRate, flagPickup, newZone, zoneStep, zoneWinner};
 })();
