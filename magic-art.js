@@ -29,7 +29,9 @@ const SHEETS = {props: {src: 'art/trees-rocks.webp'},   // 나무 3 (위) · 바
                 things: {src: 'art/things.webp', max: 200}};     // 덩굴 화살 · 사슬 갈고리 · 바위 기둥
 // 빛 효과 (검은 배경, 가로·세로 칸이 고르게): 0 칼자국 1 폭발 2 치유 / 3 기절 별 4 빛의 창 5 빨간 구슬 / 6 순간 이동 7 섬광 8 마법진
 const GLOWS = {fx: {src: 'art/fx.webp', cols: 3, rows: 3, max: 300},
-               areas: {src: 'art/areas.webp', cols: 2, rows: 1, max: 760}};   // 바닥 범위: 0 레이브 궁극기(보라 시계) · 1 생명의 샘(초록)
+               areas: {src: 'art/areas.webp', cols: 2, rows: 1, max: 760},   // 바닥 범위: 0 레이브 궁극기(보라 시계) · 1 생명의 샘(초록)
+               // 0 가데온 평타(주황 칼자국) 1 가데온 궁극기 오라 2 궁극기 발밑 고리 / 3 레이브·4 가데온·5 세라 달려가는 꼬리
+               fx2: {src: 'art/fx2.webp', cols: 3, rows: 2, max: 320}};
 const stand = {}, walk = {}, tiles = {}, sheets = {}, glows = {};
 
 // 그림 주소에 판 번호(MAGIC_V)를 붙여서, 그림을 바꿔 올리면 브라우저가 새로 받게 함

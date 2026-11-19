@@ -256,7 +256,7 @@ function melee(t, o, isBasic, color){
   const p = S.player, dir = aimDir(p); p.face = dir; p.swingAt = t; p.swings++;
   const reach = p.r + o.reach * (1 + L.effectSum(p.fx, 'reach', t));   // 궁극기 등으로 공격 거리가 늘어남
   for (const e of enemies()) if (L.inArc(p, dir, e, reach + e.r, o.arc)) dealHit(e, o.dmg, t, {basic: isBasic, color});
-  addFx({type: 'swing', x: r1(p.x), y: r1(p.y), a: r2(Math.atan2(dir.y, dir.x)), r: r1(reach), arc: r2(o.arc * Math.PI / 180), t0: t, life: 0.2, color: color || '#ffffff'}, true);
+  addFx({type: 'swing', who: cls.id, x: r1(p.x), y: r1(p.y), a: r2(Math.atan2(dir.y, dir.x)), r: r1(reach), arc: r2(o.arc * Math.PI / 180), t0: t, life: 0.2, color: color || '#ffffff'}, true);
 }
 // 나에게 강화 걸기 (fx: [{kind, value}], time초 동안). by: 걸어 준 친구 이름
 function buffMe(fx, time, tag, heal, color, t, by){
@@ -1048,12 +1048,14 @@ function topOf(e, c){
    - 서 있기: 숨쉬듯 아주 살짝 커졌다 작아짐
    - 공격: 앞으로 쑥 내밀며 기울임 / 돌진: 앞으로 숙이고 길쭉하게 */
 const WALK_STEP = {tank: 16, dealer: 13, healer: 13};   // 클수록 걸음 그림이 천천히 바뀜 (가데온은 묵직하게)
+const DASH_TRAIL = {dealer: 3, tank: 4, healer: 5}, DASH_TRAIL_LEN = 170;   // 달려가는 꼬리 그림 번호 · 길이
 const MOTION = {sway: 0.05, hop: 3.5, squash: 0.025, attack: 0.14, dash: 0.12};   // 처음 값의 절반쯤
 function drawSprite(p, t, art, c){
   if (Math.abs(p.face.x) > 0.15) p.look = p.face.x < 0 ? -1 : 1;   // 위·아래로 갈 땐 보던 쪽 그대로
   const dir = p.look || 1, h = SPRITE_H[c.id] || p.r * 3.8;
   // 이번 장면에서 움직인 거리 → 걸음
-  const moved = p.lastX === undefined ? 0 : Math.hypot(p.x - p.lastX, p.y - p.lastY);
+  const mdx = p.lastX === undefined ? 0 : p.x - p.lastX, mdy = p.lastY === undefined ? 0 : p.y - p.lastY;
+  const moved = Math.hypot(mdx, mdy);
   p.lastX = p.x; p.lastY = p.y;
   const dashing = !!p.dash || (p.kind === 'player' && moved > 9);
   const walking = !dashing && moved > 0.25 && moved < 40;
@@ -1078,11 +1080,18 @@ function drawSprite(p, t, art, c){
   const sw = Math.min(1, Math.max(0, (t - p.swingAt) / 0.22));
   if (sw < 1){ const a = Math.sin(sw * Math.PI); rot += a * MOTION.attack; fwd += a * 5; sx += a * 0.025; }   // 공격: 앞으로 쑥
   if (dashing){ rot += MOTION.dash; sx *= 1.06; sy *= 0.96; lift = 0; }                               // 돌진: 앞으로 숙임
+  const feet = p.y + p.r * 0.95;
+  // 돌진 중: 캐릭터 뒤로 길게 늘어지는 꼬리 (레이브 보라 · 가데온 주황 · 세라 초록). 그림의 앞쪽 끝이 캐릭터에 오게
+  if (dashing && moved > 0.5){ const a = Math.atan2(mdy, mdx), tl = DASH_TRAIL_LEN; drawFx2(DASH_TRAIL[c.id], p.x - Math.cos(a) * tl * 0.38, feet - h * 0.4 - Math.sin(a) * tl * 0.38, tl, a, 0.9); }
+  // 강철 군단의 함성(공격 거리 증가)이 걸려 있으면 발밑에 방패 고리가 돎
+  const legion = L.effectSum(p.fx, 'reach', t) > 0;
+  if (legion) drawFx2(2, p.x, feet, 120, t * 1.2, 0.85, 0.45);
   ctx.save(); ctx.translate(p.x + fwd * dir, p.y + p.r * 0.95 - lift); ctx.scale(dir * sx, sy); ctx.rotate(rot);
   ctx.drawImage(img, -ax, -h, w, h);   // 머리 위치를 캐릭터 가운데에 맞춤
   const fl = hitFlash(p, t);
   if (fl > 0){ ctx.globalAlpha *= fl; ctx.drawImage(whiteOf(img), -ax, -h, w, h); }   // 맞으면 하얗게 번쩍
   ctx.restore();
+  if (legion) drawFx2(1, p.x, feet - h * 0.55, h * 1.55, 0, 0.5 + Math.sin(t * 6) * 0.12);   // 몸을 감싸는 주황 불꽃 기둥 (일렁임)
 }
 /* 그림이 없을 때 코드로 그리는 간단한 모습 */
 function drawHero(p, t, hc){
@@ -1250,11 +1259,24 @@ function drawGlow(i, x, y, size, rot, alpha){
   ctx.globalAlpha = was;
   return true;
 }
+// 두 번째 효과 그림 (art/fx2.webp). flat: 바닥에 눕힌 것처럼 세로를 납작하게
+function drawFx2(i, x, y, size, rot, alpha, flat){
+  const g = window.MagicArt && MagicArt.glow ? MagicArt.glow('fx2') : null, a = g && g[i];
+  if (!a) return false;
+  const img = a.img, s = size / Math.max(img.width, img.height), w = img.width * s, h = img.height * s;
+  const was = ctx.globalAlpha; ctx.globalAlpha = was * Math.max(0, Math.min(1, alpha));
+  ctx.save(); ctx.translate(x, y); if (flat) ctx.scale(1, flat); if (rot) ctx.rotate(rot); ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore();
+  ctx.globalAlpha = was;
+  return true;
+}
 // 효과 하나를 그림으로 그릴 수 있으면 그리고 true
 function glowFx(f, k){
   const fade = 1 - k;
   switch (f.type){
-    case 'swing': return drawGlow(0, f.x + Math.cos(f.a) * f.r * 0.62, f.y + Math.sin(f.a) * f.r * 0.62, f.r * (1.15 + 0.25 * k), f.a, fade);
+    case 'swing': {                                       // 가데온은 주황 칼자국, 나머지는 보라 칼자국
+      const sx = f.x + Math.cos(f.a) * f.r * 0.62, sy = f.y + Math.sin(f.a) * f.r * 0.62, size = f.r * (1.15 + 0.25 * k);
+      return (f.who === 'tank' && drawFx2(0, sx, sy, size, f.a, fade)) || drawGlow(0, sx, sy, size, f.a, fade);
+    }
     case 'ring': return f.kind === 'boom' && drawGlow(1, f.x, f.y - f.r * 0.2, f.r * 2 * (0.55 + 0.6 * k), 0, 1 - k * k);
     case 'heal': return drawGlow(2, f.x, f.y - 30 - k * 30, 96, 0, fade);
     case 'blink': return drawGlow(6, f.x, f.y - 20, 80 + k * 30, 0, fade);
