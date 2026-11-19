@@ -45,7 +45,7 @@ window.MAGIC_CLASSES = [
       {id: 'shadow', type: 'stealth', name: '그림자 은신', cd: 16, desc: 'Enter만 쳐도 바로! 15초 투명 · 속도 2배', color: '#8f86b8', instant: true, time: 15, fx: [{kind: 'speed', value: 1}]},
       {id: 'oath',   type: 'buff',    name: '칼끝의 맹세', cd: 14, desc: '6초 동안 공격력 +40%',                 color: '#ff9ad5', time: 6, ally: 'near', fx: [{kind: 'atk', value: 0.4}]}
     ],
-    ult: {id: 'stopworld', type: 'slowfield', name: '멈춰 버린 세계를 가르는 칼날', desc: '쓴 자리에 12초 동안 넓은 범위 · 안의 적 느려짐 · 나 속도 +30% · 피해 +40%', color: '#c7b8ff', time: 12, area: 650, slow: 0.5,
+    ult: {id: 'stopworld', type: 'slowfield', name: '멈춰 버린 세계를 가르는 칼날', desc: '쓴 자리에 12초 동안 넓은 범위 · 안의 적 느려짐 · 나 속도 +30% · 피해 +40%', color: '#c7b8ff', time: 12, area: 580, slow: 0.5,
       fx: [{kind: 'speed', value: 0.3}, {kind: 'atk', value: 0.4}]}
   },
   {

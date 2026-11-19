@@ -911,6 +911,7 @@ function bar(x, y, w, ratio, color){
 }
 /* 바닥 범위 그림 (art/areas.webp): 0 레이브 궁극기 · 1 생명의 샘. 그림의 원 테두리가 실제 범위에 맞게 RING배 크게 */
 const AREA_RING = [0.86, 0.94];
+const AREA_ALPHA = [0.45, 1];   // 레이브 궁극기 마법진은 화면을 많이 덮어서 연하게
 function drawArea(i, x, y, r, rot, alpha){
   const g = window.MagicArt && MagicArt.glow ? MagicArt.glow('areas') : null, a = g && g[i];
   if (!a) return false;
@@ -952,7 +953,7 @@ function drawGroundFx(t){
   for (const f of S.fields){
     const p = f;                                         // 범위는 쓴 자리에 고정
     const k = Math.min(1, (t - f.t0) / 0.4), fade = Math.min(1, (f.until - t) / 0.6);
-    if (drawArea(0, p.x, p.y, f.r * k, -t * 0.12, fade * 0.7)) continue;   // 멈춰 버린 세계: 보라 시계 마법진 (반대로 천천히 돎)
+    if (drawArea(0, p.x, p.y, f.r * k, -t * 0.12, fade * AREA_ALPHA[0])) continue;   // 멈춰 버린 세계: 보라 시계 마법진 (반대로 천천히 돎)
     ctx.globalAlpha = fade;
     ctx.fillStyle = 'rgba(140,110,255,.10)'; circle(p.x, p.y, f.r * k);
     ctx.strokeStyle = 'rgba(199,184,255,.85)'; ctx.lineWidth = 4; ctx.setLineDash([16, 12]);
@@ -1194,12 +1195,6 @@ function drawPlayer(t){
     return;
   }
   const hidden = p.stealthUntil > t;
-  if (hidden){                                           // 그림자 은신: 완전히 투명, 걸으면 발자국 먼지만. 나에게만 체력 막대·👻 표시
-    drawHero(p, t, undefined, true);
-    const top = topOf(p); bar(p.x, top - 10, 64, p.hp / p.max, 'rgba(255,93,115,.5)');
-    ctx.font = '16px "Segoe UI Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.globalAlpha = 0.6; ctx.fillText('👻', p.x, top - 16); ctx.globalAlpha = 1;
-    return;
-  }
   ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(p.x, p.y + p.r + 2, p.r, 7, 0, 0, Math.PI * 2); ctx.fill();
   if (net) teamRing(p);
   if (L.takenMult(p.fx, t) < 1){ ctx.strokeStyle = 'rgba(95,225,255,.9)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 10 + Math.sin(t * 8) * 2, 0, Math.PI * 2); ctx.stroke(); }
@@ -1406,7 +1401,7 @@ function drawRemote(o, t){
     return;
   }
   const hidden = o.stealth;
-  if (hidden){ drawHero(o, t, o.cls, true); return; }   // 그림자 은신: 완전히 투명 (걸으면 발자국 먼지만 보임)
+  if (hidden && enemy){ drawHero(o, t, o.cls, true); return; }   // 그림자 은신: 상대 팀에게는 완전히 투명 (걸으면 발자국 먼지만), 나·우리 팀은 반투명
   ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(o.x, o.y + o.r + 2, o.r, 7, 0, 0, Math.PI * 2); ctx.fill();
   teamRing(o);
   if (L.takenMult(o.fx, t) < 1){ ctx.strokeStyle = 'rgba(95,225,255,.9)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(o.x, o.y, o.r + 10 + Math.sin(t * 8) * 2, 0, Math.PI * 2); ctx.stroke(); }
