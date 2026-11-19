@@ -854,6 +854,35 @@ function drawPillar(w, q, t){
   if (h > 1) ctx.drawImage(img, q.x - pw / 2, q.y + 12 - h, pw, h);
   ctx.globalAlpha = 1;
 }
+/* 쇠사슬: 갈고리 그림(things 1번)의 사슬 고리 한 마디를 잘라서, 던진 사람 → 끝까지 줄줄이 이어 그림 */
+const CHAIN_CUT = {x0: 0.275, x1: 0.475, y0: 0.30, y1: 0.80};   // 갈고리 그림 안에서 고리 한 마디(큰 고리 + 작은 연결 고리) 자리
+const CHAIN_H = 16;                                               // 맵에서 사슬 굵기(픽셀)
+let chainTile = null;
+function chainLink(){
+  if (chainTile) return chainTile;
+  const t = thing(1); if (!t) return null;
+  const img = t.img, sx = Math.round(img.width * CHAIN_CUT.x0), sw = Math.round(img.width * (CHAIN_CUT.x1 - CHAIN_CUT.x0));
+  const sy = Math.round(img.height * CHAIN_CUT.y0), sh = Math.round(img.height * (CHAIN_CUT.y1 - CHAIN_CUT.y0));
+  const c = document.createElement('canvas'); c.width = sw; c.height = sh;
+  c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+  return (chainTile = c);
+}
+function drawChain(from, to){
+  const link = chainLink(), dx = to.x - from.x, dy = to.y - from.y, len = Math.hypot(dx, dy);
+  if (len < 4) return;
+  if (!link){                                            // 그림이 없으면 예전처럼 점선
+    ctx.strokeStyle = 'rgba(207,214,230,.85)'; ctx.lineWidth = 3; ctx.setLineDash([9, 5]);
+    ctx.beginPath(); ctx.moveTo(from.x, from.y); ctx.lineTo(to.x, to.y); ctx.stroke(); ctx.setLineDash([]);
+    return;
+  }
+  const h = CHAIN_H, w = h * link.width / link.height, start = (from.r || 0) * 0.6;
+  ctx.save(); ctx.translate(from.x, from.y); ctx.rotate(Math.atan2(dy, dx));
+  for (let x = start; x < len - 4; x += w){
+    const f = Math.min(1, (len - x) / w);                // 마지막 고리는 남은 길이만큼만 잘라서
+    ctx.drawImage(link, 0, 0, link.width * f, link.height, x, -h / 2, w * f, h);
+  }
+  ctx.restore();
+}
 function drawWorld(t){
   const items = [];
   for (const o of OBSTACLES) if (o.kind !== 'pond' && inView(o.x + o.w / 2, o.y + o.h / 2, 260)) items.push({y: o.y + o.h, f: () => drawObstacle(o)});
@@ -932,7 +961,7 @@ function drawDummy(d, t){
     ctx.fillStyle = '#fff'; ctx.font = '700 26px "Malgun Gothic",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(Math.ceil(d.deadUntil - t) + '', d.x, base - 40);
     return;
   }
-  if (d.pull){ ctx.strokeStyle = '#cfd6e6'; ctx.lineWidth = 4; ctx.setLineDash([10, 5]); ctx.beginPath(); ctx.moveTo(S.player.x, S.player.y); ctx.lineTo(d.x, d.y); ctx.stroke(); ctx.setLineDash([]); }
+  if (d.pull) drawChain(S.player, d);                   // 강철 사슬에 끌려오는 중
   const slowed = L.effectSum(d.fx, 'speed', t) < 0, weak = L.effectSum(d.fx, 'atk', t) < 0;
   if (slowed){ ctx.strokeStyle = 'rgba(199,184,255,.9)'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(d.x, d.y - 24, 52, t * 0.5, t * 0.5 + Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
   if (S.dummyMode === 'attack'){                         // 반격 모드: 발밑이 빨갛게
@@ -964,7 +993,7 @@ function drawDummyPlain(d, t){
     ctx.fillStyle = '#fff'; ctx.font = '700 26px "Malgun Gothic",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(Math.ceil(d.deadUntil - t) + '', d.x, d.y - 10);
     return;
   }
-  if (d.pull){ ctx.strokeStyle = '#cfd6e6'; ctx.lineWidth = 4; ctx.setLineDash([10, 5]); ctx.beginPath(); ctx.moveTo(S.player.x, S.player.y); ctx.lineTo(d.x, d.y); ctx.stroke(); ctx.setLineDash([]); }
+  if (d.pull) drawChain(S.player, d);                   // 강철 사슬에 끌려오는 중
   const slowed = L.effectSum(d.fx, 'speed', t) < 0, weak = L.effectSum(d.fx, 'atk', t) < 0;
   if (slowed){ ctx.strokeStyle = 'rgba(199,184,255,.9)'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(d.x, d.y - 4, 46, t * 0.5, t * 0.5 + Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
   ctx.strokeStyle = '#6b4a2b'; ctx.lineWidth = 7;
@@ -1160,7 +1189,7 @@ function drawPlayer(t){
 function drawShots(){
   for (const s of S.shots){
     const by = s.owner === 'me' ? S.player : S.others.get(s.pid);   // 사슬은 던진 사람과 이어져 있음
-    if (s.look === 'chain' && by){ ctx.strokeStyle = 'rgba(207,214,230,.85)'; ctx.lineWidth = 3; ctx.setLineDash([9, 5]); ctx.beginPath(); ctx.moveTo(by.x, by.y); ctx.lineTo(s.x, s.y); ctx.stroke(); ctx.setLineDash([]); }
+    if (s.look === 'chain' && by) drawChain(by, s);
     ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(Math.atan2(s.vy, s.vx));
     const tg = THING[s.look] !== undefined && thing(THING[s.look]);
     if (tg){                                             // 그림이 있으면 그림으로 (끝이 날아가는 쪽을 향함)
