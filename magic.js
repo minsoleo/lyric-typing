@@ -772,9 +772,32 @@ function drawGround(t){
   }
   ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 16; ctx.strokeRect(0, 0, WW, WH);
 }
+/* 나무·바위 그림 (art/trees-rocks.webp: 나무 3개 · 바위 3개). 부딪히는 칸(o.x, o.y, o.w, o.h)은 그대로, 그림만 그 위에 */
+const PROP = {tree: [0, 1, 2], rockBig: 3, rockMid: 4, rockFlat: 5};
+function propOf(o){
+  const sh = window.MagicArt && MagicArt.sheet ? MagicArt.sheet('props') : null;
+  if (!sh || sh.length < 6) return null;
+  if (o.kind === 'tree') return sh[PROP.tree[Math.abs(Math.round(o.x * 7 + o.y * 13)) % 3]];   // 자리마다 정해진 나무 모양
+  return sh[o.w / o.h >= 1.8 ? PROP.rockFlat : o.w >= 130 ? PROP.rockBig : PROP.rockMid];
+}
+// 바닥에 붙은 것(연못)은 먼저, 나무·바위는 캐릭터와 함께 아래쪽에 있는 것이 앞에 보이게(drawWorld에서) 그림
 function drawObstacles(){
-  for (const o of OBSTACLES){
-    if (!inView(o.x + o.w / 2, o.y + o.h / 2, 200)) continue;
+  for (const o of OBSTACLES) if (o.kind === 'pond' && inView(o.x + o.w / 2, o.y + o.h / 2, 200)) drawObstacle(o);
+}
+function drawObstacle(o){
+  {
+    const art = o.kind !== 'pond' && propOf(o);
+    if (art){
+      const tree = o.kind === 'tree', cx = o.x + o.w / 2, base = o.y + o.h * (tree ? 0.95 : 1) + (tree ? 0 : 6);
+      const w = o.w * (tree ? 1.9 : 1.35), h = w * art.img.height / art.img.width;
+      ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(cx + 6, base - 4, w * (tree ? 0.32 : 0.45), w * 0.1, 0, 0, Math.PI * 2); ctx.fill();
+      // 나무 뒤에 내가 숨어 있으면 나무를 반투명하게 (내 모습이 보이게)
+      const p = S.player, behind = tree && !p.deadUntil && p.y < base && p.y > base - h && Math.abs(p.x - cx) < w / 2;
+      if (behind) ctx.globalAlpha = 0.55;
+      ctx.drawImage(art.img, cx - w / 2, base - h, w, h);
+      ctx.globalAlpha = 1;
+      return;
+    }
     if (o.kind === 'pond'){
       ctx.fillStyle = '#5c7f3e'; ctx.beginPath(); ctx.ellipse(o.x + o.w / 2, o.y + o.h / 2, o.w / 2 + 18, o.h / 2 + 18, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#2b78a8'; ctx.beginPath(); ctx.ellipse(o.x + o.w / 2, o.y + o.h / 2, o.w / 2 + 8, o.h / 2 + 8, 0, 0, Math.PI * 2); ctx.fill();
@@ -795,6 +818,16 @@ function drawObstacles(){
       ctx.fillStyle = '#3fa85f'; circle(cx - r * 0.3, cy - r * 0.45, r * 0.32);
     }
   }
+}
+// 나무·바위·허수아비·캐릭터를 아래쪽(발 위치)에 있는 것부터 그림 → 뒤에 있는 것은 가려짐
+function drawWorld(t){
+  const items = [];
+  for (const o of OBSTACLES) if (o.kind !== 'pond' && inView(o.x + o.w / 2, o.y + o.h / 2, 260)) items.push({y: o.y + o.h, f: () => drawObstacle(o)});
+  if (!inMatch()) for (const d of S.dummies) items.push({y: d.y + d.r, f: () => drawDummy(d, t)});
+  for (const o of S.others.values()) items.push({y: o.y + (o.r || 20), f: () => drawRemote(o, t)});
+  items.push({y: S.player.y + S.player.r, f: () => drawPlayer(t)});
+  items.sort((a, b) => a.y - b.y);
+  for (const it of items) it.f();
 }
 function bar(x, y, w, ratio, color){
   ctx.fillStyle = 'rgba(0,0,0,.55)'; roundRect(x - w / 2, y, w, 8, 4); ctx.fill();
@@ -1125,9 +1158,7 @@ function draw(){
   drawGround(t); drawGroundFx(t); drawObstacles(); drawFx(t);
   const p = S.player;
   if (p.target && !p.deadUntil){ ctx.strokeStyle = 'rgba(95,225,255,.35)'; ctx.setLineDash([6, 8]); ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.target.x, p.target.y); ctx.stroke(); ctx.setLineDash([]); }
-  if (!inMatch()) for (const d of S.dummies) drawDummy(d, t);
-  for (const o of S.others.values()) drawRemote(o, t);
-  drawPlayer(t); drawShots(); drawFloats(t);
+  drawWorld(t); drawShots(); drawFloats(t);
   ctx.setTransform(base, 0, 0, base, 0, 0);
   if (S.tint){   // 멈춰 버린 세계: 화면이 보랏빛으로
     const a = Math.min(1, (t - S.tint.t0) / 0.3) * Math.min(1, (S.tint.until - t) / 0.5) * 0.16;

@@ -17,7 +17,9 @@ const FILES = {
 const MAX = 360;                 // 줄여 둘 최대 크기(픽셀)
 // 바닥 무늬 (이어 붙이는 타일): 맵에서 한 장이 차지할 크기(픽셀)
 const TILES = {grass: {src: 'art/grass.webp', size: 420}, dirt: {src: 'art/dirt.webp', size: 260}};
-const stand = {}, walk = {}, tiles = {};
+// 여러 개가 든 그림 (줄마다 왼쪽→오른쪽 순서로 자동으로 잘라 씀)
+const SHEETS = {props: 'art/trees-rocks.webp'};   // 나무 3 (위) · 바위 3 (아래)
+const stand = {}, walk = {}, tiles = {}, sheets = {};
 
 const load = src => new Promise(res => { const img = new Image(); img.onload = () => res(img); img.onerror = () => res(null); img.src = src; });
 
@@ -101,6 +103,37 @@ function makeWalk(img, fixes){
   return boxes.map(b => cut(s, b, y0, y1, k));
 }
 
+// 여러 개 든 그림 자르기: 그림이 없는 가로줄로 줄을 나누고, 줄마다 그림이 없는 세로줄로 칸을 나눔
+function segments(has, len, gap, min){
+  const out = [];
+  for (let i = 0; i < len; i++){
+    if (!has(i)) continue;
+    let e = i, miss = 0;
+    for (let j = i + 1; j < len; j++){ if (has(j)){ e = j; miss = 0; } else if (++miss > gap) break; }
+    if (e - i > min) out.push([i, e]);
+    i = e;
+  }
+  return out;
+}
+function makeSheet(img){
+  const s = removeBg(img), parts = [];
+  const rowHas = y => { for (let x = 0; x < s.w; x += 2) if (solid(s, x, y)) return true; return false; };
+  for (const [ya, yb] of segments(rowHas, s.h, 10, 30)){
+    const colHas = x => { for (let y = ya; y <= yb; y += 2) if (solid(s, x, y)) return true; return false; };
+    for (const [xa, xb] of segments(colHas, s.w, 10, 30)){
+      const box = bbox(s, xa, xb);
+      if (!box) continue;
+      const b = {x0: box.x0, x1: box.x1, y0: Math.max(box.y0, ya), y1: Math.min(box.y1, yb)};
+      const k = Math.min(1, MAX / Math.max(b.x1 - b.x0 + 1, b.y1 - b.y0 + 1));
+      const c = cut(s, b, b.y0, b.y1, k);
+      c.ax = c.img.width / 2;   // 물건은 가운데 기준
+      parts.push(c);
+    }
+  }
+  return parts;
+}
+const sheetReady = Promise.all(Object.entries(SHEETS).map(async ([id, src]) => { const img = await load(src); if (img) sheets[id] = makeSheet(img); }));
+
 // 타일: 정해진 크기로 줄여 둠 (반복 무늬로 깔 때 그대로 씀)
 function makeTile(img, size){
   const c = document.createElement('canvas'); c.width = c.height = size;
@@ -121,7 +154,8 @@ window.MagicArt = {
   get: id => stand[id] || null,               // {img, ax}
   walk: id => walk[id] || null,               // [{img, ax} × 4] 또는 null
   tile: id => tiles[id] || null,              // 바닥 무늬 캔버스
-  ready: Promise.all([ready, tileReady]),
+  sheet: id => sheets[id] || null,            // [{img, ax}, …] 여러 개 든 그림
+  ready: Promise.all([ready, tileReady, sheetReady]),
   url: id => stand[id] ? stand[id].img.toDataURL() : null
 };
 })();
