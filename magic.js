@@ -912,10 +912,13 @@ function bar(x, y, w, ratio, color){
 /* 바닥 범위 그림 (art/areas.webp): 0 레이브 궁극기 · 1 생명의 샘. 그림의 원 테두리가 실제 범위에 맞게 RING배 크게 */
 const AREA_RING = [0.86, 0.94];
 const AREA_ALPHA = [0.45, 1];   // 레이브 궁극기 마법진은 화면을 많이 덮어서 연하게
+const RAVE_THIN = {ring: 0.83, alpha: 0.8};   // 얇은 선 버전(art/area-rave.webp)이 있으면 이걸로
 function drawArea(i, x, y, r, rot, alpha){
-  const g = window.MagicArt && MagicArt.glow ? MagicArt.glow('areas') : null, a = g && g[i];
+  const thin = i === 0 && window.MagicArt && MagicArt.glow && (MagicArt.glow('areaRave') || [])[0];
+  if (thin) alpha = alpha / AREA_ALPHA[0] * RAVE_THIN.alpha;   // 얇은 그림은 더 진하게 그려도 바닥이 잘 보임
+  const g = window.MagicArt && MagicArt.glow ? MagicArt.glow('areas') : null, a = thin || (g && g[i]);
   if (!a) return false;
-  const size = 2 * r / AREA_RING[i], img = a.img, s = size / Math.max(img.width, img.height), w = img.width * s, h = img.height * s;
+  const size = 2 * r / (thin ? RAVE_THIN.ring : AREA_RING[i]), img = a.img, s = size / Math.max(img.width, img.height), w = img.width * s, h = img.height * s;
   const was = ctx.globalAlpha; ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
   ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.drawImage(img, -w / 2, -h / 2, w, h); ctx.restore();
   ctx.globalAlpha = was;

@@ -31,7 +31,8 @@ const SHEETS = {props: {src: 'art/trees-rocks.webp'},   // 나무 3 (위) · 바
 const GLOWS = {fx: {src: 'art/fx.webp', cols: 3, rows: 3, max: 300},
                areas: {src: 'art/areas.webp', cols: 2, rows: 1, max: 760},   // 바닥 범위: 0 레이브 궁극기(보라 시계) · 1 생명의 샘(초록)
                // 0 가데온 평타(주황 칼자국) 1 가데온 궁극기 오라 2 궁극기 발밑 고리 / 3 레이브·4 가데온·5 세라 달려가는 꼬리
-               fx2: {src: 'art/fx2.webp', cols: 3, rows: 2, max: 320}};
+               fx2: {src: 'art/fx2.webp', cols: 3, rows: 2, max: 320},
+               areaRave: {src: 'art/area-rave.webp', cols: 1, rows: 1, max: 1000}};   // 레이브 궁극기 범위 (얇은 선 버전)
 const stand = {}, walk = {}, tiles = {}, sheets = {}, glows = {};
 
 // 그림 주소에 판 번호(MAGIC_V)를 붙여서, 그림을 바꿔 올리면 브라우저가 새로 받게 함
