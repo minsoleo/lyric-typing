@@ -21,7 +21,8 @@ const TILES = {grass: {src: 'art/grass.webp', size: 420}, dirt: {src: 'art/dirt.
 const SHEETS = {props: 'art/trees-rocks.webp'};   // 나무 3 (위) · 바위 3 (아래)
 const stand = {}, walk = {}, tiles = {}, sheets = {};
 
-const load = src => new Promise(res => { const img = new Image(); img.onload = () => res(img); img.onerror = () => res(null); img.src = src; });
+// 그림 주소에 판 번호(MAGIC_V)를 붙여서, 그림을 바꿔 올리면 브라우저가 새로 받게 함
+const load = src => new Promise(res => { const img = new Image(); img.onload = () => res(img); img.onerror = () => res(null); img.src = src + (window.MAGIC_V ? '?v=' + window.MAGIC_V : ''); });
 
 // 흰 배경을 지운 원본 크기 캔버스 + 픽셀 정보
 function removeBg(img, fixes){
