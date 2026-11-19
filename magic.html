@@ -66,6 +66,7 @@ canvas{display:block;border-radius:16px;box-shadow:var(--shadow);cursor:crosshai
 .cast.shake{animation:shake .3s}
 .cast.charged{border-color:var(--gold);box-shadow:0 0 0 4px rgba(255,201,40,.25)}
 @keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+body.online #mapBtn{display:none}
 .dummy small{font-size:12px;font-weight:800;color:var(--dim);margin-right:2px}
 .stats{font-size:11.5px;color:var(--dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .stats b{color:var(--text)}
@@ -198,7 +199,7 @@ button.go{background:var(--gold);border-color:var(--gold);color:var(--gold-text)
       <input type="text" id="spellInput" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" maxlength="30" placeholder="아래 스킬 이름을 치고 Enter로 장전 → 오른쪽 클릭으로 발사">
       <span id="castMsg"></span>
     </div>
-    <div class="row dummy"><button id="infBtn" class="on">♾ 무제한</button><button id="pickBtn">🔄 캐릭터 바꾸기</button><small>허수아비</small><button id="dStill" class="on">가만히</button><button id="dMove">움직이기</button><button id="dAttack" title="허수아비가 나에게 공격을 쏴요 (가데온의 바위벽·세라 회복 연습용)">반격</button></div>
+    <div class="row dummy"><button id="infBtn" class="on">♾ 무제한</button><button id="pickBtn">🔄 캐릭터 바꾸기</button><button id="mapBtn" title="혼자 연습할 맵 바꾸기">🗺 숲 맵</button><small>허수아비</small><button id="dStill" class="on">가만히</button><button id="dMove">움직이기</button><button id="dAttack" title="허수아비가 나에게 공격을 쏴요 (가데온의 바위벽·세라 회복 연습용)">반격</button></div>
   </div>
   <ul class="skills" id="book"></ul>
 </div>
@@ -249,6 +250,7 @@ button.go{background:var(--gold);border-color:var(--gold);color:var(--gold-text)
 <script src="magic-logic.js?v=20261119t"></script>
 <script src="magic-net.js?v=20261119t"></script>
 <script src="magic-art.js?v=20261119t"></script>
+<script src="magic-maps.js?v=20261119t"></script>
 <script src="magic.js?v=20261119t"></script>
 </body>
 </html>

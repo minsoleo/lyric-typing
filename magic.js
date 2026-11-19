@@ -17,13 +17,12 @@
 'use strict';
 const $ = s => document.querySelector(s);
 const L = window.MagicLogic, CLASSES = window.MAGIC_CLASSES, CHARGE = window.MAGIC_CHARGE_TIME || 5, U = window.MAGIC_ULT;
-const WW = 3200, WH = 1800, VW = 1600, VH = 900;
+const VW = 1600, VH = 900;
 const DUMMY_SPEED = 100, FAIL_LOCK = 0.8, RESPAWN = 3, DASH_SPEED = 900, PULL_SPEED = 1300;
 const DUMMY_SHOT = {dmg: 7, speed: 300, radius: 9, range: 700, look: 'enemy'}, DUMMY_RATE = 2.2, DUMMY_SIGHT = 650;
 const AIM_RADIUS = 110;                    // 목 긋기·숲속의 섬광: 마우스에서 이만큼 안에 있는 적을 "가리킨 적"으로 봄
 const ALLY_RANGE = 600, NEAR_RANGE = 350;  // "가장 가까운 아군"을 찾는 거리 · "주변 아군" 거리
 const SEND_EVERY = 0.1;                    // 온라인: 내 상태를 보내는 간격(초)
-const SPAWN = {solo: {x: 520, y: 900}, red: {x: 520, y: 900}, blue: {x: 2680, y: 900}};
 const TEAMS = {red: {name: '빨강 팀', color: '#ff5d5d'}, blue: {name: '파랑 팀', color: '#4fa3ff'}};
 const allSpells = c => c.spells.concat([c.ult]);
 const classById = id => CLASSES.find(c => c.id === id) || CLASSES[1];
@@ -39,37 +38,34 @@ function applyTheme(){
 $('#themeBtn').onclick = () => { theme = theme === 'light' ? 'dark' : 'light'; applyTheme(); try { localStorage.setItem('lyricTyping.theme', theme); } catch (e) {} focusSpell(); };
 applyTheme();
 
-/* ---------- 숲 맵 ----------
-   ★ 왼쪽·오른쪽이 똑같은(거울처럼 대칭인) 맵: 빨강 팀은 왼쪽, 파랑 팀은 오른쪽에서 시작하니까 지형이 공평하게.
-     LEFT에 왼쪽 절반만 적으면 오른쪽은 자동으로 거울처럼 만들어짐. CENTER는 가운데(x 1600)에 걸친 것 */
-const tree = (x, y, s = 80) => ({x, y, w: s, h: s, kind: 'tree'});
-const rock = (x, y, w, h) => ({x, y, w, h, kind: 'rock'});
-const LEFT = [
-  // 숨을 곳은 적게: 왼쪽 절반에 나무 6그루 · 바위 4개를 맵 전체에 고르게 (위 · 길가 · 아래)
-  tree(300, 300), tree(800, 250, 90), tree(1250, 330),
-  tree(1050, 520),
-  tree(250, 1350, 90), tree(750, 1450), tree(1200, 1500, 90),
-  rock(560, 560, 110, 70), rock(1380, 520, 100, 66),
-  rock(420, 1150, 130, 80), rock(1300, 1050, 100, 66)
-];
-const CENTER = [tree(1560, 280), {x: 1450, y: 1170, w: 300, h: 190, kind: 'pond'}];
+/* ---------- 맵 (magic-maps.js) ----------
+   ★ 맵은 왼쪽·오른쪽이 거울처럼 똑같음. 맵 정보는 magic-maps.js, 여기서는 "지금 맵"을 만들어 씀.
+   setMap(id)로 바꾸면 크기·장애물·장식·출발 자리·허수아비·작은 지도가 모두 그 맵 기준으로 바뀜 */
+const MAPS = window.MAGIC_MAPS;
+let MAP, WW, WH, OBSTACLES, WALLS, BLOCKERS, DECOR, SPAWN, mmBg = null;
 const mirror = o => Object.assign({}, o, {x: WW - o.x - o.w});
-const OBSTACLES = LEFT.concat(LEFT.map(mirror), CENTER);
-// 흙길: 왼쪽 출발 자리 → 가운데 → 오른쪽 출발 자리 (좌우 대칭 아치)
-const PATH = [250, 900, 1000, 650, 2200, 650, 2950, 900];
-const tracePath = g => { g.beginPath(); g.moveTo(PATH[0], PATH[1]); g.bezierCurveTo(PATH[2], PATH[3], PATH[4], PATH[5], PATH[6], PATH[7]); };
-const WALLS = OBSTACLES, BLOCKERS = OBSTACLES.filter(o => o.kind !== 'pond');
+const tracePath = g => {                                   // 흙길: 곡선 조각들을 이어서
+  g.beginPath(); g.moveTo(MAP.path[0][0], MAP.path[0][1]);
+  for (const q of MAP.path) g.bezierCurveTo(q[2], q[3], q[4], q[5], q[6], q[7]);
+};
 // 꾸미기(풀·꽃·버섯·덤불): 부딪히지 않음. 매번 같은 자리에 나오게 정해진 난수 사용
-const DECOR = (() => {
-  let s = 20261118; const rnd = () => { s = (s * 1103515245 + 12345) % 2147483648; return s / 2147483648; };
+function buildDecor(){
+  let s = MAP.decorSeed; const rnd = () => { s = (s * 1103515245 + 12345) % 2147483648; return s / 2147483648; };
   const out = [], kinds = ['grass', 'grass', 'grass', 'flower', 'flower', 'mush', 'bush'];
-  for (let i = 0; i < 210; i++){                        // 왼쪽 절반에 뿌리고 오른쪽은 거울처럼
+  for (let i = 0; i < MAP.decorCount; i++){              // 왼쪽 절반에 뿌리고 오른쪽은 거울처럼
     const x = rnd() * WW / 2, y = rnd() * WH, kind = kinds[Math.floor(rnd() * kinds.length)], hue = rnd();
     if (L.pointInRects(x, y, 30, OBSTACLES)) continue;
     out.push({x, y, kind, hue}, {x: WW - x, y, kind, hue});
   }
   return out;
-})();
+}
+function loadMap(id){
+  MAP = MAPS[id] || MAPS.forest; WW = MAP.W; WH = MAP.H; SPAWN = MAP.spawn;
+  OBSTACLES = MAP.left.concat(MAP.left.map(mirror), MAP.center);
+  WALLS = OBSTACLES; BLOCKERS = OBSTACLES.filter(o => o.kind !== 'pond');
+  DECOR = buildDecor(); mmBg = null;
+}
+loadMap('forest');
 
 /* ---------- 게임 상태 ---------- */
 const now = () => performance.now() / 1000;
@@ -87,7 +83,7 @@ const unl = () => unlimited && !inMatch();         // 대결 중에는 무제한
 const S = {
   player: null,
   others: new Map(),                               // 친구들 (pid → 받은 상태)
-  dummies: [makeDummy(950, 1080, 0), makeDummy(2250, 1080, 1), makeDummy(1600, 960, 2)],   // 왼쪽·오른쪽·가운데 (대칭)
+  dummies: [],                                     // 허수아비 3개: 맵마다 자리가 정해져 있음 (makeDummies)
   dummyMode: 'still',
   shots: [], zones: [], walls: [], sanctums: [], fields: [], fx: [], floats: [], feed: [], tint: null,
   cds: {}, lastBasic: undefined, lockUntil: 0, charged: null, busy: null, ult: 0,
@@ -99,6 +95,8 @@ function makePlayer(c, team){
     frozenUntil: 0, frozenKind: 'stun', deadUntil: 0, target: null, dash: null, flurry: null, backAt: null, pull: null, swingAt: -9, swings: 0,
     stealthUntil: 0, stealthTag: null, fx: [], face: {x: team === 'blue' ? -1 : 1, y: 0}};
 }
+const makeDummies = () => MAP.dummies.map((d, i) => makeDummy(d[0], d[1], i));   // 왼쪽·오른쪽·가운데 (대칭)
+S.dummies = makeDummies();
 S.player = makePlayer(cls, 'solo');
 let cam = L.camFollow(S.player, VW, VH, WW, WH);
 const mouse = {sx: VW / 2, sy: VH / 2, left: false, get x(){ return this.sx + cam.x; }, get y(){ return this.sy + cam.y; }};
@@ -1357,7 +1355,6 @@ function drawFloats(t){
 }
 /* 작은 지도: 맵 그림(풀밭·흙길·연못·나무·바위)을 한 번 작게 그려 두고, 그 위에 사람·허수아비 점만 매번 그림 */
 const MM_W = 240, MM_RES = 2.5;                          // 작은 지도 가로 크기 · 선명하게 그릴 배율
-let mmBg = null;
 function buildMinimap(){
   const A = window.MagicArt;
   if (!A || !A.tile || !A.tile('grass') || !A.sheet('props') || !A.sheet('pond')) return null;   // 그림이 다 오면 만듦
@@ -1587,6 +1584,22 @@ function choose(c){
   inp.value = ''; castMsg(`${c.role} · ${c.name}!`, 'good');
   buildBook(); $('#pick').hidden = true; focusSpell();
 }
+// 맵 바꾸기: 그 맵의 허수아비·출발 자리로, 남아 있던 효과·벽은 정리
+function setMap(id){
+  if (MAP && MAP.id === id) return;
+  loadMap(id);
+  S.dummies = makeDummies();
+  S.shots = []; S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; S.tint = null;
+  clearCharge(); S.busy = null; resetMe(); renderMapBtn();
+}
+// 🗺 혼자 연습에서 맵 고르기 (온라인에서는 방장이 고른 모드를 따라감)
+function renderMapBtn(){ const b = $('#mapBtn'); if (b) b.textContent = MAP.id === 'wide' ? '🗺 넓은 맵' : '🗺 숲 맵'; }
+$('#mapBtn').onclick = () => {
+  if (net) return;
+  setMap(MAP.id === 'wide' ? 'forest' : 'wide');
+  try { localStorage.setItem('magic.map', MAP.id); } catch (e) {}
+  castMsg(`🗺 ${MAP.name}으로 바꿨어요`, 'good'); focusSpell();
+};
 // 내 캐릭터를 우리 팀 출발 자리에 새로
 function resetMe(){
   const team = net ? (S.player.team === 'blue' ? 'blue' : 'red') : 'solo';
@@ -1793,11 +1806,13 @@ function drawMatchHud(){
 
 /* ---------- 시작 ---------- */
 function loop(){ update(); draw(); updateHud(); requestAnimationFrame(loop); }
+try { const m = localStorage.getItem('magic.map'); if (m && MAPS[m]) setMap(m); } catch (e) {}
+renderMapBtn();
 buildBook(); fit(); openPick();
 if (window.MagicArt) MagicArt.ready.then(() => { buildBook(); if (!$('#pick').hidden) buildPick(); });   // 그림이 다 오면 스킬 칸·고르기 카드에도
 try { const c = sessionStorage.getItem('magic.code'); if (c){ $('#codeInput').value = c; pickMode = 'friend'; refreshPick(); } } catch (e) {}
 requestAnimationFrame(loop);
 
-window.__magic = {S, mouse, submitSpell, rightClick, choose, CLASSES, OBSTACLES, step(){ update(); draw(); updateHud(); }, get cls(){ return cls; }, get cam(){ return cam; },
+window.__magic = {S, mouse, submitSpell, rightClick, choose, CLASSES, get OBSTACLES(){ return OBSTACLES; }, get map(){ return MAP; }, setMap, get mmBg(){ return mmBg; }, step(){ update(); draw(); updateHud(); }, get cls(){ return cls; }, get cam(){ return cam; },
   get unlimited(){ return unlimited; }, setUnlimited(v){ unlimited = !!v; applyUnlimited(); }, get net(){ return net; }, setTeam, leaveNet, startMatch, get match(){ return match; }, phase};
 })();
