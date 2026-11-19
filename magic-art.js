@@ -20,7 +20,8 @@ const TILES = {grass: {src: 'art/grass.webp', size: 420}, dirt: {src: 'art/dirt.
 // 여러 개가 든 그림 (줄마다 왼쪽→오른쪽 순서로 자동으로 잘라 씀)
 const SHEETS = {props: {src: 'art/trees-rocks.webp'},   // 나무 3 (위) · 바위 3 (아래)
                 pond: {src: 'art/pond.webp', max: 900},  // 연못 1 (크게 그려서 선명하게)
-                decor: {src: 'art/decor.webp', max: 160}}; // 풀2·낮은 덤불 / 꽃 분홍·노랑·하늘 / 버섯 빨강·갈색·둥근 덤불
+                decor: {src: 'art/decor.webp', max: 160},  // 풀2·낮은 덤불 / 꽃 분홍·노랑·하늘 / 버섯 빨강·갈색·둥근 덤불
+                dummy: {src: 'art/dummy.webp', max: 300}}; // 허수아비 1
 const stand = {}, walk = {}, tiles = {}, sheets = {};
 
 // 그림 주소에 판 번호(MAGIC_V)를 붙여서, 그림을 바꿔 올리면 브라우저가 새로 받게 함

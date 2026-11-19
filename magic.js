@@ -396,6 +396,8 @@ function healPlayer(amount, t, silent){
   if (!silent && got > 0) floatAt(p, '+' + Math.round(got), '#5ce08a', t);
   return got;
 }
+// 허수아비가 맞으면 지푸라기가 튐 (내 화면에만)
+function strawBurst(d, t){ S.fx.push({type: 'straw', x: d.x, y: d.y - 30, t0: t, life: 0.5, a0: Math.random() * 6}); }
 function floatAt(e, text, color, t){ S.floats.push({x: e.x + (Math.random() * 20 - 10), y: e.y - e.r - 34, text, color, t0: t}); }
 // 상태 이상을 신호에 담기 / 꺼내기
 const statusOf = o => ({st: o.stun || 0, sl: o.slow ? [o.slow.v, o.slow.t, o.slow.tag || 'slow'] : 0, wk: o.weak ? [o.weak.v, o.weak.t, o.weak.tag || 'weak'] : 0,
@@ -414,7 +416,7 @@ function dealHit(e, base, t, o){
   if (e.kind === 'dummy' && isAuth()) got = applyHit(e, out, o, t, null);
   else {
     send(Object.assign({k: 'hit', to: e.id, d: r2(out)}, statusOf(o), {c: o.color || 0}));
-    if (out > 0){ got = Math.max(1, Math.round(out * L.takenMult(e.fx, t))); S.stats.dmg += got; floatAt(e, String(got), o.color || '#ffd166', t); }
+    if (out > 0){ got = Math.max(1, Math.round(out * L.takenMult(e.fx, t))); S.stats.dmg += got; floatAt(e, String(got), o.color || '#ffd166', t); e.hitAt = t; if (e.kind === 'dummy') strawBurst(e, t); }
   }
   if (!o.noUlt && got) gainUlt(got * (o.basic ? U.basicDmg : U.spellDmg), t);
   return got;
@@ -435,7 +437,8 @@ function applyHit(e, out, o, t, by){
 function hurt(target, dmg, t, color, tag, by){
   if (isDown(target)) return 0;
   const r = L.applyDamage(target, dmg, t);
-  target.hp = r.hp; target.shield = r.shield;
+  target.hp = r.hp; target.shield = r.shield; target.hitAt = t;
+  if (target.kind === 'dummy') strawBurst(target, t);
   const isMe = target === S.player, got = dmg - r.absorbed;
   if (isMe){ S.stats.taken += got; gainUlt(got * U.taken, t); } else if (!by) S.stats.dmg += got;
   floatAt(target, (isMe ? '-' : '') + got + (tag || ''), isMe ? (tag ? '#8fd8ff' : '#ff7b7b') : color || '#ffd166', t);
@@ -501,6 +504,7 @@ function onNetState(pid, st){
     addFeed(`👋 ${st.n || '친구'} 님이 들어왔어요`, '#bff7c8');
   }
   if (Math.hypot(st.x - o.x, st.y - o.y) > 400){ o.x = st.x; o.y = st.y; }   // 순간 이동·부활은 바로
+  if (o.hp !== undefined && st.hp < o.hp - 0.5 && !(t - (o.hitAt === undefined ? -9 : o.hitAt) < 0.25)) o.hitAt = t;   // 친구가 맞으면 번쩍
   Object.assign(o, {tx: st.x, ty: st.y, name: st.n || '친구', team: st.tm === 'blue' ? 'blue' : 'red', cls: c, r: c.r, hp: st.hp, max: st.mx || c.hp,
     face: {x: (st.fa || [1, 0])[0], y: (st.fa || [1, 0])[1]}, stealth: !!st.sh, dead: !!st.dd, deadLeft: st.dd || 0, charged: st.ch || '', seen: t,
     frozenUntil: st.fz ? t + st.fz : 0, frozenKind: 'stun', k: st.k || 0, de: st.de || 0, dm: st.dm || 0, fx: (st.fx || []).map(([kind, value, left]) => ({kind, value, until: t + left, tag: 'net'}))});
@@ -513,6 +517,7 @@ function onNetDummies(arr){
   arr.forEach((a, i) => {
     const d = S.dummies[i]; if (!d || !a) return;
     d.tx = a[0]; d.ty = a[1]; if (Math.hypot(a[0] - d.x, a[1] - d.y) > 400){ d.x = a[0]; d.y = a[1]; }
+    if (a[2] < d.hp - 0.5 && !(t - (d.hitAt === undefined ? -9 : d.hitAt) < 0.25)) d.hitAt = t;   // 방장 화면에서 맞은 것도 흔들리게
     d.hp = a[2]; d.deadUntil = a[3] ? t + a[3] : 0; d.frozenUntil = a[4] ? t + a[4] : 0; d.frozenKind = a[5] ? 'stun' : 'ice';
     d.fx = [];
     if (a[6]) d.fx.push({kind: 'speed', value: -0.5, until: t + 0.5, tag: 'net'});
@@ -889,7 +894,57 @@ function drawGroundFx(t){
     ctx.globalAlpha = 1;
   }
 }
+/* 허수아비 (art/dummy.webp). 맞으면 흔들리고 하얗게 번쩍 + 지푸라기가 튐 */
+const DUMMY_H = 100;
+// 맞은 직후 번쩍임 세기 (0~0.75, 0.18초 동안)
+const hitFlash = (e, t) => e.hitAt === undefined ? 0 : Math.max(0, 1 - (t - e.hitAt) / 0.18) * 0.75;
+// 그림을 하얀 실루엣으로 (번쩍일 때 위에 겹쳐 그림, 한 번 만들어 두고 계속 씀)
+const whiteCache = new WeakMap();
+function whiteOf(img){
+  let c = whiteCache.get(img);
+  if (!c){
+    c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+    const g = c.getContext('2d'); g.drawImage(img, 0, 0); g.globalCompositeOperation = 'source-in'; g.fillStyle = '#ffffff'; g.fillRect(0, 0, c.width, c.height);
+    whiteCache.set(img, c);
+  }
+  return c;
+}
 function drawDummy(d, t){
+  const art = window.MagicArt && MagicArt.sheet && (MagicArt.sheet('dummy') || [])[0];
+  if (!art) return drawDummyPlain(d, t);
+  const img = art.img, h = DUMMY_H, w = h * img.width / img.height, base = d.y + d.r + 4, top = base - h;
+  ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(d.x, base, d.r * 0.9, 7, 0, 0, Math.PI * 2); ctx.fill();
+  if (d.deadUntil){                                      // 쓰러짐: 옆으로 누운 허수아비 + 다시 일어날 때까지 남은 초
+    ctx.save(); ctx.globalAlpha = 0.6; ctx.translate(d.x, base); ctx.rotate(-Math.PI / 2 * 0.92); ctx.drawImage(img, -w / 2, -h, w, h); ctx.restore();
+    ctx.fillStyle = '#fff'; ctx.font = '700 26px "Malgun Gothic",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(Math.ceil(d.deadUntil - t) + '', d.x, base - 40);
+    return;
+  }
+  if (d.pull){ ctx.strokeStyle = '#cfd6e6'; ctx.lineWidth = 4; ctx.setLineDash([10, 5]); ctx.beginPath(); ctx.moveTo(S.player.x, S.player.y); ctx.lineTo(d.x, d.y); ctx.stroke(); ctx.setLineDash([]); }
+  const slowed = L.effectSum(d.fx, 'speed', t) < 0, weak = L.effectSum(d.fx, 'atk', t) < 0;
+  if (slowed){ ctx.strokeStyle = 'rgba(199,184,255,.9)'; ctx.lineWidth = 3; ctx.setLineDash([6, 6]); ctx.beginPath(); ctx.arc(d.x, d.y - 24, 52, t * 0.5, t * 0.5 + Math.PI * 2); ctx.stroke(); ctx.setLineDash([]); }
+  if (S.dummyMode === 'attack'){                         // 반격 모드: 발밑이 빨갛게
+    ctx.strokeStyle = `rgba(255,90,90,${0.55 + Math.sin(t * 6) * 0.25})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(d.x, base, d.r + 6, 10, 0, 0, Math.PI * 2); ctx.stroke();
+  }
+  // 맞으면 기둥 아래를 축으로 휘청 (점점 잦아듦)
+  const since = d.hitAt === undefined ? 9 : t - d.hitAt;
+  const wob = since < 0.8 ? Math.sin(since * 28) * 0.22 * Math.exp(-since * 5) : 0;
+  ctx.save(); ctx.translate(d.x, base); ctx.rotate(wob);
+  ctx.drawImage(img, -w / 2, -h, w, h);
+  const fl = hitFlash(d, t);
+  if (fl > 0){ ctx.globalAlpha = fl; ctx.drawImage(whiteOf(img), -w / 2, -h, w, h); }
+  ctx.restore();
+  if (t < d.frozenUntil){
+    if (d.frozenKind === 'stun'){
+      ctx.fillStyle = '#fff6a8'; ctx.font = '800 20px "Malgun Gothic",sans-serif'; ctx.textAlign = 'center';
+      for (let i = 0; i < 3; i++){ const a = t * 5 + i * 2.1; ctx.fillText('★', d.x + Math.cos(a) * 24, top + 6 + Math.sin(a) * 6); }
+    } else { ctx.fillStyle = 'rgba(150,220,255,.45)'; roundRect(d.x - 42, top, 84, h, 12); ctx.fill(); }
+  }
+  bar(d.x, top - 12, 70, d.hp / d.max, '#ff5d73');
+  const tags = (slowed ? '🐢' : '') + (weak ? '💧' : '');
+  if (tags){ ctx.font = '16px "Segoe UI Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(tags, d.x, top - 18); }
+}
+/* 그림이 없을 때 코드로 그리는 허수아비 */
+function drawDummyPlain(d, t){
   ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(d.x, d.y + d.r + 4, d.r, 8, 0, 0, Math.PI * 2); ctx.fill();
   if (d.deadUntil){
     ctx.fillStyle = '#c9a66b'; ctx.fillRect(d.x - 34, d.y + 10, 68, 12);
@@ -961,6 +1016,8 @@ function drawSprite(p, t, art, c){
   if (dashing){ rot += MOTION.dash; sx *= 1.06; sy *= 0.96; lift = 0; }                               // 돌진: 앞으로 숙임
   ctx.save(); ctx.translate(p.x + fwd * dir, p.y + p.r * 0.95 - lift); ctx.scale(dir * sx, sy); ctx.rotate(rot);
   ctx.drawImage(img, -ax, -h, w, h);   // 머리 위치를 캐릭터 가운데에 맞춤
+  const fl = hitFlash(p, t);
+  if (fl > 0){ ctx.globalAlpha *= fl; ctx.drawImage(whiteOf(img), -ax, -h, w, h); }   // 맞으면 하얗게 번쩍
   ctx.restore();
 }
 /* 그림이 없을 때 코드로 그리는 간단한 모습 */
@@ -1139,6 +1196,9 @@ function drawFx(t){
     else if (f.type === 'ring'){
       ctx.strokeStyle = f.color; ctx.lineWidth = 10 * (1 - k) + 2; ctx.beginPath(); ctx.arc(f.x, f.y, f.r * (0.3 + 0.7 * k), 0, Math.PI * 2); ctx.stroke();
       ctx.fillStyle = 'rgba(160,120,70,.25)'; circle(f.x, f.y, f.r * k);
+    } else if (f.type === 'straw'){
+      ctx.fillStyle = '#f2cf7a'; ctx.strokeStyle = '#8a6a2b'; ctx.lineWidth = 1;
+      for (let i = 0; i < 8; i++){ const a = f.a0 + i * 0.8, r = 12 + k * 46; ctx.save(); ctx.translate(f.x + Math.cos(a) * r, f.y + Math.sin(a) * r * 0.7 + k * k * 30); ctx.rotate(a + k * 4); ctx.fillRect(-5, -1.5, 10, 3); ctx.restore(); }
     } else if (f.type === 'dust'){ ctx.fillStyle = 'rgba(210,180,140,.7)'; circle(f.x + (Math.random() - 0.5) * 20, f.y, 8 * (1 - k) + 2); }
     else if (f.type === 'fizzle'){ ctx.fillStyle = '#ff7b7b'; ctx.font = '800 22px "Malgun Gothic",sans-serif'; ctx.textAlign = 'center'; ctx.fillText('퓨슉…', f.x, f.y - 50 - k * 20); }
     ctx.globalAlpha = 1;
