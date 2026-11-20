@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><title>소리 엔진 테스트</title>
+<style>body{font-family:"Malgun Gothic",sans-serif;background:#0f1a14;color:#eee;padding:20px}.ok{color:#5ce08a}.no{color:#ff7b7b}</style></head>
+<body>
+<div id="out"></div>
+<script src="../magic-sfx.js"></script>
+<script>
+const out = document.getElementById('out');
+let pass = 0, fail = 0;
+function t(name, fn){
+  let ok = false, err = '';
+  try { ok = fn() === true; } catch (e) { err = e.message; }
+  if (ok) pass++; else fail++;
+  out.insertAdjacentHTML('beforeend', `<div class="${ok ? 'ok' : 'no'}">${ok ? 'PASS' : 'FAIL'} ${name}${err ? ' (' + err + ')' : ok ? '' : ' (false)'}</div>`);
+}
+t('allow: 간격', () => { const st = {a: {last: 1.0, playing: 0}}; return !MagicSfx.allow(st, 'a', {gap: 0.1}, 1.05) && MagicSfx.allow(st, 'a', {gap: 0.1}, 1.2); });
+t('allow: 동시에 max개까지', () => { const st = {a: {last: 0, playing: 3}}; return !MagicSfx.allow(st, 'a', {max: 3}, 9) && MagicSfx.allow({}, 'a', {max: 3}, 9); });
+t('play: 없는 이름·불러오기 전이면 false, 오류 없음', () => MagicSfx.play('없음') === false);
+
+out.insertAdjacentHTML('afterbegin', `<h2 id="sum">${fail ? 'FAIL' : 'ALL PASS'} — ${pass} pass, ${fail} fail</h2>`);
+</script>
+</body>
+</html>
