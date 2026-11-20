@@ -2111,10 +2111,13 @@ if (window.MagicSfx){
   document.addEventListener('pointerdown', un, true); document.addEventListener('keydown', un, true);
 }
 function renderSfx(){ const b = $('#sfxBtn'), v = $('#sfxVol'); if (!b || !window.MagicSfx) return; b.textContent = MagicSfx.muted ? '🔇' : '🔊'; b.classList.toggle('on', !MagicSfx.muted); v.value = Math.round(MagicSfx.volume * 100); v.disabled = MagicSfx.muted; }
-$('#sfxBtn').onclick = () => { if (!window.MagicSfx) return; MagicSfx.setMuted(!MagicSfx.muted); renderSfx(); if (!MagicSfx.muted) sfx('charge'); focusSpell(); };
-$('#sfxVol').oninput = e => { if (window.MagicSfx){ MagicSfx.setVolume(e.target.value / 100); renderSfx(); } };
-$('#sfxVol').onchange = () => { sfx('hit'); focusSpell(); };   // 놓으면 이 크기로 한 번 들려 줌
-renderSfx();
+// 🔊 버튼이 있을 때만 (2026-11-21 소리는 잠시 빼 둠: magic.html에서 소리 파일·버튼을 빼면 게임은 조용히 그대로 돎)
+if ($('#sfxBtn')){
+  $('#sfxBtn').onclick = () => { if (!window.MagicSfx) return; MagicSfx.setMuted(!MagicSfx.muted); renderSfx(); if (!MagicSfx.muted) sfx('charge'); focusSpell(); };
+  $('#sfxVol').oninput = e => { if (window.MagicSfx){ MagicSfx.setVolume(e.target.value / 100); renderSfx(); } };
+  $('#sfxVol').onchange = () => { sfx('hit'); focusSpell(); };   // 놓으면 이 크기로 한 번 들려 줌
+  renderSfx();
+}
 buildBook(); fit(); openPick();
 if (window.MagicArt) MagicArt.ready.then(() => { buildBook(); if (!$('#pick').hidden) buildPick(); });   // 그림이 다 오면 스킬 칸·고르기 카드에도
 try { const c = sessionStorage.getItem('magic.code'); if (c){ $('#codeInput').value = c; pickMode = 'friend'; refreshPick(); } } catch (e) {}

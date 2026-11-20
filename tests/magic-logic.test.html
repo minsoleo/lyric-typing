@@ -43,9 +43,15 @@ t('궁극기 게이지 설정이 있음 (가만히 있어도 참, 딜이 더 빨
 t('민솔님이 정한 수치 (2026-11-18)', () => {
   const sp = (c, id) => all(by(c)).find(s => s.id === id), fx = (c, id, k) => (sp(c, id).fx || []).find(f => f.kind === k).value;
   return sp('tank', 'rockwall').time === 5 && sp('tank', 'guard').time === 8 && fx('tank', 'legion', 'def') === 0.5 && fx('tank', 'legion', 'reach') > 0
-    && sp('dealer', 'gale').swing === 1.5 && sp('healer', 'sanctum').time === 10 && sp('dealer', 'throat').screen === true && sp('dealer', 'shadow').time === 15 && fx('dealer', 'shadow', 'speed') === 1
+    && sp('dealer', 'gale').swing === 1.5 && sp('healer', 'sanctum').time === 10 && sp('dealer', 'throat').screen === true && sp('dealer', 'shadow').time === 15 && fx('dealer', 'shadow', 'speed') === 0.6
     && fx('dealer', 'oath', 'atk') === 0.4 && sp('dealer', 'stopworld').time === 12
     && sp('healer', 'spring').time === 7 && sp('healer', 'spear').dmg === 20 && sp('healer', 'flash').time === 2.5 && fx('healer', 'bless', 'def') === 0.3;
+});
+t('밸런스 패치 (2026-11-21, 친구랑 해 보고)', () => {
+  const sp = (c, id) => all(by(c)).find(s => s.id === id), fx = (c, id, k) => (sp(c, id).fx || []).find(f => f.kind === k).value;
+  return by('tank').basic.dmg === 8 && sp('tank', 'chain').dmg === 15
+    && by('dealer').basic.dmg === 6 && sp('dealer', 'rush').dmg === 18 && sp('dealer', 'throat').dmg === 20 && fx('dealer', 'shadow', 'speed') === 0.6 && sp('dealer', 'oath').time === 3
+    && sp('healer', 'sprint').healAll === 30 && sp('healer', 'spring').heal === 60 && sp('healer', 'bless').heal === 40;
 });
 t('레이브 대기 시간은 원래대로, 궁극기 범위는 12초 유지', () => by('dealer').spells.map(s => s.cd).join() === '6,8,10,16,14' && by('dealer').ult.time === 12);
 t('가데온 검 이름: 강철 베기 · 검의 폭풍', () => by('tank').basic.name === '강철 베기' && by('tank').spells.some(s => s.name === '검의 폭풍'));
@@ -66,7 +72,7 @@ t('pickTarget: 마우스에 가장 가까운 적, 너무 멀면 없음', () => {
 t('wallPoints: 바라보는 방향과 수직으로 늘어섬', () => { const p = L.wallPoints({x: 0, y: 0}, {x: 1, y: 0}, 200, 50); return p.length === 5 && p.every(q => near(q.x, 0)) && near(p[0].y, -100) && near(p[4].y, 100); });
 t('busyTime: 스킬 쓰는 동안 다른 스킬 금지 시간 (은신은 0)', () => {
   const sp = (c, id) => all(by(c)).find(s => s.id === id);
-  return L.busyTime(sp('dealer', 'oath')) === 6 && L.busyTime(sp('dealer', 'shadow')) === 0 && L.busyTime(sp('healer', 'spear')) === 0
+  return L.busyTime(sp('dealer', 'oath')) === 3 && L.busyTime(sp('dealer', 'shadow')) === 0 && L.busyTime(sp('healer', 'spear')) === 0
     && near(L.busyTime(sp('dealer', 'gale')), 1.7) && L.busyTime(sp('tank', 'crash'), 0.5) === 0.5 && L.busyTime(sp('healer', 'sanctum')) === 10
     && L.busyTime({type: 'buff', time: 6, busy: 2}) === 2;
 });
