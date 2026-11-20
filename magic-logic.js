@@ -239,7 +239,13 @@
   // 구역 이름: 팀이 있으면 내 기준(우리 쪽/가운데/상대 쪽), 혼자면 팀 이름
   const zoneLabel = (side, team) => side === 'mid' ? '가운데' : team === 'red' || team === 'blue' ? (side === team ? '우리 쪽' : '상대 쪽') : side === 'red' ? '빨강 쪽' : '파랑 쪽';
 
-  window.MagicLogic = {viewOf, flipPt, flipVec, flipAng, flipRect, flipEvent, flipState, flipDummies, flipObj, zoneLabel, breaksStealth, phaseKick, canAnnounce, aheadObj, nextHost, zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
+  // 내 화면 기준(또는 맵 크기)이 바뀔 때: 옛 화면 자리 → 원래 자리 → 새 화면 자리.  a, b = {view, W, H}
+  const reView = (p, a, b) => flipPt(flipPt(p, a.view, a.W, a.H), b.view, b.W, b.H);
+  const reViewVec = (v, a, b) => flipVec(flipVec(v, a), b);
+  // 점수판: 우리 팀이 왼쪽 (파랑이면 파랑·빨강, 아니면 빨강·파랑)
+  const scoreSides = team => team === 'blue' ? ['blue', 'red'] : ['red', 'blue'];
+
+  window.MagicLogic = {reView, reViewVec, scoreSides, viewOf, flipPt, flipVec, flipAng, flipRect, flipEvent, flipState, flipDummies, flipObj, zoneLabel, breaksStealth, phaseKick, canAnnounce, aheadObj, nextHost, zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
     addEffect, effectSum, takenMult, pruneEffects, removeTag, calcDamage, inArc, pickTarget, wallPoints, gainUlt, busyTime,
     flagRate, flagPickup, newZone, zoneStep, zoneWinner};
 })();

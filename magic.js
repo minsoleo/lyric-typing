@@ -1697,33 +1697,43 @@ function choose(c){
 }
 // 맵 바꾸기: 그 맵의 허수아비·출발 자리로, 남아 있던 효과·벽은 정리
 function setMap(id){
-  if (MAP && MAP.id === id) return;
-  loadMap(id, L.viewOf(S.player.team, (MAPS[id] || MAPS.forest).sym));
+  const m = MAPS[id] || MAPS.forest;
+  if (MAP && MAP.id === m.id){ applyView(); return; }               // 같은 맵: 내 화면 기준만 맞춤
+  const a = {view: VIEW, W: WW, H: WH};
+  loadMap(m.id, L.viewOf(S.player.team, m.sym));
+  S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; S.floats = [];
+  remapWorld(a);                                                    // 먼저 와 있던 친구·깃발 자리도 새 맵 화면으로
   S.dummies = makeDummies();
-  S.shots = []; S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; S.tint = null;
   clearCharge(); S.busy = null; resetMe(); renderMapBtn();
 }
 // 팀이 바뀌어서 내 화면 기준(VIEW)이 달라지면: 같은 맵을 새 기준으로 다시 불러오고, 친구·허수아비·깃발 자리를 옮김
 function applyView(){
-  const v = L.viewOf(S.player.team, MAP.sym), old = VIEW;
-  if (v === old) return false;
-  const re = q => L.flipPt(L.flipPt(q, old, WW, WH), v, WW, WH);        // 옛 화면 → 원래 → 새 화면
-  const reVec = q => L.flipVec(L.flipVec(q, old), v);
+  const v = L.viewOf(S.player.team, MAP.sym), a = {view: VIEW, W: WW, H: WH};
+  if (v === a.view) return false;
   loadMap(MAP.id, v);
-  for (const o of S.others.values()){
-    Object.assign(o, re(o));
-    if (o.tx !== undefined){ const q = re({x: o.tx, y: o.ty}); o.tx = q.x; o.ty = q.y; }
-    if (o.face) o.face = reVec(o.face);
-    o.dash = null;
-  }
+  remapWorld(a);
+  const re = q => L.reView(q, a, {view: v, W: WW, H: WH});
   S.dummies.forEach((d, i) => {
     Object.assign(d, re(d)); const q = re({x: d.tx, y: d.ty}); d.tx = q.x; d.ty = q.y;
     if (MDUMMIES[i]){ d.baseX = MDUMMIES[i][0]; d.baseY = MDUMMIES[i][1]; }
-    d.pull = null;
+    d.dir = L.reViewVec({x: d.dir, y: 0}, a.view, v).x;            // 좌우로 걷던 방향도 화면에 맞게
+    d.pull = null; d.lastX = d.lastY = undefined;
   });
-  for (const o of [obj, heldObj]) if (o && o.flag) Object.assign(o.flag, re(o.flag));
-  S.shots = []; S.fx = []; S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; S.tint = null;
   return true;
+}
+// 내 화면 기준이나 맵이 바뀐 뒤: 친구·깃발·남아 있는 바위벽/샘/성역/장판/떠 있는 글씨를 새 화면 자리로 (a = 옛 {view, W, H})
+function remapWorld(a){
+  const b = {view: VIEW, W: WW, H: WH}, at = q => Object.assign(q, L.reView(q, a, b));
+  for (const o of S.others.values()){
+    at(o);
+    if (o.tx !== undefined){ const q = L.reView({x: o.tx, y: o.ty}, a, b); o.tx = q.x; o.ty = q.y; }
+    if (o.face) o.face = L.reViewVec(o.face, a.view, b.view);
+    if (o.look) o.look = L.reViewVec({x: o.look, y: 0}, a.view, b.view).x;
+    o.dash = null; o.lastX = o.lastY = undefined;                  // 옮긴 거리를 '달렸다'로 보지 않게 (돌진 꼬리 X)
+  }
+  for (const o of new Set([obj, heldObj])) if (o && o.flag) at(o.flag);
+  S.walls.forEach(w => w.pts.forEach(at)); S.zones.forEach(at); S.sanctums.forEach(at); S.fields.forEach(at); S.floats.forEach(at);
+  S.shots = []; S.fx = []; S.tint = null;                          // 날아가던 공격·짧은 효과는 정리
 }
 // 🗺 혼자 연습에서 맵 고르기 (온라인에서는 방장이 고른 모드를 따라감)
 function renderMapBtn(){ const b = $('#mapBtn'); if (b) b.textContent = MAP.id === 'wide' ? '🗺 넓은 맵' : '🗺 숲 맵'; }
@@ -2010,10 +2020,11 @@ function showResult(){
   $('#resTitle').style.color = win ? TEAMS[win].color : '#ffd84a';
   const unit = mmode() === 'zone' ? '🔒 ' : '';
   $('#resScore').innerHTML = (match.why === 'left' ? '<small>상대 팀이 모두 나갔어요</small><br>' : '') + (mmode() === 'zone' ? '<small>완전 점령한 구역</small><br>' : mmode() === 'flag' ? '<small>깃발 점수</small><br>' : '')
-    + `<span style="color:${TEAMS.red.color}">빨강 ${unit}${red}</span> : <span style="color:${TEAMS.blue.color}">${unit}${blue} 파랑</span>`;
+    + (([lt, rt]) => `<span style="color:${TEAMS[lt].color}">${TEAMS[lt].name.slice(0, 2)} ${unit}${score(lt)}</span> : <span style="color:${TEAMS[rt].color}">${unit}${score(rt)} ${TEAMS[rt].name.slice(0, 2)}</span>`)(L.scoreSides(S.player.team));
   const rows = [{id: net.pid, name: net.name, team: S.player.team, cls, k: S.stats.kills, de: S.stats.deaths, dm: Math.round(S.stats.dmg)}].concat(others());
-  rows.sort((a, b) => (a.team === b.team ? 0 : a.team === 'red' ? -1 : 1) || b.k - a.k || b.dm - a.dm);
-  const mvp = rows.slice().sort((a, b) => b.k - a.k || b.dm - a.dm)[0];
+  const first = L.scoreSides(S.player.team)[0];                     // 우리 팀 먼저
+  rows.sort((a, b) => (a.team === b.team ? 0 : a.team === first ? -1 : 1) || b.k - a.k || b.dm - a.dm);
+  const mvp = rows.slice().sort((a, b) => b.k - a.k || b.dm - a.dm || (a.id < b.id ? -1 : 1))[0];   // 같으면 아이디 순 → 모든 화면에서 같은 MVP
   $('#resRows').innerHTML = rows.map(o => `<tr style="--tc:${TEAMS[o.team] ? TEAMS[o.team].color : '#fff'}"><td><i></i>${o === mvp ? '👑 ' : ''}${esc(o.name)}${o.id === net.pid ? ' (나)' : ''}</td>`
     + `<td>${o.cls ? o.cls.icon + ' ' + o.cls.name : ''}</td><td>${o.k || 0}</td><td>${o.de || 0}</td><td>${o.dm || 0}</td></tr>`).join('');
   $('#resMvp').textContent = mvp ? `🏅 MVP: ${mvp.name} (쓰러뜨림 ${mvp.k || 0}, 준 피해 ${mvp.dm || 0})` : '';
@@ -2040,11 +2051,12 @@ function drawMatchHud(){
   ctx.strokeStyle = 'rgba(255,216,74,.6)'; ctx.lineWidth = 2; ctx.stroke();
   ctx.font = '800 13px "Malgun Gothic",sans-serif';
   const tl = mmode() === 'zone' ? ' 🔒' : '';
-  ctx.fillStyle = TEAMS.red.color; ctx.fillText('빨강 팀' + tl, x + 52, y + 20);
-  ctx.fillStyle = TEAMS.blue.color; ctx.fillText('파랑 팀' + tl, x + w - 52, y + 20);
+  const [lt, rt] = L.scoreSides(S.player.team);                    // 우리 팀이 왼쪽 (구역 칸 '우리 쪽'과 같은 쪽)
+  ctx.fillStyle = TEAMS[lt].color; ctx.fillText(TEAMS[lt].name + tl, x + 52, y + 20);
+  ctx.fillStyle = TEAMS[rt].color; ctx.fillText(TEAMS[rt].name + tl, x + w - 52, y + 20);
   ctx.font = '400 32px "Black Han Sans","Malgun Gothic",sans-serif';
-  ctx.fillStyle = TEAMS.red.color; ctx.fillText(String(score('red')), x + 52, y + 54);
-  ctx.fillStyle = TEAMS.blue.color; ctx.fillText(String(score('blue')), x + w - 52, y + 54);
+  ctx.fillStyle = TEAMS[lt].color; ctx.fillText(String(score(lt)), x + 52, y + 54);
+  ctx.fillStyle = TEAMS[rt].color; ctx.fillText(String(score(rt)), x + w - 52, y + 54);
   if (mmode() === 'zone'){                              // 🏳 시간 대신 구역 3칸 (내 화면에서 왼쪽에 있는 구역부터 → 우리 쪽이 왼쪽)
     const zs = (obj && obj.zones) || [], order = MZONES ? [0, 1, 2].sort((a, b) => MZONES[a].x - MZONES[b].x) : [0, 1, 2];
     for (let k = 0; k < 3; k++){

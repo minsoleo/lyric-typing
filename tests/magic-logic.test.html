@@ -219,6 +219,17 @@ t('flipState·flipDummies·flipObj', () => {
 });
 t('zoneLabel: 내 팀 기준 / 혼자면 팀 이름', () => L.zoneLabel('red', 'red') === '우리 쪽' && L.zoneLabel('red', 'blue') === '상대 쪽' && L.zoneLabel('mid', 'blue') === '가운데'
   && L.zoneLabel('blue', 'solo') === '파랑 쪽' && L.zoneLabel('red', 'solo') === '빨강 쪽');
+t('reView: 옛 화면(맵 크기·기준) → 새 화면 자리', () => {
+  const a = L.reView({x: 2500, y: 900}, {view: 'x', W: 3200, H: 1800}, {view: 'x', W: 4800, H: 2400});   // 숲 맵 파랑 화면 → 넓은 맵 파랑 화면 (원래 700)
+  const b = L.reView({x: 700, y: 900}, {view: null, W: 3200, H: 1800}, {view: 'x', W: 3200, H: 1800});   // 빨강 → 파랑
+  const c = L.reView({x: 100, y: 50}, {view: 'xy', W: 1000, H: 600}, {view: 'xy', W: 1000, H: 600});
+  const v = L.reViewVec({x: 1, y: 2}, 'x', null), w = L.reViewVec({x: 1, y: 2}, 'x', 'x');
+  return a.x === 4100 && a.y === 900 && b.x === 2500 && b.y === 900 && c.x === 100 && c.y === 50 && v.x === -1 && v.y === 2 && w.x === 1 && w.y === 2;
+});
+t('scoreSides: 우리 팀 점수가 왼쪽', () => {
+  const b = L.scoreSides('blue'), r = L.scoreSides('red'), s = L.scoreSides('solo');
+  return b[0] === 'blue' && b[1] === 'red' && r[0] === 'red' && r[1] === 'blue' && s[0] === 'red' && s[1] === 'blue';
+});
 
 out.insertAdjacentHTML('afterbegin', `<h2 id="sum">${fail ? 'FAIL' : 'ALL PASS'} — ${pass} pass, ${fail} fail</h2>`);
 </script>
