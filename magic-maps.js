@@ -14,7 +14,7 @@ const pond = (x, y, w, h) => ({x, y, w, h, kind: 'pond'});
 window.MAGIC_MAPS = {
   // 🌳 숲 맵: ⚔ 킬내기전 · 혼자 연습 기본
   forest: {
-    id: 'forest', name: '숲 맵', W: 3200, H: 1800,
+    id: 'forest', name: '숲 맵', W: 3200, H: 1800, sym: 'x',   // sym: 파랑 팀은 좌우를 뒤집어 봄 (팀마다 같은 화면)
     left: [
       // 숨을 곳은 적게: 왼쪽 절반에 나무 7그루 · 바위 4개를 맵 전체에 고르게 (위 · 길가 · 아래)
       tree(300, 300), tree(800, 250, 90), tree(1250, 330),
@@ -32,7 +32,7 @@ window.MAGIC_MAPS = {
   },
   // 🏞 넓은 맵: 🚩 깃발쟁 · 🏳 점령전 (가운데 깃발 / 구역 3곳이 흙길 위에 한 줄로)
   wide: {
-    id: 'wide', name: '넓은 맵', W: 4800, H: 2400,
+    id: 'wide', name: '넓은 맵', W: 4800, H: 2400, sym: 'x',
     left: [
       // 위
       tree(350, 350), tree(900, 250, 90), tree(1500, 380), tree(2000, 220, 90),
@@ -52,7 +52,7 @@ window.MAGIC_MAPS = {
     dummies: [[1300, 850], [3500, 850], [2400, 800]],
     decorSeed: 20261119, decorCount: 420,
     flag: {x: 2400, y: 1200},
-    zones: [{x: 1300, y: 1200, r: 200}, {x: 2400, y: 1200, r: 200}, {x: 3500, y: 1200, r: 200}]
+    zones: [{x: 1300, y: 1200, r: 200, side: 'red'}, {x: 2400, y: 1200, r: 200, side: 'mid'}, {x: 3500, y: 1200, r: 200, side: 'blue'}]   // side: 어느 팀 쪽 구역인지
   }
 };
 })();

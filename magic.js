@@ -43,10 +43,13 @@ applyTheme();
    setMap(id)로 바꾸면 크기·장애물·장식·출발 자리·허수아비·작은 지도가 모두 그 맵 기준으로 바뀜 */
 const MAPS = window.MAGIC_MAPS;
 let MAP, WW, WH, OBSTACLES, WALLS, BLOCKERS, DECOR, SPAWN, mmBg = null;
+// 팀마다 같은 화면: VIEW = 내 화면이 원래 맵을 어떻게 뒤집었는지 (null | 'x' | 'xy'). 파랑 팀만 뒤집음.
+// 게임은 전부 '내 화면 좌표'로 돌고, 친구와 주고받을 때만 원래 좌표로 바꿈. 아래 M… 값은 내 화면 기준 자리
+let VIEW = null, MZONES = null, MFLAG = null, MDUMMIES = [], MPATH = [];
 const mirror = o => Object.assign({}, o, {x: WW - o.x - o.w});
 const tracePath = g => {                                   // 흙길: 곡선 조각들을 이어서
-  g.beginPath(); g.moveTo(MAP.path[0][0], MAP.path[0][1]);
-  for (const q of MAP.path) g.bezierCurveTo(q[2], q[3], q[4], q[5], q[6], q[7]);
+  g.beginPath(); g.moveTo(MPATH[0][0], MPATH[0][1]);
+  for (const q of MPATH) g.bezierCurveTo(q[2], q[3], q[4], q[5], q[6], q[7]);
 };
 // 꾸미기(풀·꽃·버섯·덤불): 부딪히지 않음. 매번 같은 자리에 나오게 정해진 난수 사용
 function buildDecor(){
@@ -59,13 +62,21 @@ function buildDecor(){
   }
   return out;
 }
-function loadMap(id){
-  MAP = MAPS[id] || MAPS.forest; WW = MAP.W; WH = MAP.H; SPAWN = MAP.spawn;
-  OBSTACLES = MAP.left.concat(MAP.left.map(mirror), MAP.center);
+function loadMap(id, view){
+  MAP = MAPS[id] || MAPS.forest; WW = MAP.W; WH = MAP.H; VIEW = view || null;
+  const fp = q => L.flipPt(q, VIEW, WW, WH);
+  OBSTACLES = MAP.left.concat(MAP.left.map(mirror), MAP.center);   // 원래 좌표로 만들고 (장식이 장애물을 피하게)
+  DECOR = buildDecor().map(d => Object.assign(d, fp(d)));
+  OBSTACLES = OBSTACLES.map(o => L.flipRect(o, VIEW, WW, WH));      // 내 화면 기준으로 뒤집기
   WALLS = OBSTACLES; BLOCKERS = OBSTACLES.filter(o => o.kind !== 'pond');
-  DECOR = buildDecor(); mmBg = null;
+  SPAWN = {}; for (const k in MAP.spawn) SPAWN[k] = fp(MAP.spawn[k]);
+  MZONES = MAP.zones ? MAP.zones.map(z => Object.assign({}, z, fp(z))) : null;   // 번호(순서)는 원래 그대로
+  MFLAG = MAP.flag ? fp(MAP.flag) : null;
+  MDUMMIES = MAP.dummies.map(d => { const q = fp({x: d[0], y: d[1]}); return [q.x, q.y]; });
+  MPATH = MAP.path.map(c => { const o = []; for (let i = 0; i < 8; i += 2){ const q = fp({x: c[i], y: c[i + 1]}); o.push(q.x, q.y); } return o; });
+  mmBg = null;
 }
-loadMap('forest');
+loadMap('forest', null);
 
 /* ---------- 게임 상태 ---------- */
 const now = () => performance.now() / 1000;
@@ -108,7 +119,7 @@ function makePlayer(c, team){
     frozenUntil: 0, frozenKind: 'stun', deadUntil: 0, target: null, dash: null, flurry: null, backAt: null, pull: null, swingAt: -9, swings: 0,
     stealthUntil: 0, stealthTag: null, fx: [], face: {x: team === 'blue' ? -1 : 1, y: 0}};
 }
-const makeDummies = () => MAP.dummies.map((d, i) => makeDummy(d[0], d[1], i));   // 왼쪽·오른쪽·가운데 (대칭)
+const makeDummies = () => MDUMMIES.map((d, i) => makeDummy(d[0], d[1], i));   // 왼쪽·오른쪽·가운데 (대칭, 내 화면 기준 자리)
 S.dummies = makeDummies();
 S.player = makePlayer(cls, 'solo');
 let cam = L.camFollow(S.player, VW, VH, WW, WH);
@@ -1406,7 +1417,7 @@ function drawMinimap(){
   ctx.restore();
   ctx.strokeStyle = 'rgba(255,255,255,.25)'; ctx.lineWidth = 1.5; roundRect(mx, my, mw, mh, 8); ctx.stroke();
   // 🏳 점령 구역: 주인 팀 색 원
-  if (mmode() === 'zone' && inMatch() && obj && obj.zones) MAP.zones.forEach((a, i) => {
+  if (mmode() === 'zone' && inMatch() && obj && obj.zones) MZONES.forEach((a, i) => {
     const z = obj.zones[i]; if (!z) return;
     ctx.fillStyle = z.own ? TEAMS[z.own].color : 'rgba(255,255,255,.6)'; ctx.globalAlpha = z.lock ? 0.95 : 0.6;
     ctx.beginPath(); ctx.arc(mx + a.x * k, my + a.y * k, Math.max(5, a.r * k), 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
@@ -1453,12 +1464,12 @@ function draw(){
 
 /* ---------- 🚩 깃발 · 🏳 점령 구역 그리기 ---------- */
 // 지금 맵에 보일 것: 온라인이면 방 모드, 혼자면 넓은 맵에서 둘 다 (구경용)
-const objMode = () => net ? (inMatch() ? mmode() : gmode) : (MAP.zones ? 'both' : null);
+const objMode = () => net ? (inMatch() ? mmode() : gmode) : (MZONES ? 'both' : null);
 function drawObjectives(t){
   const om = objMode(); if (!om || om === 'kill') return;
   const live = inMatch() && obj;                       // 대결 중이면 진짜 상태, 아니면 흐리게 (구경용)
-  if ((om === 'zone' || om === 'both') && MAP.zones) for (let i = 0; i < MAP.zones.length; i++) drawZone(MAP.zones[i], live && obj.zones ? obj.zones[i] : null, t);
-  if ((om === 'flag' || om === 'both') && MAP.flag && !(live && obj.flag)) drawFlag(MAP.flag.x, MAP.flag.y, null, t, 0.35);
+  if ((om === 'zone' || om === 'both') && MZONES) for (let i = 0; i < MZONES.length; i++) drawZone(MZONES[i], live && obj.zones ? obj.zones[i] : null, t);
+  if ((om === 'flag' || om === 'both') && MFLAG && !(live && obj.flag)) drawFlag(MFLAG.x, MFLAG.y, null, t, 0.35);
   if (om === 'flag' && live && obj.flag && !obj.flag.by){            // 바닥에 떨어진 깃발: 빛나는 고리 + 둥실
     const f = obj.flag, k = 0.5 + Math.sin(t * 4) * 0.5;
     ctx.strokeStyle = `rgba(255,216,74,${0.35 + k * 0.4})`; ctx.lineWidth = 4; ctx.beginPath(); ctx.ellipse(f.x, f.y + 4, FLAG_PICK, FLAG_PICK * 0.45, 0, 0, Math.PI * 2); ctx.stroke();
@@ -1678,10 +1689,32 @@ function choose(c){
 // 맵 바꾸기: 그 맵의 허수아비·출발 자리로, 남아 있던 효과·벽은 정리
 function setMap(id){
   if (MAP && MAP.id === id) return;
-  loadMap(id);
+  loadMap(id, L.viewOf(S.player.team, (MAPS[id] || MAPS.forest).sym));
   S.dummies = makeDummies();
   S.shots = []; S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; S.tint = null;
   clearCharge(); S.busy = null; resetMe(); renderMapBtn();
+}
+// 팀이 바뀌어서 내 화면 기준(VIEW)이 달라지면: 같은 맵을 새 기준으로 다시 불러오고, 친구·허수아비·깃발 자리를 옮김
+function applyView(){
+  const v = L.viewOf(S.player.team, MAP.sym), old = VIEW;
+  if (v === old) return false;
+  const re = q => L.flipPt(L.flipPt(q, old, WW, WH), v, WW, WH);        // 옛 화면 → 원래 → 새 화면
+  const reVec = q => L.flipVec(L.flipVec(q, old), v);
+  loadMap(MAP.id, v);
+  for (const o of S.others.values()){
+    Object.assign(o, re(o));
+    if (o.tx !== undefined){ const q = re({x: o.tx, y: o.ty}); o.tx = q.x; o.ty = q.y; }
+    if (o.face) o.face = reVec(o.face);
+    o.dash = null;
+  }
+  S.dummies.forEach((d, i) => {
+    Object.assign(d, re(d)); const q = re({x: d.tx, y: d.ty}); d.tx = q.x; d.ty = q.y;
+    if (MDUMMIES[i]){ d.baseX = MDUMMIES[i][0]; d.baseY = MDUMMIES[i][1]; }
+    d.pull = null;
+  });
+  for (const o of [obj, heldObj]) if (o && o.flag) Object.assign(o.flag, re(o.flag));
+  S.shots = []; S.fx = []; S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; S.tint = null;
+  return true;
 }
 // 🗺 혼자 연습에서 맵 고르기 (온라인에서는 방장이 고른 모드를 따라감)
 function renderMapBtn(){ const b = $('#mapBtn'); if (b) b.textContent = MAP.id === 'wide' ? '🗺 넓은 맵' : '🗺 숲 맵'; }
@@ -1744,7 +1777,7 @@ function startNet(conn){
   net.on.host = () => { renderRoomBar(); if (net && net.isHost()) for (const d of S.dummies){ d.nextShot = 0; } };
   S.others.clear(); S.shots = []; S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; S.feed = []; S.tint = null;
   S.player.team = net.created ? 'red' : 'blue';           // 처음엔 방장 빨강, 들어온 친구 파랑 (언제든 바꿀 수 있음)
-  resetMe(); clearCharge(); S.busy = null;
+  applyView(); resetMe(); clearCharge(); S.busy = null;
   for (const d of S.dummies) Object.assign(d, {hp: d.max, deadUntil: 0, fx: [], pull: null, x: d.baseX, y: d.baseY, tx: d.baseX, ty: d.baseY});
   try { sessionStorage.setItem('magic.code', net.code); } catch (e) {}
   document.body.classList.add('online');
@@ -1758,7 +1791,7 @@ async function leaveNet(){
   let solo = 'forest'; try { const m = localStorage.getItem('magic.map'); if (m && MAPS[m]) solo = m; } catch (e) {}
   setMap(solo);                                       // 혼자 연습 때 고른 맵으로
   S.others.clear(); S.shots = []; S.zones = []; S.walls = []; S.sanctums = []; S.fields = []; S.feed = []; S.tint = null;
-  S.player.team = 'solo'; resetMe(); clearCharge(); S.busy = null;
+  S.player.team = 'solo'; applyView(); resetMe(); clearCharge(); S.busy = null;
   try { sessionStorage.removeItem('magic.code'); } catch (e) {}
   document.body.classList.remove('online');
   $('#subTitle').textContent = '연습판';
@@ -1771,7 +1804,7 @@ window.addEventListener('pagehide', () => { if (net) net.leave(); });
 function setTeam(team){
   if (!net || S.player.team === team) return;
   if (inMatch()){ castMsg('대결 중에는 팀을 못 바꿔요', 'wait'); return; }
-  S.player.team = team; resetMe(); clearCharge(); S.busy = null;
+  S.player.team = team; applyView(); resetMe(); clearCharge(); S.busy = null;
   castMsg(`${TEAMS[team].name}이 됐어요!`, 'good'); renderTeamBtns(); renderRoomBar(); focusSpell();
 }
 $('#teamRed').onclick = () => setTeam('red');
@@ -1872,7 +1905,7 @@ function flagTick(dt){
 const warSaid = [], WAR_GAP = 6;                    // 같은 구역 '전쟁 중' 소식은 6초에 한 번만 (가장자리에 걸쳐 서 있을 때)
 function zoneTick(dt){
   const ps = people().filter(q => !q.dead);              // 살아 있는 사람만 셈 (그림자 은신 중이어도 셈)
-  obj.zones = MAP.zones.map((a, i) => {
+  obj.zones = MZONES.map((a, i) => {
     const prev = obj.zones[i] || L.newZone(), inside = ps.filter(q => Math.hypot(q.x - a.x, q.y - a.y) <= a.r);
     const z = L.zoneStep(prev, inside.filter(q => q.team === 'red').length, inside.filter(q => q.team === 'blue').length, dt, ZONE_RATE);
     if (z.war && !prev.war && L.canAnnounce(warSaid[i], now(), WAR_GAP) && (warSaid[i] = now())) announce(`⚔ ${ZNAME[i]} 구역에서 전쟁 중!`, '#ffd84a');
@@ -1951,7 +1984,7 @@ function startMatch(){
   const len = +$('#matchLen').value || 180, start = net.serverNow() + 3500, m = {id: 'm' + Math.random().toString(36).slice(2, 8), mode: gmode, startAt: start, len, score: {red: 0, blue: 0}};
   if (gmode === 'zone') delete m.len; else m.endAt = start + len * 1000;   // 점령전: 제한 시간 없음
   // 깃발쟁·점령전: 방장이 처음 상태를 먼저 올림 (킬내기전은 없음)
-  net.publishObj(gmode === 'flag' ? {mid: m.id, flag: {x: MAP.flag.x, y: MAP.flag.y, by: null}, score: {red: 0, blue: 0}} : gmode === 'zone' ? {mid: m.id, zones: MAP.zones.map(() => L.newZone())} : null);   // mid: 어느 판의 점수판인지
+  net.publishObj(gmode === 'flag' ? {mid: m.id, flag: {x: MFLAG.x, y: MFLAG.y, by: null}, score: {red: 0, blue: 0}} : gmode === 'zone' ? {mid: m.id, zones: MZONES.map(() => L.newZone())} : null);   // mid: 어느 판의 점수판인지
   net.setMatch(m);
 }
 $('#matchBtn').onclick = startMatch;
@@ -2037,5 +2070,5 @@ try { const c = sessionStorage.getItem('magic.code'); if (c){ $('#codeInput').va
 requestAnimationFrame(loop);
 
 window.__magic = {get obj(){ return obj; }, set zoneRate(v){ ZONE_RATE = v; }, get zoneRate(){ return ZONE_RATE; }, people: () => net ? people() : [], S, mouse, submitSpell, rightClick, choose, CLASSES, get OBSTACLES(){ return OBSTACLES; }, get map(){ return MAP; }, setMap, get mmBg(){ return mmBg; }, step(){ update(); draw(); updateHud(); }, get cls(){ return cls; }, get cam(){ return cam; },
-  get unlimited(){ return unlimited; }, setUnlimited(v){ unlimited = !!v; applyUnlimited(); }, get net(){ return net; }, get hiddenFor(){ return hiddenFor; }, setTeam, leaveNet, startMatch, get match(){ return match; }, phase};
+  get unlimited(){ return unlimited; }, setUnlimited(v){ unlimited = !!v; applyUnlimited(); }, get net(){ return net; }, get VIEW(){ return VIEW; }, get SPAWN(){ return SPAWN; }, get MZONES(){ return MZONES; }, get hiddenFor(){ return hiddenFor; }, setTeam, leaveNet, startMatch, get match(){ return match; }, phase};
 })();
