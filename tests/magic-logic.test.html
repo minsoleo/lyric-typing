@@ -231,6 +231,10 @@ t('scoreSides: 우리 팀 점수가 왼쪽', () => {
   return b[0] === 'blue' && b[1] === 'red' && r[0] === 'red' && r[1] === 'blue' && s[0] === 'red' && s[1] === 'blue';
 });
 
+t('hearGain: 가까우면 그대로, 멀면 작게, 아주 멀거나 숨은 상대면 0', () =>
+  L.hearGain(0, false) === 1 && L.hearGain(700, false) === 1 && Math.abs(L.hearGain(1150, false) - 0.5) < 1e-9
+  && L.hearGain(1600, false) === 0 && L.hearGain(5000, false) === 0 && L.hearGain(100, true) === 0);
+t('flipEvent: snd 자리도 뒤집음', () => { const e = L.flipEvent({k: 'snd', s: 'chain', x: 100, y: 50}, 'x', 1000, 600); return e.x === 900 && e.y === 50 && e.s === 'chain'; });
 out.insertAdjacentHTML('afterbegin', `<h2 id="sum">${fail ? 'FAIL' : 'ALL PASS'} — ${pass} pass, ${fail} fail</h2>`);
 </script>
 </body>

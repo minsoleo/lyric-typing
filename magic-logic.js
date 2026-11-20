@@ -223,7 +223,7 @@
       case 'fx': { if (!ev.v) return ev; const v = withPt(ev.v, view, W, H); if (typeof ev.v.a === 'number') v.a = flipAng(ev.v.a, view); return Object.assign({}, ev, {v}); }
       case 'shot': { if (!ev.s) return ev; const d = flipVec({x: ev.s.vx, y: ev.s.vy}, view); return Object.assign({}, ev, {s: Object.assign(withPt(ev.s, view, W, H), {vx: d.x, vy: d.y})}); }
       case 'wall': return Object.assign({}, ev, {pts: (ev.pts || []).map(q => withPt(q, view, W, H))});
-      case 'field': case 'zone': case 'sanc': return withPt(ev, view, W, H);
+      case 'field': case 'zone': case 'sanc': case 'snd': return withPt(ev, view, W, H);
       case 'hit': return ev.pl ? Object.assign({}, ev, {pl: withPt(ev.pl, view, W, H)}) : ev;
       default: return ev;
     }
@@ -245,7 +245,11 @@
   // 점수판: 우리 팀이 왼쪽 (파랑이면 파랑·빨강, 아니면 빨강·파랑)
   const scoreSides = team => team === 'blue' ? ['blue', 'red'] : ['red', 'blue'];
 
-  window.MagicLogic = {reView, reViewVec, scoreSides, viewOf, flipPt, flipVec, flipAng, flipRect, flipEvent, flipState, flipDummies, flipObj, zoneLabel, breaksStealth, phaseKick, canAnnounce, aheadObj, nextHost, zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
+  // 🔊 다른 사람 소리 크기: SOUND_NEAR까지 그대로, SOUND_FAR부터 안 들림, 사이는 직선으로 / 숨은 상대(은신)는 0
+  const SOUND_NEAR = 700, SOUND_FAR = 1600;
+  const hearGain = (d, hidden) => hidden || d >= SOUND_FAR ? 0 : d <= SOUND_NEAR ? 1 : (SOUND_FAR - d) / (SOUND_FAR - SOUND_NEAR);
+
+  window.MagicLogic = {SOUND_NEAR, SOUND_FAR, hearGain, reView, reViewVec, scoreSides, viewOf, flipPt, flipVec, flipAng, flipRect, flipEvent, flipState, flipDummies, flipObj, zoneLabel, breaksStealth, phaseKick, canAnnounce, aheadObj, nextHost, zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
     addEffect, effectSum, takenMult, pruneEffects, removeTag, calcDamage, inArc, pickTarget, wallPoints, gainUlt, busyTime,
     flagRate, flagPickup, newZone, zoneStep, zoneWinner};
 })();
