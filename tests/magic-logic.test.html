@@ -191,6 +191,35 @@ t('nextHost: 소식이 살아 있는 사람 중 가장 먼저 들어온 사람 (
 t('breaksStealth: 피해를 받거나 사슬에 끌려오면 은신이 풀림, 느려짐만은 안 풀림', () =>
   L.breaksStealth({}, 5) && L.breaksStealth({pull: {x: 1, y: 2}}, 0) && !L.breaksStealth({}, 0) && !L.breaksStealth({slow: {v: 0.3, t: 2}}, 0));
 
+// ---------- 2026-11-20: 팀마다 같은 화면 (파랑 팀은 맵을 뒤집어 봄) ----------
+t('viewOf: 파랑만 뒤집음', () => L.viewOf('blue', 'x') === 'x' && L.viewOf('red', 'x') === null && L.viewOf('solo', 'xy') === null && L.viewOf('blue', null) === null);
+t('flipPt/flipVec/flipAng: 좌우·180도', () => {
+  const a = L.flipPt({x: 100, y: 50}, 'x', 1000, 600), b = L.flipPt({x: 100, y: 50}, 'xy', 1000, 600), c = L.flipPt({x: 100, y: 50}, null, 1000, 600);
+  const v = L.flipVec({x: 1, y: 2}, 'x'), w = L.flipVec({x: 1, y: 2}, 'xy');
+  return a.x === 900 && a.y === 50 && b.x === 900 && b.y === 550 && c.x === 100 && c.y === 50 && v.x === -1 && v.y === 2 && w.x === -1 && w.y === -2
+    && Math.abs(L.flipAng(0, 'x') - Math.PI) < 1e-9 && Math.abs(L.flipAng(Math.PI / 2, 'x') - Math.PI / 2) < 1e-9 && Math.abs(L.flipAng(0, 'xy') - Math.PI) < 1e-9 && L.flipAng(1, null) === 1;
+});
+t('flipRect: 왼쪽 위 기준 사각형', () => { const r = L.flipRect({x: 100, y: 50, w: 80, h: 40, kind: 'tree'}, 'xy', 1000, 600); return r.x === 820 && r.y === 510 && r.w === 80 && r.kind === 'tree'; });
+t('flipEvent: 위치·방향이 든 신호만 뒤집고, 두 번 뒤집으면 원래대로', () => {
+  const W = 1000, H = 600, evs = [
+    {k: 'fx', v: {type: 'swing', x: 100, y: 50, a: 0.5, r: 90}}, {k: 'shot', s: {x: 100, y: 50, vx: 10, vy: -5, r: 12}},
+    {k: 'wall', pts: [{x: 10, y: 20}, {x: 30, y: 40}]}, {k: 'field', x: 100, y: 50, r: 300}, {k: 'zone', x: 100, y: 50}, {k: 'sanc', x: 100, y: 50},
+    {k: 'hit', to: 'p1', d: 10, pl: {x: 100, y: 50}}, {k: 'heal', to: 'p1', a: 5}];
+  const f = evs.map(e => L.flipEvent(e, 'x', W, H));
+  const back = f.map(e => L.flipEvent(e, 'x', W, H));
+  return f[0].v.x === 900 && Math.abs(f[0].v.a - (Math.PI - 0.5)) < 1e-9 && f[0].v.r === 90 && f[1].s.x === 900 && f[1].s.vx === -10 && f[1].s.vy === -5
+    && f[2].pts[1].x === 970 && f[3].x === 900 && f[3].r === 300 && f[4].x === 900 && f[5].x === 900 && f[6].pl.x === 900 && f[6].d === 10 && f[7].a === 5
+    && JSON.stringify(back) === JSON.stringify(evs) && evs[0].v.x === 100 && L.flipEvent(evs[0], null, W, H) === evs[0];
+});
+t('flipState·flipDummies·flipObj', () => {
+  const s = L.flipState({x: 100, y: 50, fa: [1, 0], hp: 9}, 'x', 1000, 600), d = L.flipDummies([[100, 50, 30, 0], [200, 60, 10, 1]], 'x', 1000, 600);
+  const o = L.flipObj({mid: 'm1', flag: {x: 100, y: 50, by: 'p1'}, score: {red: 2}}, 'x', 1000, 600), z = L.flipObj({zones: [1]}, 'x', 1000, 600);
+  return s.x === 900 && s.fa[0] === -1 && s.hp === 9 && d[0][0] === 900 && d[0][2] === 30 && d[1][0] === 800 && o.flag.x === 900 && o.flag.by === 'p1' && o.score.red === 2 && o.mid === 'm1'
+    && z.zones[0] === 1 && L.flipObj(null, 'x', 1000, 600) === null;
+});
+t('zoneLabel: 내 팀 기준 / 혼자면 팀 이름', () => L.zoneLabel('red', 'red') === '우리 쪽' && L.zoneLabel('red', 'blue') === '상대 쪽' && L.zoneLabel('mid', 'blue') === '가운데'
+  && L.zoneLabel('blue', 'solo') === '파랑 쪽' && L.zoneLabel('red', 'solo') === '빨강 쪽');
+
 out.insertAdjacentHTML('afterbegin', `<h2 id="sum">${fail ? 'FAIL' : 'ALL PASS'} — ${pass} pass, ${fail} fail</h2>`);
 </script>
 </body>

@@ -205,7 +205,41 @@
   // 그림자 은신이 풀리는 맞기: 피해를 받거나(방패로 막아도) 사슬에 끌려올 때 (느려짐·나약함만 걸리면 그대로)
   const breaksStealth = (o, out) => out > 0 || !!(o && o.pull);
 
-  window.MagicLogic = {breaksStealth, phaseKick, canAnnounce, aheadObj, nextHost, zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
+  /* ---------- 팀마다 같은 화면: 파랑 팀은 맵을 뒤집어 봄 ----------
+     view: null(안 뒤집음) | 'x'(좌우) | 'xy'(180도). 두 번 뒤집으면 원래대로라서 보낼 때·받을 때 같은 함수를 씀 */
+  const viewOf = (team, sym) => team === 'blue' && sym ? sym : null;
+  const flipPt = (p, view, W, H) => ({x: view ? W - p.x : p.x, y: view === 'xy' ? H - p.y : p.y});
+  const flipVec = (v, view) => ({x: view ? -v.x : v.x, y: view === 'xy' ? -v.y : v.y});
+  function flipAng(a, view){
+    if (view === 'x') return Math.PI - a;
+    if (view === 'xy'){ const b = a + Math.PI; return b > Math.PI ? a - Math.PI : b; }
+    return a;
+  }
+  const flipRect = (o, view, W, H) => Object.assign({}, o, {x: view ? W - o.x - o.w : o.x, y: view === 'xy' ? H - o.y - o.h : o.y});
+  const withPt = (o, view, W, H) => Object.assign({}, o, flipPt(o, view, W, H));
+  function flipEvent(ev, view, W, H){
+    if (!view || !ev) return ev;
+    switch (ev.k){
+      case 'fx': { if (!ev.v) return ev; const v = withPt(ev.v, view, W, H); if (typeof ev.v.a === 'number') v.a = flipAng(ev.v.a, view); return Object.assign({}, ev, {v}); }
+      case 'shot': { if (!ev.s) return ev; const d = flipVec({x: ev.s.vx, y: ev.s.vy}, view); return Object.assign({}, ev, {s: Object.assign(withPt(ev.s, view, W, H), {vx: d.x, vy: d.y})}); }
+      case 'wall': return Object.assign({}, ev, {pts: (ev.pts || []).map(q => withPt(q, view, W, H))});
+      case 'field': case 'zone': case 'sanc': return withPt(ev, view, W, H);
+      case 'hit': return ev.pl ? Object.assign({}, ev, {pl: withPt(ev.pl, view, W, H)}) : ev;
+      default: return ev;
+    }
+  }
+  function flipState(st, view, W, H){
+    if (!view || !st) return st;
+    const o = withPt(st, view, W, H);
+    if (st.fa){ const f = flipVec({x: st.fa[0], y: st.fa[1]}, view); o.fa = [f.x, f.y]; }
+    return o;
+  }
+  const flipDummies = (arr, view, W, H) => !view || !arr ? arr : arr.map(a => { if (!a) return a; const q = flipPt({x: a[0], y: a[1]}, view, W, H), b = a.slice(); b[0] = q.x; b[1] = q.y; return b; });
+  const flipObj = (o, view, W, H) => !view || !o || !o.flag ? o : Object.assign({}, o, {flag: withPt(o.flag, view, W, H)});
+  // 구역 이름: 팀이 있으면 내 기준(우리 쪽/가운데/상대 쪽), 혼자면 팀 이름
+  const zoneLabel = (side, team) => side === 'mid' ? '가운데' : team === 'red' || team === 'blue' ? (side === team ? '우리 쪽' : '상대 쪽') : side === 'red' ? '빨강 쪽' : '파랑 쪽';
+
+  window.MagicLogic = {viewOf, flipPt, flipVec, flipAng, flipRect, flipEvent, flipState, flipDummies, flipObj, zoneLabel, breaksStealth, phaseKick, canAnnounce, aheadObj, nextHost, zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
     addEffect, effectSum, takenMult, pruneEffects, removeTag, calcDamage, inArc, pickTarget, wallPoints, gainUlt, busyTime,
     flagRate, flagPickup, newZone, zoneStep, zoneWinner};
 })();
