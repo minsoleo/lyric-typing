@@ -1474,7 +1474,7 @@ const objMode = () => net ? (inMatch() ? mmode() : gmode) : (MZONES ? 'both' : n
 function drawObjectives(t){
   const om = objMode(); if (!om || om === 'kill') return;
   const live = inMatch() && obj;                       // 대결 중이면 진짜 상태, 아니면 흐리게 (구경용)
-  if ((om === 'zone' || om === 'both') && MZONES) for (let i = 0; i < MZONES.length; i++) drawZone(MZONES[i], live && obj.zones ? obj.zones[i] : null, t);
+  if ((om === 'zone' || om === 'both') && MZONES) for (let i = 0; i < MZONES.length; i++) drawZone(MZONES[i], live && obj.zones ? obj.zones[i] : null, t, i);
   if ((om === 'flag' || om === 'both') && MFLAG && !(live && obj.flag)) drawFlag(MFLAG.x, MFLAG.y, null, t, 0.35);
   if (om === 'flag' && live && obj.flag && !obj.flag.by){            // 바닥에 떨어진 깃발: 빛나는 고리 + 둥실
     const f = obj.flag, k = 0.5 + Math.sin(t * 4) * 0.5;
@@ -1490,14 +1490,16 @@ function flagHolder(){
 }
 function drawHeldFlag(t){ const h = flagHolder(); if (h) drawFlag(h.x - 24, h.y + 8, h.team, t, 1, 140); }
 // 구역 원 (z: 점령 상태, 없으면 흐린 구경용)
-function drawZone(a, z, t){
+// 화면에 쓰는 구역 이름: 팀이 있으면 우리 쪽/가운데/상대 쪽, 혼자면 빨강 쪽/가운데/파랑 쪽
+const zoneName = i => MZONES && MZONES[i] ? L.zoneLabel(MZONES[i].side, S.player.team) : ZNAME[i];
+function drawZone(a, z, t, i){
   if (!inView(a.x, a.y, a.r + 40)) return;
   ctx.save();
   ctx.fillStyle = 'rgba(255,255,255,.07)'; ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI * 2); ctx.fill();
   ctx.setLineDash([14, 12]); ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.stroke(); ctx.setLineDash([]);
   if (!z){
     ctx.font = '800 18px "Malgun Gothic",sans-serif'; ctx.textAlign = 'center'; ctx.fillStyle = 'rgba(255,255,255,.55)';
-    ctx.fillText('🏳 점령 구역', a.x, a.y - 6); ctx.font = '700 14px "Malgun Gothic",sans-serif'; ctx.fillText('대결을 시작하면 켜져요', a.x, a.y + 18);
+    ctx.fillText(`🏳 ${zoneName(i)} 구역`, a.x, a.y - 6); ctx.font = '700 14px "Malgun Gothic",sans-serif'; ctx.fillText('대결을 시작하면 켜져요', a.x, a.y + 18);
     ctx.restore(); return;
   }
   const g = zoneGauge(z), col = z.own ? TEAMS[z.own].color : '#ffffff';
@@ -1512,6 +1514,7 @@ function drawZone(a, z, t){
   ctx.textAlign = 'center'; ctx.lineWidth = 5; ctx.strokeStyle = 'rgba(0,0,0,.6)';
   const big = (txt, y, c, size) => { ctx.font = `800 ${size}px "Malgun Gothic","Segoe UI Emoji",sans-serif`; ctx.strokeText(txt, a.x, y); ctx.fillStyle = c; ctx.fillText(txt, a.x, y); };
   const ty = a.y - a.r + 52;                             // 글씨는 구역 위쪽에 (가운데 서 있는 사람에 안 가리게)
+  ctx.font = '800 15px "Malgun Gothic",sans-serif'; ctx.strokeText(`${zoneName(i)} 구역`, a.x, ty - 30); ctx.fillStyle = 'rgba(255,255,255,.85)'; ctx.fillText(`${zoneName(i)} 구역`, a.x, ty - 30);
   if (z.war) big('⚔ 전쟁 중', ty, Math.sin(t * 8) > 0 ? '#ffd84a' : '#ff9f43', 30);
   else if (z.lock) big('🔒 완전 점령', ty, col, 26);
   else big(`${g.label} ${Math.floor(g.pct)}%`, ty, g.pct > 0 ? TEAMS[g.team].color : 'rgba(255,255,255,.7)', 24);
@@ -1872,7 +1875,7 @@ applyUnlimited();
    방장이 바뀌면 새 방장이 서버에서 받아 둔 obj부터 이어서 계산 */
 const FLAG_PICK = 60, OBJ_EVERY = 200;
 let ZONE_RATE = 100 / 40;                          // 🏳 1명이 구역에 서 있으면 40초에 0→100%
-const ZNAME = ['왼쪽', '가운데', '오른쪽'];
+const ZNAME = ['빨강 쪽', '가운데', '파랑 쪽'];       // 모두에게 같은 글로 가는 소식용 (원래 번호 순서). 화면 글씨는 zoneName(i) = 내 기준
 let objLast = performance.now() / 1000, lastRate = 0, goneSince = null;
 const LEFT_GRACE = 5;                              // 한 팀이 5초 동안 계속 비어야 남은 팀 승리 (잠깐 끊긴 인터넷은 봐줌)
 // 깃발·구역 계산에 쓰는 사람들 (나 + 친구들, 친구는 마지막으로 받은 위치)
@@ -2042,17 +2045,17 @@ function drawMatchHud(){
   ctx.font = '400 32px "Black Han Sans","Malgun Gothic",sans-serif';
   ctx.fillStyle = TEAMS.red.color; ctx.fillText(String(score('red')), x + 52, y + 54);
   ctx.fillStyle = TEAMS.blue.color; ctx.fillText(String(score('blue')), x + w - 52, y + 54);
-  if (mmode() === 'zone'){                              // 🏳 시간 대신 구역 3칸 (왼쪽·가운데·오른쪽)
-    const zs = (obj && obj.zones) || [];
-    for (let i = 0; i < 3; i++){
-      const z = zs[i] || L.newZone(), cx = VW / 2 + (i - 1) * 62, cy = y + 36, g = zoneGauge(z);
+  if (mmode() === 'zone'){                              // 🏳 시간 대신 구역 3칸 (내 화면에서 왼쪽에 있는 구역부터 → 우리 쪽이 왼쪽)
+    const zs = (obj && obj.zones) || [], order = MZONES ? [0, 1, 2].sort((a, b) => MZONES[a].x - MZONES[b].x) : [0, 1, 2];
+    for (let k = 0; k < 3; k++){
+      const i = order[k], z = zs[i] || L.newZone(), cx = VW / 2 + (k - 1) * 62, cy = y + 36, g = zoneGauge(z);
       ctx.fillStyle = z.own ? TEAMS[z.own].color : 'rgba(255,255,255,.18)'; ctx.globalAlpha = z.lock ? 1 : 0.55;
       ctx.beginPath(); ctx.arc(cx, cy, 20, 0, Math.PI * 2); ctx.fill(); ctx.globalAlpha = 1;
       if (g.pct > 0 && !z.lock){ ctx.strokeStyle = TEAMS[g.team].color; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(cx, cy, 24, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * g.pct / 100); ctx.stroke(); }
       if (z.war){ ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy, 20, 0, Math.PI * 2); ctx.stroke(); }
       ctx.font = '800 15px "Malgun Gothic","Segoe UI Emoji",sans-serif'; ctx.fillStyle = '#ffffff';
       ctx.fillText(z.lock ? '🔒' : z.war ? '⚔' : `${Math.floor(g.pct)}`, cx, cy + 5);
-      ctx.font = '700 11px "Malgun Gothic",sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.fillText(ZNAME[i], cx, cy + 41);
+      ctx.font = '700 11px "Malgun Gothic",sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.75)'; ctx.fillText(zoneName(i), cx, cy + 41);
     }
     if (ph === 'end'){ ctx.font = '800 14px "Malgun Gothic",sans-serif'; ctx.fillStyle = '#ffd84a'; ctx.fillText('끝!', VW / 2, y + 97); }
     return;
