@@ -117,7 +117,7 @@ function makePlayer(c, team){
   const sp = SPAWN[team] || SPAWN.solo;
   return {kind: 'me', team, x: sp.x, y: sp.y, r: c.r, hp: c.hp, max: c.hp, speed: c.speed, shield: 0, shieldUntil: 0,
     frozenUntil: 0, frozenKind: 'stun', deadUntil: 0, target: null, dash: null, flurry: null, backAt: null, pull: null, swingAt: -9, swings: 0,
-    stealthUntil: 0, stealthTag: null, fx: [], face: {x: team === 'blue' ? -1 : 1, y: 0}};
+    stealthUntil: 0, stealthTag: null, fx: [], face: {x: sp.x < WW / 2 ? 1 : -1, y: 0}};
 }
 const makeDummies = () => MDUMMIES.map((d, i) => makeDummy(d[0], d[1], i));   // 왼쪽·오른쪽·가운데 (대칭, 내 화면 기준 자리)
 S.dummies = makeDummies();
@@ -140,7 +140,10 @@ const myName = () => net ? net.name : '나';
 const nameOf = pid => net && pid === net.pid ? net.name : (S.others.get(pid) || {}).name || '친구';
 
 /* ---------- 온라인 신호 보내기 ---------- */
-function send(ev){ if (net) net.send(ev); }
+// 팀마다 같은 화면: 친구에게 보낼 때·받을 때 위치·방향을 뒤집음 (내 화면 좌표 ↔ 원래 좌표, 같은 함수)
+const toNet = ev => L.flipEvent(ev, VIEW, WW, WH);
+function send(ev){ if (net) net.send(toNet(ev)); }
+const pubObj = o => net.publishObj(L.flipObj(o, VIEW, WW, WH));
 // 효과 그림: share면 친구 화면에도 똑같이 그려지게 신호로 보냄
 function addFx(f, share){
   S.fx.push(f);
@@ -503,6 +506,7 @@ function hurt(target, dmg, t, color, tag, by){
 
 /* ---------- 친구에게서 온 신호 ---------- */
 function onNetEvent(ev){
+  ev = toNet(ev);
   const t = now(), from = S.others.get(ev.f), p = S.player;
   switch (ev.k){
     case 'hit': {
@@ -538,6 +542,7 @@ function onNetEvent(ev){
 }
 // 친구 상태(0.1초마다) → 화면에 그릴 친구 정보
 function onNetState(pid, st){
+  st = L.flipState(st, VIEW, WW, WH);
   const t = now(), c = classById(st.c);
   let o = S.others.get(pid);
   if (!o){
@@ -555,6 +560,7 @@ function onNetState(pid, st){
 // 방장이 보낸 허수아비 상태 (방장이 아닐 때만)
 function onNetDummies(arr){
   if (!arr || isAuth()) return;
+  arr = L.flipDummies(arr, VIEW, WW, WH);
   const t = now();
   arr.forEach((a, i) => {
     const d = S.dummies[i]; if (!d || !a) return;
@@ -572,12 +578,12 @@ function publish(t){
   if (!net || t - sentAt < SEND_EVERY) return;
   sentAt = t;
   const p = S.player;
-  net.publish({n: net.name, tm: p.team, c: cls.id, x: Math.round(p.x), y: Math.round(p.y), hp: r1(p.hp), mx: p.max, fa: [r2(p.face.x), r2(p.face.y)],
+  net.publish(L.flipState({n: net.name, tm: p.team, c: cls.id, x: Math.round(p.x), y: Math.round(p.y), hp: r1(p.hp), mx: p.max, fa: [r2(p.face.x), r2(p.face.y)],
     fx: p.fx.filter(f => f.until > t).map(f => [f.kind, f.value, r1(f.until - t)]), sh: p.stealthUntil > t ? 1 : 0,
     dd: p.deadUntil ? Math.max(0.1, r1(p.deadUntil - t)) : 0, ch: S.charged ? S.charged.spell.color : 0, sw: p.swings, fz: t < p.frozenUntil ? r1(p.frozenUntil - t) : 0,
-    k: S.stats.kills, de: S.stats.deaths, dm: Math.round(S.stats.dmg), hb: (sentBeat = (sentBeat + 1) % 1000)});   // hb: 살아 있다는 신호 (가만히 있어도 바뀜)
-  if (net.isHost()) net.publishDummies(S.dummies.map(d => [Math.round(d.x), Math.round(d.y), Math.round(d.hp), d.deadUntil ? Math.max(0.1, r1(d.deadUntil - t)) : 0,
-    t < d.frozenUntil ? r1(d.frozenUntil - t) : 0, d.frozenKind === 'stun' ? 1 : 0, L.effectSum(d.fx, 'speed', t) < 0 ? 1 : 0, L.effectSum(d.fx, 'atk', t) < 0 ? 1 : 0]));
+    k: S.stats.kills, de: S.stats.deaths, dm: Math.round(S.stats.dmg), hb: (sentBeat = (sentBeat + 1) % 1000)}, VIEW, WW, WH));   // hb: 살아 있다는 신호 (가만히 있어도 바뀜)
+  if (net.isHost()) net.publishDummies(L.flipDummies(S.dummies.map(d => [Math.round(d.x), Math.round(d.y), Math.round(d.hp), d.deadUntil ? Math.max(0.1, r1(d.deadUntil - t)) : 0,
+    t < d.frozenUntil ? r1(d.frozenUntil - t) : 0, d.frozenKind === 'stun' ? 1 : 0, L.effectSum(d.fx, 'speed', t) < 0 ? 1 : 0, L.effectSum(d.fx, 'atk', t) < 0 ? 1 : 0]), VIEW, WW, WH));
 }
 
 /* ---------- 한 프레임 진행 ---------- */
@@ -1771,6 +1777,7 @@ function startNet(conn){
   net.on.match = onMatch;
   net.on.gmode = onGmode;
   net.on.obj = o => {
+    o = L.flipObj(o, VIEW, WW, WH);
     if (L.aheadObj(o, matchId)){ heldObj = o; return; }   // '한 판 더': 새 판 점수판(0:0)이 판보다 먼저 옴 → 판이 바뀔 때까지 보관
     obj = o; heldObj = null; if (phase() === 'end' && !$('#result').hidden) showResult();
   };   // 끝난 뒤 마지막 점수가 오면 결과 다시
@@ -1932,7 +1939,7 @@ function objTick(){
   if (mmode() === 'flag') flagTick(dt);
   else if (mmode() === 'zone' && obj.zones) zoneTick(dt);
   else return;
-  net.publishObj(obj);
+  pubObj(obj);
 }
 setInterval(objTick, OBJ_EVERY);
 // 방장 창이 30초 넘게 숨어 있으면(크롬은 5분 넘게 숨은 창을 1분에 한 번만 돌림 → 깃발·구역·허수아비가 멈춤)
@@ -1984,12 +1991,12 @@ function startMatch(){
   const len = +$('#matchLen').value || 180, start = net.serverNow() + 3500, m = {id: 'm' + Math.random().toString(36).slice(2, 8), mode: gmode, startAt: start, len, score: {red: 0, blue: 0}};
   if (gmode === 'zone') delete m.len; else m.endAt = start + len * 1000;   // 점령전: 제한 시간 없음
   // 깃발쟁·점령전: 방장이 처음 상태를 먼저 올림 (킬내기전은 없음)
-  net.publishObj(gmode === 'flag' ? {mid: m.id, flag: {x: MFLAG.x, y: MFLAG.y, by: null}, score: {red: 0, blue: 0}} : gmode === 'zone' ? {mid: m.id, zones: MZONES.map(() => L.newZone())} : null);   // mid: 어느 판의 점수판인지
+  pubObj(gmode === 'flag' ? {mid: m.id, flag: {x: MFLAG.x, y: MFLAG.y, by: null}, score: {red: 0, blue: 0}} : gmode === 'zone' ? {mid: m.id, zones: MZONES.map(() => L.newZone())} : null);   // mid: 어느 판의 점수판인지
   net.setMatch(m);
 }
 $('#matchBtn').onclick = startMatch;
 $('#againBtn').onclick = startMatch;
-$('#practiceBtn').onclick = () => { if (net && net.isHost()){ net.setMatch(null); net.publishObj(null); } };
+$('#practiceBtn').onclick = () => { if (net && net.isHost()){ net.setMatch(null); pubObj(null); } };
 const locks = tm => ((obj && obj.zones) || []).filter(z => z && z.lock && z.own === tm).length;   // 🏳 완전 점령한 구역 수
 const score = tm => mmode() === 'zone' ? locks(tm) : mmode() === 'flag' ? Math.floor(((obj && obj.score) || {})[tm] || 0) : ((match && match.score) || {})[tm] || 0;
 function showResult(){
