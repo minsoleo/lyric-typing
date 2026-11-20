@@ -38,7 +38,7 @@ window.MAGIC_SOUNDS = {
   fail:     {file: 'error_004.ogg', vol: 0.6, vary: 0},               // 주문 틀림 (내 화면만)
   swing:    {file: 'knifeSlice2.ogg', rate: 1.3, len: 0.3, vol: 0.3, gap: 0.08},   // 연타 두 번째부터 작게
   boom:     {file: 'explosionCrunch_000.ogg'},                          // 파쇄 돌격 폭발
-  hit:      {file: 'impactPunch_medium_000.ogg', vol: 0.7, max: 4},     // 내가 맞힘
+  hit:      {file: 'impactPunch_medium_000.ogg', vol: 0.7, max: 4, gap: 0.03},     // 내가 맞힘
   hurt:     {file: 'impactPunch_heavy_000.ogg', vol: 0.8},              // 내가 맞음
   block:    {file: 'impactMetal_light_002.ogg', vol: 0.8},              // 방패로 줄어든 피해
   heal:     {file: 'glass_004.ogg', vol: 0.35, gap: 0.6},               // 회복받음

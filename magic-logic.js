@@ -249,7 +249,20 @@
   const SOUND_NEAR = 700, SOUND_FAR = 1600;
   const hearGain = (d, hidden) => hidden || d >= SOUND_FAR ? 0 : d <= SOUND_NEAR ? 1 : (SOUND_FAR - d) / (SOUND_FAR - SOUND_NEAR);
 
-  window.MagicLogic = {SOUND_NEAR, SOUND_FAR, hearGain, reView, reViewVec, scoreSides, viewOf, flipPt, flipVec, flipAng, flipRect, flipEvent, flipState, flipDummies, flipObj, zoneLabel, breaksStealth, phaseKick, canAnnounce, aheadObj, nextHost, zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
+  // 깃발·점령 상태가 바뀔 때 낼 소리 (a: 앞 상태, b: 새 상태). 처음이거나 판이 바뀌면 조용히
+  function objSounds(a, b){
+    const out = [];
+    if (!a || !b || a.mid !== b.mid) return out;
+    if (a.flag && b.flag){ if (!a.flag.by && b.flag.by) out.push('flagUp'); else if (a.flag.by && !b.flag.by) out.push('flagDown'); }
+    if (a.zones && b.zones) b.zones.forEach((z, i) => {
+      const y = a.zones[i]; if (!z || !y) return;
+      if (z.own && z.own !== y.own) out.push('capture');
+      if (z.lock && !y.lock) out.push('lock');
+    });
+    return out;
+  }
+
+  window.MagicLogic = {objSounds, SOUND_NEAR, SOUND_FAR, hearGain, reView, reViewVec, scoreSides, viewOf, flipPt, flipVec, flipAng, flipRect, flipEvent, flipState, flipDummies, flipObj, zoneLabel, breaksStealth, phaseKick, canAnnounce, aheadObj, nextHost, zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
     addEffect, effectSum, takenMult, pruneEffects, removeTag, calcDamage, inArc, pickTarget, wallPoints, gainUlt, busyTime,
     flagRate, flagPickup, newZone, zoneStep, zoneWinner};
 })();

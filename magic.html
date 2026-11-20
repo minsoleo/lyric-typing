@@ -35,6 +35,7 @@ body{display:flex;flex-direction:column;overflow:hidden;color:var(--text);font-f
 .display{font-family:"Black Han Sans","Malgun Gothic",sans-serif;font-weight:400}
 header{flex:none;display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 16px;border-bottom:1px solid var(--line)}
 header h1{margin:0;font-size:20px}
+.sfxbox{display:flex;align-items:center;gap:4px}.sfxbox input{width:84px;accent-color:#ffd84a;cursor:pointer}.sfxbox input:disabled{opacity:.4}
 header h1 small{font:700 13px "Malgun Gothic",sans-serif;color:var(--dim);margin-left:6px}
 .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 button,.btn{font:inherit;color:var(--text);background:var(--panel2);border:1px solid var(--line);border-radius:10px;padding:6px 12px;cursor:pointer;text-decoration:none;white-space:nowrap;font-size:14px}
@@ -180,6 +181,7 @@ button.go{background:var(--gold);border-color:var(--gold);color:var(--gold-text)
     <button id="leaveBtn" type="button">🚪 방 나가기</button>
   </div>
   <div class="row">
+    <span class="sfxbox"><button id="sfxBtn" type="button" title="소리 끄기 / 켜기">🔊</button><input id="sfxVol" type="range" min="0" max="100" value="60" aria-label="소리 크기" title="소리 크기"></span>
     <button id="themeBtn" type="button"></button>
     <a class="btn" href="./">타자연습으로</a>
   </div>
@@ -247,14 +249,14 @@ button.go{background:var(--gold);border-color:var(--gold);color:var(--gold-text)
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <!-- ★ 고친 뒤 올릴 때 아래 v=… 숫자를 바꾸면, 친구들 브라우저가 예전 파일을 쓰지 않고 새로 받아요 -->
-<script>window.MAGIC_V = '20261120e';</script>
-<script src="magic-spells.js?v=20261120e"></script>
-<script src="magic-logic.js?v=20261120e"></script>
-<script src="magic-net.js?v=20261120e"></script>
-<script src="magic-art.js?v=20261120e"></script>
-<script src="magic-maps.js?v=20261120e"></script>
-<script src="magic-sounds.js?v=20261120e"></script>
-<script src="magic-sfx.js?v=20261120e"></script>
-<script src="magic.js?v=20261120e"></script>
+<script>window.MAGIC_V = '20261120f';</script>
+<script src="magic-spells.js?v=20261120f"></script>
+<script src="magic-logic.js?v=20261120f"></script>
+<script src="magic-net.js?v=20261120f"></script>
+<script src="magic-art.js?v=20261120f"></script>
+<script src="magic-maps.js?v=20261120f"></script>
+<script src="magic-sounds.js?v=20261120f"></script>
+<script src="magic-sfx.js?v=20261120f"></script>
+<script src="magic.js?v=20261120f"></script>
 </body>
 </html>

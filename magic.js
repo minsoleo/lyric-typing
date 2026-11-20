@@ -91,7 +91,7 @@ let match = null, matchId = null;
 const MODES = {kill: {name: '⚔ 킬내기전', goal: '상대 팀을 많이 쓰러뜨리면 이겨요'}, flag: {name: '🚩 깃발쟁', goal: '깃발을 오래 들고 있으면 이겨요'},
   zone: {name: '🏳 점령전', goal: '구역 2곳을 먼저 완전 점령하면 이겨요'}};
 const MODE_MAP = {kill: 'forest', flag: 'wide', zone: 'wide'};
-let gmode = 'kill', obj = null, heldObj = null;                     // obj: 방장이 계산한 깃발·점령 상태 (서버에서 받음)
+let gmode = 'kill', obj = null, heldObj = null, objSaid = null;                     // obj: 방장이 계산한 깃발·점령 상태 (서버에서 받음)
 const mmode = () => (match && match.mode) || 'kill';
 // 준비(3·2·1) → 진행 → 끝 (점령전은 끝나는 시간이 없고, 방장이 승리를 쓰면 끝)
 const phase = () => {
@@ -143,6 +143,14 @@ const nameOf = pid => net && pid === net.pid ? net.name : (S.others.get(pid) || 
 // 팀마다 같은 화면: 친구에게 보낼 때·받을 때 위치·방향을 뒤집음 (내 화면 좌표 ↔ 원래 좌표, 같은 함수)
 const toNet = ev => L.flipEvent(ev, VIEW, WW, WH);
 function send(ev){ if (net) net.send(toNet(ev)); }
+// 🔊 소리: sfx = 내 화면에서만 / skillSound = 내 화면 + 친구에게 (가까울수록 크게) / sfxAt = 친구가 보낸 소리
+const sfx = (name, gain) => { if (window.MagicSfx) MagicSfx.play(name, gain); };
+// h: 보낸 순간 내가 은신 중인지 (친구 화면의 은신 표시는 0.1초 늦어서, 은신을 풀며 쓴 공격까지 조용해지면 안 됨)
+function skillSound(name){ const p = S.player; sfx(name); send({k: 'snd', s: name, x: r1(p.x), y: r1(p.y), h: p.stealthUntil > now() ? 1 : 0}); }
+function sfxAt(name, x, y, from, h){
+  const p = S.player, o = S.others.get(from);
+  sfx(name, L.hearGain(Math.hypot(x - p.x, y - p.y), !!(h && o && o.team !== p.team)));   // 은신한 상대 소리는 안 들림
+}
 const pubObj = o => net.publishObj(L.flipObj(o, VIEW, WW, WH));
 // 효과 그림: share면 친구 화면에도 똑같이 그려지게 신호로 보냄
 function addFx(f, share){
@@ -228,7 +236,7 @@ function submitSpell(){
   if (S.charged){ castMsg(`⚡ ${S.charged.spell.name}부터 써요 (오른쪽 클릭)`, 'charge'); shakeCast(); return; }
   if (t < S.lockUntil){ castMsg('잠깐! 다시 집중하는 중…', 'wait'); return; }
   if (!sp){
-    inp.value = ''; S.lockUntil = t + FAIL_LOCK; S.stats.fail++;
+    inp.value = ''; S.lockUntil = t + FAIL_LOCK; S.stats.fail++; sfx('fail');
     const other = CLASSES.find(c => c !== cls && L.findSpell(allSpells(c), text));
     castMsg(other ? `그건 ${other.name}(${other.role}) 스킬이에요!` : '스킬 실패!', 'bad'); shakeCast();
     S.fx.push({type: 'fizzle', x: p.x, y: p.y - 40, t0: t, life: 0.6});
@@ -240,7 +248,7 @@ function submitSpell(){
   S.charged = {spell: sp, at: t, until: t + CHARGE};
   S.stats.ok++; if (!isUlt) gainUlt(U.typed, t);
   castMsg(`⚡ ${isUlt ? '궁극기 ' : ''}${sp.name} 장전! 오른쪽 클릭`, 'charge', true);
-  $('#castBox').classList.add('charged');
+  $('#castBox').classList.add('charged'); sfx('charge');
   flashSlot(sp.id);
 }
 
@@ -348,6 +356,7 @@ function breakStealth(t){
 }
 function castSpell(sp, t, target){
   const p = S.player;
+  skillSound(sp.id);
   switch (sp.type){
     case 'shot': { const d = aimDir(p); p.face = d; shoot('me', p, d, sp); break; }
     case 'dash': {
@@ -417,7 +426,7 @@ function castSpell(sp, t, target){
 function basicAttack(t){
   const b = cls.basic;
   if (L.cooldownLeft(S.lastBasic, b.cd, t) > 0) return;
-  S.lastBasic = t; breakStealth(t);
+  S.lastBasic = t; breakStealth(t); skillSound('basic-' + cls.id);
   if (b.melee) melee(t, b, true, '#ffffff');
   else { const d = aimDir(S.player); S.player.face = d; shoot('me', S.player, d, Object.assign({basic: true}, b)); }
 }
@@ -427,6 +436,7 @@ function gainUlt(x, t){
   const was = S.ult; S.ult = L.gainUlt(S.ult, x, U.need);
   if (was < U.need && S.ult >= U.need && !unl()){
     if (!S.charged) castMsg('🌟 궁극기 준비 완료! 긴 이름을 쳐 봐요', 'charge');
+    sfx('ultReady');
     S.floats.push({x: S.player.x, y: S.player.y - 70, text: '🌟 궁극기 준비!', color: '#ffd84a', t0: t});
     flashSlot(cls.ult.id);
   }
@@ -436,7 +446,7 @@ function healPlayer(amount, t, silent){
   if (p.deadUntil) return 0;
   p.hp = Math.min(p.max, p.hp + amount);
   const got = p.hp - before; S.stats.healed += got; gainUlt(got * U.heal, t);
-  if (!silent && got > 0) floatAt(p, '+' + Math.round(got), '#5ce08a', t);
+  if (!silent && got > 0){ floatAt(p, '+' + Math.round(got), '#5ce08a', t); sfx('heal'); }
   return got;
 }
 // 허수아비가 맞으면 지푸라기가 튐 (내 화면에만)
@@ -461,6 +471,7 @@ function dealHit(e, base, t, o){
     send(Object.assign({k: 'hit', to: e.id, d: r2(out)}, statusOf(o), {c: o.color || 0}));
     if (out > 0){ got = Math.max(1, Math.round(out * L.takenMult(e.fx, t))); S.stats.dmg += got; floatAt(e, String(got), o.color || '#ffd166', t); e.hitAt = t; if (e.kind === 'dummy') strawBurst(e, t); }
   }
+  if (got > 0) sfx('hit');
   if (!o.noUlt && got) gainUlt(got * (o.basic ? U.basicDmg : U.spellDmg), t);
   return got;
 }
@@ -486,12 +497,13 @@ function hurt(target, dmg, t, color, tag, by){
   const isMe = target === S.player, got = dmg - r.absorbed;
   if (isMe){ S.stats.taken += got; gainUlt(got * U.taken, t); } else if (!by) S.stats.dmg += got;
   floatAt(target, (isMe ? '-' : '') + got + (tag || ''), isMe ? (tag ? '#8fd8ff' : '#ff7b7b') : color || '#ffd166', t);
+  if (isMe) sfx(tag ? 'block' : 'hurt');
   if (target.hp > 0) return got;
   target.deadUntil = t + RESPAWN;
   addFx({type: 'poof', x: r1(target.x), y: r1(target.y), t0: t, life: 0.7}, true);
   if (isMe){
     Object.assign(target, {target: null, dash: null, flurry: null, backAt: null, pull: null, stealthUntil: 0, fx: []}); clearCharge(); S.busy = null;
-    castMsg('쓰러졌어요! 3초 뒤 다시 일어나요', 'bad'); S.stats.deaths++;
+    castMsg('쓰러졌어요! 3초 뒤 다시 일어나요', 'bad'); S.stats.deaths++; sfx('down');
     if (phase() === 'play'){ const k = S.others.get(by); if (k && k.team !== target.team) net.addScore(k.team); }   // 대결: 쓰러뜨린 팀 +1
     if (net){
       send({k: 'down', by: by || 0, who: myName()});
@@ -521,7 +533,7 @@ function onNetEvent(ev){
       break;
     }
     case 'heal':
-      if (ev.to === net.pid && !p.deadUntil){ const got = healPlayer(ev.a, t, true); if (got > 0) floatAt(p, '+' + Math.round(got), '#5ce08a', t); }
+      if (ev.to === net.pid && !p.deadUntil){ const got = healPlayer(ev.a, t, true); if (got > 0){ floatAt(p, '+' + Math.round(got), '#5ce08a', t); sfx('heal'); } }
       break;
     case 'buff':
       if (ev.to === net.pid && !p.deadUntil) buffMe((ev.fx || []).map(([kind, value]) => ({kind, value})), ev.tm || 0, ev.tag, ev.h, ev.c, t, ev.by);
@@ -531,7 +543,8 @@ function onNetEvent(ev){
     case 'wall': S.walls.push({pts: ev.pts || [], r: 22, t0: t, until: t + ev.tm, team: ev.team}); break;
     case 'zone': S.zones.push({x: ev.x, y: ev.y, r: ev.r, rate: ev.rate, until: t + ev.tm, t0: t, color: ev.c, acc: 0, team: ev.team}); break;
     case 'sanc': S.sanctums.push({x: ev.x, y: ev.y, r: ev.r, t0: t, until: t + ev.tm, healRate: ev.hr, team: ev.team, acc: 0}); break;
-    case 'feed': addFeed(ev.text, ev.c); break;          // 방장이 알려 주는 깃발·점령 소식
+    case 'feed': addFeed(ev.text, ev.c); break;
+    case 'snd': if (ev.s) sfxAt(ev.s, ev.x, ev.y, ev.f, ev.h); break;   // 친구·상대가 쓴 스킬 소리          // 방장이 알려 주는 깃발·점령 소식
     case 'field': S.fields.push({owner: ev.f, x: ev.x, y: ev.y, r: ev.r, t0: t, until: t + ev.tm, color: ev.c}); break;
     case 'down':
       if (ev.by === net.pid) S.stats.kills++;
@@ -594,7 +607,7 @@ function update(){
   p.fx = L.pruneEffects(p.fx, t);
 
   // 내가 쓰러졌다가 다시 일어남 (우리 팀 출발 자리에서)
-  if (p.deadUntil && t >= p.deadUntil){ const sp = SPAWN[p.team] || SPAWN.solo; Object.assign(p, {deadUntil: 0, hp: p.max, x: sp.x, y: sp.y, frozenUntil: 0}); }
+  if (p.deadUntil && t >= p.deadUntil){ const sp = SPAWN[p.team] || SPAWN.solo; Object.assign(p, {deadUntil: 0, hp: p.max, x: sp.x, y: sp.y, frozenUntil: 0}); sfx('respawn'); }
   if (p.stealthUntil && t >= p.stealthUntil) p.stealthUntil = 0;
   // 궁극기 게이지: 가만히 있어도 천천히 참 (장전한 궁극기를 들고 있을 때는 빼고)
   if (!p.deadUntil && !(S.charged && S.charged.spell === cls.ult)) gainUlt(U.idle * dt, t);
@@ -618,7 +631,7 @@ function update(){
       p.x = pos.x; p.y = pos.y;
       if (p.dash.dmg) for (const e of enemies()) if (!p.dash.hit.has(e) && dist(e, p) < e.r + p.r + (p.dash.wide || 8)){ p.dash.hit.add(e); dealHit(e, p.dash.dmg, t, {color: p.dash.color}); }
       if (Math.random() < 0.6) S.fx.push({type: 'dust', x: p.x, y: p.y + p.r, t0: t, life: 0.4});
-      if (m.arrived || blocked){ if (p.dash.boom) explode(p, p.dash.boom, t, p.dash.color); p.dash = null; }
+      if (m.arrived || blocked){ if (p.dash.boom){ explode(p, p.dash.boom, t, p.dash.color); skillSound('boom'); } p.dash = null; }
     } else if (p.target && t >= p.frozenUntil){
       const m = L.moveToward(p, p.target, spd * dt);
       const dx = m.x - p.x, dy = m.y - p.y, len = Math.hypot(dx, dy);
@@ -630,7 +643,7 @@ function update(){
     }
     // 검의 폭풍·칼바람: 정해진 시간 동안 마우스 쪽으로 계속 연타
     if (p.flurry){
-      while (p.flurry && t >= p.flurry.next && p.flurry.next < p.flurry.until - 1e-6){ melee(t, p.flurry.sp, false, p.flurry.sp.color); p.flurry.next += p.flurry.sp.every; }
+      while (p.flurry && t >= p.flurry.next && p.flurry.next < p.flurry.until - 1e-6){ melee(t, p.flurry.sp, false, p.flurry.sp.color); p.flurry.next += p.flurry.sp.every; if ((p.flurry.n = (p.flurry.n || 0) + 1) > 1) sfx('swing'); }
       if (p.flurry && t >= p.flurry.until) p.flurry = null;
     }
   }
@@ -1791,6 +1804,8 @@ function startNet(conn){
   net.on.gmode = onGmode;
   net.on.obj = o => {
     o = L.flipObj(o, VIEW, WW, WH);
+    for (const n of L.objSounds(objSaid, o)) sfx(n);              // 깃발 주움·떨어짐, 구역 점령
+    objSaid = o ? JSON.parse(JSON.stringify(o)) : null;          // 방장은 obj를 고쳐 쓰므로 복사본으로 비교
     if (L.aheadObj(o, matchId)){ heldObj = o; return; }   // '한 판 더': 새 판 점수판(0:0)이 판보다 먼저 옴 → 판이 바뀔 때까지 보관
     obj = o; heldObj = null; if (phase() === 'end' && !$('#result').hidden) showResult();
   };   // 끝난 뒤 마지막 점수가 오면 결과 다시
@@ -1993,8 +2008,8 @@ function startMatchLocal(){
 function onPhase(ph, prev){
   renderRoomBar(); applyUnlimited(); document.body.classList.toggle('matching', !!ph);
   const kick = L.phaseKick(prev, ph);                 // 3·2·1이 끝날 때만 처음부터 (점수가 바뀔 때는 그대로)
-  if (kick === 'start'){ castMsg('⚔ 시작!', 'good'); S.cds = {}; S.ult = 0; }
-  if (kick === 'end') showResult();
+  if (kick === 'start'){ castMsg('⚔ 시작!', 'good'); S.cds = {}; S.ult = 0; sfx('go'); }
+  if (kick === 'end'){ const w = showResult(); sfx(!w || w === S.player.team ? 'win' : 'lose'); }   // 무승부도 '빠밤'
   if (ph !== 'end') $('#result').hidden = true;
 }
 function startMatch(){
@@ -2030,14 +2045,17 @@ function showResult(){
   $('#resMvp').textContent = mvp ? `🏅 MVP: ${mvp.name} (쓰러뜨림 ${mvp.k || 0}, 준 피해 ${mvp.dm || 0})` : '';
   renderRoomBar();
   $('#result').hidden = false;
+  return win;
 }
 // 맵 위: 준비 숫자 3·2·1 / 남은 시간 + 점수
+let tickSaid = null;
 function drawMatchHud(){
   const ph = phase(); if (!ph) return;
   const n = net.serverNow();
   ctx.textAlign = 'center';
   if (ph === 'count'){
     const left = Math.ceil((match.startAt - n) / 1000);
+    if (left !== tickSaid){ tickSaid = left; if (left > 0) sfx('tick'); }
     ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(0, 0, VW, VH);
     ctx.font = '400 150px "Black Han Sans","Malgun Gothic",sans-serif'; ctx.lineWidth = 10; ctx.strokeStyle = 'rgba(0,0,0,.6)';
     const txt = left > 0 ? String(left) : '시작!';
@@ -2086,6 +2104,17 @@ function drawMatchHud(){
 function loop(){ update(); draw(); updateHud(); requestAnimationFrame(loop); }
 try { const m = localStorage.getItem('magic.map'); if (m && MAPS[m]) setMap(m); } catch (e) {}
 renderMapBtn();
+// 🔊 소리: 미리 불러 두고, 처음 클릭·키 누르기 때 켬 (브라우저 규칙)
+if (window.MagicSfx){
+  MagicSfx.load(window.MAGIC_SOUNDS, 'sfx/', window.MAGIC_V);
+  const un = () => MagicSfx.unlock();
+  document.addEventListener('pointerdown', un, true); document.addEventListener('keydown', un, true);
+}
+function renderSfx(){ const b = $('#sfxBtn'), v = $('#sfxVol'); if (!b || !window.MagicSfx) return; b.textContent = MagicSfx.muted ? '🔇' : '🔊'; b.classList.toggle('on', !MagicSfx.muted); v.value = Math.round(MagicSfx.volume * 100); v.disabled = MagicSfx.muted; }
+$('#sfxBtn').onclick = () => { if (!window.MagicSfx) return; MagicSfx.setMuted(!MagicSfx.muted); renderSfx(); if (!MagicSfx.muted) sfx('charge'); focusSpell(); };
+$('#sfxVol').oninput = e => { if (window.MagicSfx){ MagicSfx.setVolume(e.target.value / 100); renderSfx(); } };
+$('#sfxVol').onchange = () => { sfx('hit'); focusSpell(); };   // 놓으면 이 크기로 한 번 들려 줌
+renderSfx();
 buildBook(); fit(); openPick();
 if (window.MagicArt) MagicArt.ready.then(() => { buildBook(); if (!$('#pick').hidden) buildPick(); });   // 그림이 다 오면 스킬 칸·고르기 카드에도
 try { const c = sessionStorage.getItem('magic.code'); if (c){ $('#codeInput').value = c; pickMode = 'friend'; refreshPick(); } } catch (e) {}
