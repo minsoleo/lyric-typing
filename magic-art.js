@@ -18,7 +18,9 @@ const MAX = 360;                 // 줄여 둘 최대 크기(픽셀)
 // 바닥 무늬 (이어 붙이는 타일): 맵에서 한 장이 차지할 크기(픽셀)
 const TILES = {grass: {src: 'art/grass.webp', size: 420}, dirt: {src: 'art/dirt.webp', size: 260},
                // 🏯 동양풍 맵 (지피티 그림이 오면 이 이름으로 art/에 넣기만 하면 됨)
-               'east-ground': {src: 'art/east-ground.jpg', size: 420}, 'east-path': {src: 'art/east-path.webp', size: 260}};
+               'east-ground': {src: 'art/east-ground.jpg', size: 420}, 'east-path': {src: 'art/east-path.webp', size: 260},
+               // 🏰 성 맵: 돌바닥(칸 2개 = 400) · 성벽 면 띠(가로로 이어 붙임, 높이 90)
+               'castle-floor': {src: 'art/castle-floor.webp', size: 400}, 'castle-wall': {src: 'art/castle-wall.webp', size: 270, h: 90}};
 // 여러 개가 든 그림 (줄마다 왼쪽→오른쪽 순서로 자동으로 잘라 씀)
 const SHEETS = {props: {src: 'art/trees-rocks.webp'},   // 나무 3 (위) · 바위 3 (아래)
                 pond: {src: 'art/pond.webp', max: 900},  // 연못 1 (크게 그려서 선명하게)
@@ -220,13 +222,13 @@ function makeGlow(img, cols, rows, max){
 const glowReady = Promise.all(Object.entries(GLOWS).map(async ([id, f]) => { const img = await load(f.src); if (img) glows[id] = makeGlow(img, f.cols, f.rows, f.max); }));
 
 // 타일: 정해진 크기로 줄여 둠 (반복 무늬로 깔 때 그대로 씀)
-function makeTile(img, size){
-  const c = document.createElement('canvas'); c.width = c.height = size;
+function makeTile(img, size, h){
+  const c = document.createElement('canvas'); c.width = size; c.height = h || size;
   const g = c.getContext('2d'); g.imageSmoothingQuality = 'high';
-  g.drawImage(img, 0, 0, size, size);
+  g.drawImage(img, 0, 0, size, h || size);
   return c;
 }
-const tileReady = Promise.all(Object.entries(TILES).map(async ([id, t]) => { const img = await load(t.src); if (img) tiles[id] = makeTile(img, t.size); }));
+const tileReady = Promise.all(Object.entries(TILES).map(async ([id, t]) => { const img = await load(t.src); if (img) tiles[id] = makeTile(img, t.size, t.h); }));
 
 const ready = Promise.all(Object.entries(FILES).map(async ([id, f]) => {
   try {

@@ -67,6 +67,16 @@ t('floorMove: 계단으로는 올라감', () => { const q = L.floorMove(G, {x: 5
 t('floorMove: 한 번에 멀리 가도 낭떠러지를 안 뚫음', () => { const q = L.floorMove(G, {x: 250, y: 150}, {x: 50, y: 1150}, 20); return L.cellAt(G, q.x, q.y) === '2'; });
 t('floorMove: 가장자리에 걸친 자리에서도 빠져나옴', () => { const q = L.floorMove(G, {x: 195, y: 150}, {x: 195, y: 110}, 20); return near(q.y, 110); });
 t('floorMove: 높은 층 아래 성벽 면(g.face 띠)에는 몸이 안 들어감 — 한 번에 멀리 와도', () => { const g = {cell: 100, face: 30, rows: ['22', '11']}; const a = L.floorMove(g, {x: 50, y: 190}, {x: 50, y: 20}, 10), b = L.floorMove(g, {x: 50, y: 190}, {x: 50, y: 135}, 10); return a.y >= 138 && b.y >= 138 && L.spotAt(g, 50, 115) === '#' && L.spotAt(g, 50, 135) === '1' && L.spotAt(g, 50, 50) === '2'; });
+// 계단 덩어리와 난간: 위로 오르는 계단(위·아래 층이 다름)은 왼쪽·오른쪽에, 옆 계단(왼쪽·오른쪽 층이 다름)은 위·아래에 난간
+const SG = {cell: 100, rows: ['22222', '2aa22', '11122', '222b3', '222b3']};
+t('stairGroups: 계단 덩어리 자리 · 방향 · 높은 쪽', () => { const s = L.stairGroups(SG); const up = s.find(q => q.ch === 'a'), sd = s.find(q => q.ch === 'b');
+  return s.length === 2 && up.x === 100 && up.y === 100 && up.w === 200 && up.h === 100 && !up.side && !up.flip
+    && sd.x === 300 && sd.y === 300 && sd.w === 100 && sd.h === 200 && sd.side && !sd.flip; });
+t('stairGroups: 높은 쪽이 아래·왼쪽이면 flip', () => { const s = L.stairGroups({cell: 100, rows: ['111', '1a1', '222']})[0], d = L.stairGroups({cell: 100, rows: ['2b3'.split('').reverse().join('')]})[0]; return !s.side && s.flip && d.side && d.flip; });
+t('stairRails: 위로 오르는 계단은 왼쪽·오른쪽 난간 (계단 밖, 끝 기둥만큼 앞뒤로 더)', () => { const r = L.stairRails(SG, 20, 10).filter(q => q.y < 250);
+  return r.length === 2 && r.some(q => q.x === 80 && q.w === 20 && q.y === 90 && q.h === 120) && r.some(q => q.x === 300 && q.w === 20 && q.y === 90 && q.h === 120) && r.every(q => q.kind === 'rail'); });
+t('stairRails: 옆 계단은 위·아래 난간', () => { const r = L.stairRails(SG, 20, 10).filter(q => q.y >= 250);
+  return r.length === 2 && r.some(q => q.y === 280 && q.h === 20 && q.x === 290 && q.w === 120) && r.some(q => q.y === 500 && q.h === 20); });
 t('레이브 대기 시간은 원래대로, 궁극기 범위는 12초 유지', () => by('dealer').spells.map(s => s.cd).join() === '6,8,10,16,14' && by('dealer').ult.time === 12);
 t('가데온 검 이름: 강철 베기 · 검의 폭풍', () => by('tank').basic.name === '강철 베기' && by('tank').spells.some(s => s.name === '검의 폭풍'));
 t('findSpell: 다른 캐릭터 스킬은 못 씀', () => L.findSpell(all(by('tank')), '목 긋기') === null);

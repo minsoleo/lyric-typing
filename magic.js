@@ -48,6 +48,7 @@ let MAP, WW, WH, OBSTACLES, WALLS, BLOCKERS, DECOR, SPAWN, mmBg = null;
 let VIEW = null, MZONES = null, MFLAG = null, MDUMMIES = [], MPATH = [];
 // 🏰 성 맵: GRID = 층 격자 {rows, cell} (180도 대칭이라 파랑 팀 화면에서도 그대로). 없으면 null
 let GRID = null;
+const RAIL = 36, POST = 30;                                  // 🏰 계단 난간 두께 · 계단 앞뒤 끝 기둥 길이 (난간은 걷기를 막음)
 const FACE_H = 60;                                         // 높은 층 아래쪽 성벽 면 띠 높이 (걸어서 못 들어감)
 const mirror = o => Object.assign({}, o, {x: WW - o.x - o.w});
 const rotate = o => Object.assign({}, o, {x: WW - o.x - o.w, y: WH - o.y - o.h});   // 180도 (성 맵)
@@ -74,7 +75,7 @@ function loadMap(id, view){
   DECOR = buildDecor().map(d => Object.assign(d, fp(d)));
   OBSTACLES = OBSTACLES.map(o => L.flipRect(o, VIEW, WW, WH));      // 내 화면 기준으로 뒤집기
   GRID = MAP.grid ? {rows: MAP.grid, cell: MAP.cell, face: FACE_H} : null;   // 성벽 면 띠도 걷기만 막음 (L.spotAt, 공격은 넘어감)
-  WALLS = OBSTACLES;
+  WALLS = GRID ? OBSTACLES.concat(L.stairRails(GRID, RAIL, POST)) : OBSTACLES;   // 🏰 계단 난간은 걷기만 막음 (공격은 지나감, 그림은 계단 그림에)
   BLOCKERS = OBSTACLES.filter(o => o.kind !== 'pond');
   SPAWN = {}; for (const k in MAP.spawn) SPAWN[k] = fp(MAP.spawn[k]);
   MZONES = MAP.zones ? MAP.zones.map(z => Object.assign({}, z, fp(z))) : null;   // 번호(순서)는 원래 그대로
@@ -880,15 +881,24 @@ function drawGround(t){
 const CASTLE = {floor: {'1': '#565b66', '2': '#6a707c', '3': '#848b98', a: '#6f7480', b: '#868c99'}, wallTop: '#2b2931', wallLine: 'rgba(255,255,255,.06)',
   face: '#413c46', faceLine: 'rgba(0,0,0,.28)', mortar: 'rgba(0,0,0,.14)', lip: 'rgba(255,255,255,.22)'};
 const LV = {'1': 1, '2': 2, '3': 3, a: 1.5, b: 2.5, '#': 9};
+const CASTLE_SHADE = {'1': 0.36, a: 0.28, '2': 0.2, b: 0.11, '3': 0.02, '#': 0.66};   // 돌바닥 그림 위에 덮는 어둡기 (높은 층일수록 밝게)
+const WALL_CAP = 30;                                     // 성벽 면 그림의 위쪽 돌 테두리가 위층 가장자리에 걸치는 높이
 const higher = (up, me) => me !== '#' && !L.canPass(me, up) && LV[up] > LV[me];   // 위 칸이 더 높아서 이 칸 위쪽에 성벽 면이 보임
 function drawCastle(){
   const g = GRID, C = g.cell, rows = g.rows;
   const c0 = Math.max(0, Math.floor(cam.x / C)), c1 = Math.min(rows[0].length - 1, Math.floor((cam.x + VW) / C));
   const r0 = Math.max(0, Math.floor(cam.y / C)), r1 = Math.min(rows.length - 1, Math.floor((cam.y + VH) / C));
   const at = (r, c) => (rows[r] && rows[r][c]) || '#';
+  const floor = tilePattern('castle-floor'), wall = tilePattern('castle-wall'), stairPic = !!stairArt();
   ctx.lineWidth = 2;
   for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++){
     const ch = rows[r][c], x = c * C, y = r * C;
+    if (floor){                                          // 돌바닥 그림 (art/castle-floor.webp): 층이 낮을수록 어둡게, 성벽 윗면은 아주 어둡게
+      ctx.fillStyle = floor; ctx.fillRect(x, y, C, C);
+      ctx.fillStyle = `rgba(14,12,20,${CASTLE_SHADE[ch]})`; ctx.fillRect(x, y, C, C);
+      if (ch !== '#' && (ch !== 'a' && ch !== 'b' || stairPic)) continue;   // 계단은 계단 그림이 있으면 그 그림만
+      if (ch === '#') continue;
+    }
     if (ch === '#'){                                     // 성벽 윗면: 큰 돌 블록
       ctx.fillStyle = CASTLE.wallTop; ctx.fillRect(x, y, C, C);
       ctx.strokeStyle = CASTLE.wallLine; ctx.beginPath();
@@ -921,7 +931,13 @@ function drawCastle(){
     const ch = rows[r][c], x = c * C, y = r * C;
     if (ch === '#') continue;
     const up = at(r - 1, c), left = at(r, c - 1), right = at(r, c + 1);
-    if (r > 0 && higher(up, ch)){                        // 성벽 면 (L.spotAt이 막는 자리와 같음)
+    if (r > 0 && higher(up, ch) && wall){                // 성벽 면 그림 (art/castle-wall.webp): 위층 가장자리 돌 테두리 + 벽돌 (L.spotAt이 막는 띠에 맞춤)
+      const top = y - WALL_CAP; wall.setTransform(new DOMMatrix().translate(0, top));
+      ctx.fillStyle = wall; ctx.fillRect(x, top, C, WALL_CAP + FACE_H);
+      if (up === '#'){ ctx.fillStyle = 'rgba(14,12,20,.18)'; ctx.fillRect(x, top, C, WALL_CAP + FACE_H); }   // 높은 성벽은 조금 더 어둡게
+      const sh = ctx.createLinearGradient(0, y + FACE_H, 0, y + FACE_H + 22);           // 벽 아래 그림자
+      sh.addColorStop(0, 'rgba(0,0,0,.32)'); sh.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = sh; ctx.fillRect(x, y + FACE_H, C, 22);
+    } else if (r > 0 && higher(up, ch)){                 // 성벽 면 (그림이 없을 때 코드 그림)
       ctx.fillStyle = up === '#' ? '#34303a' : CASTLE.face; ctx.fillRect(x, y, C, FACE_H);
       ctx.strokeStyle = CASTLE.faceLine; ctx.beginPath();
       for (let k = 1; k < 3; k++){ ctx.moveTo(x, y + k * FACE_H / 3); ctx.lineTo(x + C, y + k * FACE_H / 3); }
@@ -948,43 +964,25 @@ function drawCastle(){
     ctx.strokeStyle = team === 'red' ? 'rgba(255,93,115,.5)' : 'rgba(95,158,255,.5)'; ctx.lineWidth = 4; ctx.setLineDash([16, 12]); ctx.stroke(); ctx.setLineDash([]);
   }
 }
-/* 계단 그림 (지피티): art/castle-stairs.webp(위로 오르는 계단) · art/castle-stair-side.webp(오른쪽으로 오르는 계단)
-   계단 칸(걷는 자리)은 그대로, 그림은 계단 앞뒤로 조금 더 길게 (계단 끝이 아래층·위층 바닥에 걸쳐 보이게).
-   높은 쪽이 반대면 뒤집어서 그림. 그림이 없으면 위의 코드 그림(단 8개)이 보임 */
-const STAIR_LONG = 1.12, SIDE_RUN = 760, SIDE_CAP = [0.11, 0.89];   // 옆 계단: 그림 전체 길이, 양 끝 기둥 부분(안 찌그러뜨림)
-function stairGroups(){
-  if (GRID.stairs) return GRID.stairs;
-  const rows = GRID.rows, C = GRID.cell, seen = {}, out = [];
-  const at = (r, c) => (rows[r] && rows[r][c]) || '#';
-  for (let r = 0; r < rows.length; r++) for (let c = 0; c < rows[r].length; c++){
-    const ch = rows[r][c]; if ((ch !== 'a' && ch !== 'b') || seen[r + ',' + c]) continue;
-    const st = [[r, c]], b = {r0: r, r1: r, c0: c, c1: c}; seen[r + ',' + c] = 1;
-    while (st.length){
-      const [y, x] = st.pop(); b.r0 = Math.min(b.r0, y); b.r1 = Math.max(b.r1, y); b.c0 = Math.min(b.c0, x); b.c1 = Math.max(b.c1, x);
-      for (const [dy, dx] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){ const k = (y + dy) + ',' + (x + dx); if (at(y + dy, x + dx) === ch && !seen[k]){ seen[k] = 1; st.push([y + dy, x + dx]); } }
-    }
-    const L1 = at(b.r0, b.c0 - 1), R1 = at(b.r0, b.c1 + 1), U1 = at(b.r0 - 1, b.c0), D1 = at(b.r1 + 1, b.c0);
-    const side = L1 !== '#' && R1 !== '#' && LV[L1] !== LV[R1];
-    out.push({x: b.c0 * C, y: b.r0 * C, w: (b.c1 - b.c0 + 1) * C, h: (b.r1 - b.r0 + 1) * C, side, flip: side ? LV[L1] > LV[R1] : LV[D1] > LV[U1]});
-  }
-  return (GRID.stairs = out);
-}
+/* 계단 그림 (지피티): art/castle-stairs.webp(위로 오르는 계단) · art/castle-stair-side.webp(옆으로 오르는 계단)
+   걷는 자리(계단 칸) + 양옆 난간(RAIL, 걷기를 막음) + 앞뒤 끝 기둥(POST) 자리에 딱 맞춰 그림. 높은 쪽이 반대면 뒤집음.
+   옆 계단 그림이 세로로 긴 그림이 아니면(아직 안 왔으면) 위로 오르는 계단 그림을 90도 돌려서 씀 */
+const stairGroups = () => GRID.stairs || (GRID.stairs = L.stairGroups(GRID));
+const stairArt = () => artPiece('castle-stairs');
 function drawStairArt(){
-  const up = artPiece('castle-stairs'), sideArt = artPiece('castle-stair-side');
+  const up = stairArt(), sd = artPiece('castle-stair-side'), sideOk = sd && sd.img.height > sd.img.width;
+  if (!up) return;
   for (const s of stairGroups()){
-    const cx = s.x + s.w / 2, cy = s.y + s.h / 2, art = s.side ? sideArt : up;
-    if (!art || !inView(cx, cy, 500)) continue;
-    const im = art.img;
-    ctx.save(); ctx.translate(cx, cy); if (s.flip){ if (s.side) ctx.scale(-1, 1); else ctx.scale(1, -1); }
-    if (!s.side){                                        // 위로 오르는 계단: 폭에 맞추고 앞뒤로 길게
-      const w = s.w * STAIR_LONG, h = w * im.height / im.width;
-      ctx.drawImage(im, -w / 2, -h / 2, w, h);
-    } else {                                             // 옆 계단: 양 끝(기둥)은 그대로, 가운데 단만 줄여서 SIDE_RUN 길이에 맞춤
-      const h = s.h * STAIR_LONG, k = h / im.height, a = SIDE_CAP[0] * im.width, b = SIDE_CAP[1] * im.width;
-      const capL = a * k, capR = (im.width - b) * k, x0 = -SIDE_RUN / 2;
-      ctx.drawImage(im, 0, 0, a, im.height, x0, -h / 2, capL, h);
-      ctx.drawImage(im, a, 0, b - a, im.height, x0 + capL, -h / 2, SIDE_RUN - capL - capR, h);
-      ctx.drawImage(im, b, 0, im.width - b, im.height, x0 + SIDE_RUN - capR, -h / 2, capR, h);
+    const cx = s.x + s.w / 2, cy = s.y + s.h / 2;
+    if (!inView(cx, cy, 400)) continue;
+    ctx.save(); ctx.translate(cx, cy);
+    if (!s.side){                                        // 위로 오르는 계단: 높은 쪽이 위 (반대면 위아래 뒤집기)
+      const w = s.w + 2 * RAIL, h = s.h + 2 * POST; if (s.flip) ctx.scale(1, -1);
+      ctx.drawImage(up.img, -w / 2, -h / 2, w, h);
+    } else {                                             // 옆 계단: 높은 쪽이 오른쪽 (반대면 좌우 뒤집기)
+      const w = s.w + 2 * POST, h = s.h + 2 * RAIL; if (s.flip) ctx.scale(-1, 1);
+      if (sideOk) ctx.drawImage(sd.img, -w / 2, -h / 2, w, h);
+      else { ctx.rotate(Math.PI / 2); ctx.drawImage(up.img, -h / 2, -w / 2, h, w); }   // 위쪽(높은 쪽)이 오른쪽으로 가게 돌림
     }
     ctx.restore();
   }
