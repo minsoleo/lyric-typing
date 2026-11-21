@@ -32,7 +32,9 @@ const SHEETS = {props: {src: 'art/trees-rocks.webp'},   // 나무 3 (위) · 바
                 // 🏯 동양풍 맵: 나무 3(분홍 꽃·단풍·소나무) + 바위 기둥 3(납작·큰·중간) / 연못+다리 / 장식 3x3 / 깃발 + 돌 제단
                 'east-props': {src: 'art/east-props.webp', tight: true}, 'east-pond': {src: 'art/east-pond.webp', max: 900},
                 'east-decor': {src: 'art/east-decor.webp', max: 160, tight: true}, 'east-flag': {src: 'art/east-flag.webp', max: 320, blobs: true, holes: true},   // 맨 왼쪽 덩어리 = 깃발
-                'east-altar': {src: 'art/east-altar.webp', max: 320, blobs: true}};   // 맨 오른쪽 덩어리 = 돌 제단
+                'east-altar': {src: 'art/east-altar.webp', max: 320, blobs: true},   // 맨 오른쪽 덩어리 = 돌 제단
+                'castle-stairs': {src: 'art/castle-stairs.webp', max: 700, blobs: true},          // 맨 왼쪽 덩어리 = 위로 오르는 계단 (앞뒤 계단)
+                'castle-stair-side': {src: 'art/castle-stair-side.webp', max: 1000, blobs: true}}; // 오른쪽으로 오르는 계단 (옆 계단)
 // 빛 효과 (검은 배경, 가로·세로 칸이 고르게): 0 칼자국 1 폭발 2 치유 / 3 기절 별 4 빛의 창 5 빨간 구슬 / 6 순간 이동 7 섬광 8 마법진
 const GLOWS = {fx: {src: 'art/fx.webp', cols: 3, rows: 3, max: 300},
                areas: {src: 'art/areas.webp', cols: 2, rows: 1, max: 760},   // 바닥 범위: 0 레이브 궁극기(보라 시계) · 1 생명의 샘(초록)

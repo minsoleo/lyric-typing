@@ -939,11 +939,53 @@ function drawCastle(){
       else { ctx.fillStyle = CASTLE.lip; ctx.fillRect(side ? ex - 4 : ex, y, 4, C); }
     }
   }
+  drawStairArt();
   // 출발 자리: 팀 색 깔개
   for (const team of ['red', 'blue']){
     const sp = SPAWN[team]; if (!sp || !inView(sp.x, sp.y, 260)) continue;
     ctx.fillStyle = team === 'red' ? 'rgba(255,93,115,.16)' : 'rgba(95,158,255,.16)'; ctx.beginPath(); ctx.ellipse(sp.x, sp.y, 230, 150, 0, 0, Math.PI * 2); ctx.fill();
     ctx.strokeStyle = team === 'red' ? 'rgba(255,93,115,.5)' : 'rgba(95,158,255,.5)'; ctx.lineWidth = 4; ctx.setLineDash([16, 12]); ctx.stroke(); ctx.setLineDash([]);
+  }
+}
+/* 계단 그림 (지피티): art/castle-stairs.webp(위로 오르는 계단) · art/castle-stair-side.webp(오른쪽으로 오르는 계단)
+   계단 칸(걷는 자리)은 그대로, 그림은 계단 앞뒤로 조금 더 길게 (계단 끝이 아래층·위층 바닥에 걸쳐 보이게).
+   높은 쪽이 반대면 뒤집어서 그림. 그림이 없으면 위의 코드 그림(단 8개)이 보임 */
+const STAIR_LONG = 1.12, SIDE_RUN = 760, SIDE_CAP = [0.11, 0.89];   // 옆 계단: 그림 전체 길이, 양 끝 기둥 부분(안 찌그러뜨림)
+function stairGroups(){
+  if (GRID.stairs) return GRID.stairs;
+  const rows = GRID.rows, C = GRID.cell, seen = {}, out = [];
+  const at = (r, c) => (rows[r] && rows[r][c]) || '#';
+  for (let r = 0; r < rows.length; r++) for (let c = 0; c < rows[r].length; c++){
+    const ch = rows[r][c]; if ((ch !== 'a' && ch !== 'b') || seen[r + ',' + c]) continue;
+    const st = [[r, c]], b = {r0: r, r1: r, c0: c, c1: c}; seen[r + ',' + c] = 1;
+    while (st.length){
+      const [y, x] = st.pop(); b.r0 = Math.min(b.r0, y); b.r1 = Math.max(b.r1, y); b.c0 = Math.min(b.c0, x); b.c1 = Math.max(b.c1, x);
+      for (const [dy, dx] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){ const k = (y + dy) + ',' + (x + dx); if (at(y + dy, x + dx) === ch && !seen[k]){ seen[k] = 1; st.push([y + dy, x + dx]); } }
+    }
+    const L1 = at(b.r0, b.c0 - 1), R1 = at(b.r0, b.c1 + 1), U1 = at(b.r0 - 1, b.c0), D1 = at(b.r1 + 1, b.c0);
+    const side = L1 !== '#' && R1 !== '#' && LV[L1] !== LV[R1];
+    out.push({x: b.c0 * C, y: b.r0 * C, w: (b.c1 - b.c0 + 1) * C, h: (b.r1 - b.r0 + 1) * C, side, flip: side ? LV[L1] > LV[R1] : LV[D1] > LV[U1]});
+  }
+  return (GRID.stairs = out);
+}
+function drawStairArt(){
+  const up = artPiece('castle-stairs'), sideArt = artPiece('castle-stair-side');
+  for (const s of stairGroups()){
+    const cx = s.x + s.w / 2, cy = s.y + s.h / 2, art = s.side ? sideArt : up;
+    if (!art || !inView(cx, cy, 500)) continue;
+    const im = art.img;
+    ctx.save(); ctx.translate(cx, cy); if (s.flip){ if (s.side) ctx.scale(-1, 1); else ctx.scale(1, -1); }
+    if (!s.side){                                        // 위로 오르는 계단: 폭에 맞추고 앞뒤로 길게
+      const w = s.w * STAIR_LONG, h = w * im.height / im.width;
+      ctx.drawImage(im, -w / 2, -h / 2, w, h);
+    } else {                                             // 옆 계단: 양 끝(기둥)은 그대로, 가운데 단만 줄여서 SIDE_RUN 길이에 맞춤
+      const h = s.h * STAIR_LONG, k = h / im.height, a = SIDE_CAP[0] * im.width, b = SIDE_CAP[1] * im.width;
+      const capL = a * k, capR = (im.width - b) * k, x0 = -SIDE_RUN / 2;
+      ctx.drawImage(im, 0, 0, a, im.height, x0, -h / 2, capL, h);
+      ctx.drawImage(im, a, 0, b - a, im.height, x0 + capL, -h / 2, SIDE_RUN - capL - capR, h);
+      ctx.drawImage(im, b, 0, im.width - b, im.height, x0 + SIDE_RUN - capR, -h / 2, capR, h);
+    }
+    ctx.restore();
   }
 }
 // 성 맵 물건 (임시 그림): 돌기둥 · 석상 · 나무 상자
