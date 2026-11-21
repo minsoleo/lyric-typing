@@ -35,7 +35,7 @@ t('성 맵: 계단은 2칸 폭 — 출발→Ⓐ 계단 a 팀마다 1곳, Ⓑ로 
   const groups = ch => { const seen = new Set(); let k = 0; G.rows.forEach((row, r) => [...row].forEach((x, c) => { if (x !== ch || seen.has(r * 100 + c)) return; k++; const st = [[r, c]]; while (st.length){ const [y, z] = st.pop(); if (seen.has(y * 100 + z) || !G.rows[y] || G.rows[y][z] !== ch) continue; seen.add(y * 100 + z); st.push([y + 1, z], [y - 1, z], [y, z + 1], [y, z - 1]); } })); return k; };
   return n('a') === 4 && n('b') === 8 && groups('a') === 2 && groups('b') === 4;
 });
-t('성 맵: Ⓑ(가운데) 구역이 가장 큼', () => C.zones[1].r > C.zones[0].r && C.zones[1].r > C.zones[2].r && C.zones[1].r >= 400 && C.zones[0].r === C.zones[2].r);
+t('성 맵: Ⓑ가 있는 3층이 가장 큰 층 (2층을 다 합친 것보다 넓음)', () => { const n = ch => G.rows.join('').split(ch).length - 1; return n('3') > n('2') + n('a') + n('b') && n('3') > n('1'); });
 t('성 맵: 출발 자리는 1층, 빨강·파랑이 180도 자리', () => L.cellAt(G, C.spawn.red.x, C.spawn.red.y) === '1' && C.spawn.blue.x === C.W - C.spawn.red.x && C.spawn.blue.y === C.H - C.spawn.red.y
   && C.spawn.solo.x === C.spawn.red.x && C.spawn.solo.y === C.spawn.red.y);
 t('성 맵: 구역 Ⓐ·Ⓒ는 2층, Ⓑ는 3층 (원 전체가 한 층)', () => {
@@ -64,6 +64,11 @@ t('성 맵: 빨강 출발에서 파랑 출발·세 구역·허수아비까지 �
   }
   const reach = (x, y) => seen.has(key(Math.floor(y / 200), Math.floor(x / 200)));
   return reach(C.spawn.blue.x, C.spawn.blue.y) && C.zones.every(z => reach(z.x, z.y)) && C.dummies.every(([x, y]) => reach(x, y));
+});
+t('성 맵: A에서 아래 복도로 들어가는 길이 넉넉함 (가데온 몸으로 250 이상)', () => {
+  const g = {rows: G.rows, cell: 200, face: 60}; let n = 0;
+  for (let y = 2800; y <= 3200; y += 10){ const q = L.floorMove(g, {x: 1500, y}, {x: 1700, y}, 26); if (Math.abs(q.x - 1700) < 1) n++; }
+  return n * 10 >= 250;
 });
 t('다른 맵은 그대로 (숲·넓은 맵은 좌우 대칭, 격자 없음)', () => MAGIC_MAPS.forest.sym === 'x' && MAGIC_MAPS.wide.sym === 'x' && !MAGIC_MAPS.forest.grid && !MAGIC_MAPS.wide.grid);
 
