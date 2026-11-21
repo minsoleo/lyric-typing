@@ -269,7 +269,44 @@
   // 방이 쓰이는 중인가 (판 뒤집기 방은 players)
   const roomInUse = (r, now) => !!r && (liveIds(r.st, now).length > 0 || (!!r.players && Object.keys(r.players).length > 0));
 
-  window.MagicLogic = {NET_GRACE, netGone, liveIds, roomInUse, objSounds, SOUND_NEAR, SOUND_FAR, hearGain, reView, reViewVec, scoreSides, viewOf, flipPt, flipVec, flipAng, flipRect, flipEvent, flipState, flipDummies, flipObj, zoneLabel, breaksStealth, phaseKick, canAnnounce, aheadObj, nextHost, zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
+  // 🏰 성 맵 층 격자: g = {rows: ['#112…', …], cell: 200}. # 성벽 · 1~3 층 · a 1↔2 계단 · b 2↔3 계단
+  const LEVEL = {'1': 1, '2': 2, '3': 3, a: 1.5, b: 2.5};
+  const cellAt = (g, x, y) => { const r = Math.floor(y / g.cell), c = Math.floor(x / g.cell); return (g.rows[r] && g.rows[r][c]) || '#'; };
+  // 같은 층끼리, 또는 계단과 바로 위·아래 층만 오갈 수 있음
+  const canPass = (a, b) => {
+    if (a === '#' || b === '#' || !(a in LEVEL) || !(b in LEVEL)) return false;
+    if (a === b) return true;
+    return (a === 'a' || a === 'b' || b === 'a' || b === 'b') && Math.abs(LEVEL[a] - LEVEL[b]) <= 0.5;
+  };
+  // from → to로 움직이되 낭떠러지·성벽은 못 넘음. 칸의 1/5씩 나눠 검사(빠른 돌진도 못 뚫음), 막히면 가로·세로로 미끄러짐.
+  // 몸(반지름 r의 0.8)도 다른 층에 걸치지 않게. 이미 걸쳐 있으면(순간 이동 등) 가운데만 보고 빠져나오게 함
+  function floorMove(g, from, to, r){
+    if (cellAt(g, from.x, from.y) === '#') return {x: to.x, y: to.y};
+    const k = r * 0.8, offs = [[k, 0], [-k, 0], [0, k], [0, -k]];
+    const fits = q => { const c = cellAt(g, q.x, q.y); return offs.every(([dx, dy]) => canPass(c, cellAt(g, q.x + dx, q.y + dy))); };
+    let p = {x: from.x, y: from.y}, strict = fits(p);
+    const ok = q => canPass(cellAt(g, p.x, p.y), cellAt(g, q.x, q.y)) && (!strict || fits(q));
+    const n = Math.max(1, Math.ceil(Math.hypot(to.x - from.x, to.y - from.y) / (g.cell / 5)));
+    for (let i = 1; i <= n; i++){
+      const q = {x: from.x + (to.x - from.x) * i / n, y: from.y + (to.y - from.y) * i / n};
+      const next = [q, {x: q.x, y: p.y}, {x: p.x, y: q.y}].find(ok);
+      if (!next) break;
+      p = next; if (!strict) strict = fits(p);
+    }
+    return p;
+  }
+  // 성벽 면: 위 칸이 성벽이거나 더 높은(못 통하는) 층이면, 그 칸 위쪽 h 띠는 걸어서 못 들어감 (그림도 여기에 그림)
+  function cliffRects(g, h){
+    const out = [];
+    for (let r = 1; r < g.rows.length; r++) for (let c = 0; c < g.rows[r].length; c++){
+      const me = g.rows[r][c], up = g.rows[r - 1][c];
+      if (me === '#' || canPass(me, up)) continue;
+      if (up === '#' || LEVEL[up] > LEVEL[me]) out.push({x: c * g.cell, y: r * g.cell, w: g.cell, h, kind: 'cliff'});
+    }
+    return out;
+  }
+
+  window.MagicLogic = {cellAt, canPass, floorMove, cliffRects, NET_GRACE, netGone, liveIds, roomInUse, objSounds, SOUND_NEAR, SOUND_FAR, hearGain, reView, reViewVec, scoreSides, viewOf, flipPt, flipVec, flipAng, flipRect, flipEvent, flipState, flipDummies, flipObj, zoneLabel, breaksStealth, phaseKick, canAnnounce, aheadObj, nextHost, zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
     addEffect, effectSum, takenMult, pruneEffects, removeTag, calcDamage, inArc, pickTarget, wallPoints, gainUlt, busyTime,
     flagRate, flagPickup, newZone, zoneStep, zoneWinner};
 })();

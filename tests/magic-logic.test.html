@@ -57,6 +57,16 @@ t('밸런스 패치 (2026-11-21, 친구랑 해 보고)', () => {
 t('netGone: 끊긴 지 15초 넘으면 나간 걸로', () => L.NET_GRACE === 15 && !L.netGone({off: 1000}, 1000 + 14000) && L.netGone({off: 1000}, 1000 + 15001) && !L.netGone({x: 1}, 99999999) && L.netGone(null, 0));
 t('liveIds: 오래 끊긴 사람은 빼고 셈', () => L.liveIds({a: {x: 1}, b: {off: 0}, c: {off: 50000}}, 60000).join() === 'a,c' && L.liveIds(null, 0).length === 0);
 t('roomInUse: 오래 끊긴 사람만 남은 방은 빈 방', () => !L.roomInUse(null, 0) && L.roomInUse({st: {a: {x: 1}}}, 0) && !L.roomInUse({st: {a: {off: 0}}}, 20000) && L.roomInUse({st: {a: {off: 0}, b: {x: 1}}}, 20000) && L.roomInUse({players: {p: 1}}, 0));
+// 🏰 성 맵: 층 격자 (# 성벽, 1~3 층, a 1↔2 계단, b 2↔3 계단). 작은 격자 4칸×3줄, 칸 100
+const G = {cell: 100, rows: ['1a22', '1122', '##22']};
+t('cellAt: 칸 글자, 바깥은 성벽', () => L.cellAt(G, 150, 50) === 'a' && L.cellAt(G, 350, 250) === '2' && L.cellAt(G, -5, 50) === '#' && L.cellAt(G, 50, 999) === '#');
+t('canPass: 같은 층·계단으로만', () => L.canPass('1', '1') && L.canPass('1', 'a') && L.canPass('a', '2') && L.canPass('2', 'b') && L.canPass('b', '3') && !L.canPass('1', '2') && !L.canPass('2', '3') && !L.canPass('a', 'b') && !L.canPass('1', '3') && !L.canPass('#', '#') && !L.canPass('2', '#'));
+t('floorMove: 낭떠러지에 막힘 (1층 → 2층 직접 못 감)', () => { const q = L.floorMove(G, {x: 50, y: 150}, {x: 250, y: 150}, 20); return q.x > 150 && q.x < 200 && near(q.y, 150) && L.cellAt(G, q.x, q.y) === '1'; });
+t('floorMove: 막히면 벽 따라 미끄러짐', () => { const q = L.floorMove(G, {x: 50, y: 150}, {x: 250, y: 120}, 20); return q.x < 200 && q.y < 125; });
+t('floorMove: 계단으로는 올라감', () => { const q = L.floorMove(G, {x: 50, y: 50}, {x: 250, y: 50}, 20); return near(q.x, 250) && near(q.y, 50) && L.cellAt(G, q.x, q.y) === '2'; });
+t('floorMove: 한 번에 멀리 가도 낭떠러지를 안 뚫음', () => { const q = L.floorMove(G, {x: 250, y: 150}, {x: 50, y: 1150}, 20); return L.cellAt(G, q.x, q.y) === '2'; });
+t('floorMove: 가장자리에 걸친 자리에서도 빠져나옴', () => { const q = L.floorMove(G, {x: 195, y: 150}, {x: 130, y: 150}, 20); return near(q.x, 130); });
+t('cliffRects: 위가 성벽이거나 더 높은 칸이면 그 칸 위쪽 띠', () => { const g = {cell: 100, rows: ['2#', '12', '1a']}; const c = L.cliffRects(g, 30); return c.length === 2 && c.some(r => r.x === 0 && r.y === 100 && r.w === 100 && r.h === 30) && c.some(r => r.x === 100 && r.y === 100) && c.every(r => r.kind === 'cliff'); });
 t('레이브 대기 시간은 원래대로, 궁극기 범위는 12초 유지', () => by('dealer').spells.map(s => s.cd).join() === '6,8,10,16,14' && by('dealer').ult.time === 12);
 t('가데온 검 이름: 강철 베기 · 검의 폭풍', () => by('tank').basic.name === '강철 베기' && by('tank').spells.some(s => s.name === '검의 폭풍'));
 t('findSpell: 다른 캐릭터 스킬은 못 씀', () => L.findSpell(all(by('tank')), '목 긋기') === null);
