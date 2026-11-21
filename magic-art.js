@@ -16,7 +16,9 @@ const FILES = {
 };
 const MAX = 360;                 // 줄여 둘 최대 크기(픽셀)
 // 바닥 무늬 (이어 붙이는 타일): 맵에서 한 장이 차지할 크기(픽셀)
-const TILES = {grass: {src: 'art/grass.webp', size: 420}, dirt: {src: 'art/dirt.webp', size: 260}};
+const TILES = {grass: {src: 'art/grass.webp', size: 420}, dirt: {src: 'art/dirt.webp', size: 260},
+               // 🏯 동양풍 맵 (지피티 그림이 오면 이 이름으로 art/에 넣기만 하면 됨)
+               'east-ground': {src: 'art/east-ground.jpg', size: 420}, 'east-path': {src: 'art/east-path.webp', size: 260}};
 // 여러 개가 든 그림 (줄마다 왼쪽→오른쪽 순서로 자동으로 잘라 씀)
 const SHEETS = {props: {src: 'art/trees-rocks.webp'},   // 나무 3 (위) · 바위 3 (아래)
                 pond: {src: 'art/pond.webp', max: 900},  // 연못 1 (크게 그려서 선명하게)
@@ -26,7 +28,10 @@ const SHEETS = {props: {src: 'art/trees-rocks.webp'},   // 나무 3 (위) · 바
                 'icons-tank': {src: 'art/icons-tank.webp', max: 128},
                 'icons-dealer': {src: 'art/icons-dealer.webp', max: 128},
                 'icons-healer': {src: 'art/icons-healer.webp', max: 128},
-                things: {src: 'art/things.webp', max: 200}};     // 덩굴 화살 · 사슬 갈고리 · 바위 기둥
+                things: {src: 'art/things.webp', max: 200},     // 덩굴 화살 · 사슬 갈고리 · 바위 기둥
+                // 🏯 동양풍 맵: 나무 3(분홍 꽃·단풍·소나무) + 바위 기둥 3(납작·큰·중간) / 연못+다리 / 장식 3x3 / 깃발 + 돌 제단
+                'east-props': {src: 'art/east-props.webp'}, 'east-pond': {src: 'art/east-pond.webp', max: 900},
+                'east-decor': {src: 'art/east-decor.webp', max: 160}, 'east-flag': {src: 'art/east-flag.webp', max: 320}};
 // 빛 효과 (검은 배경, 가로·세로 칸이 고르게): 0 칼자국 1 폭발 2 치유 / 3 기절 별 4 빛의 창 5 빨간 구슬 / 6 순간 이동 7 섬광 8 마법진
 const GLOWS = {fx: {src: 'art/fx.webp', cols: 3, rows: 3, max: 300},
                areas: {src: 'art/areas.webp', cols: 2, rows: 1, max: 760},   // 바닥 범위: 0 레이브 궁극기(보라 시계) · 1 생명의 샘(초록)

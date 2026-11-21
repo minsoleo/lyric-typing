@@ -14,7 +14,7 @@ const pillar = (x, y, s = 70) => ({x, y, w: s, h: s, kind: 'pillar'});
 const statue = (x, y, s = 90) => ({x, y, w: s, h: s, kind: 'statue'});
 const crate = (x, y, w = 80, h = 80) => ({x, y, w, h, kind: 'crate'});
 
-window.MAGIC_MAPS = {
+const MAPS = {
   // 🌳 숲 맵: ⚔ 킬내기전 · 혼자 연습 기본
   forest: {
     id: 'forest', name: '숲 맵', W: 3200, H: 1800, sym: 'x',   // sym: 파랑 팀은 좌우를 뒤집어 봄 (팀마다 같은 화면)
@@ -102,4 +102,8 @@ window.MAGIC_MAPS = {
     zones: [{x: 800, y: 2400, r: 240, side: 'red'}, {x: 3200, y: 1900, r: 280, side: 'mid'}, {x: 5600, y: 1400, r: 240, side: 'blue'}]
   }
 };
+// 🏯 동양풍 맵: 🚩 깃발쟁 (2026-11-21). 넓은 맵과 크기·배치가 똑같고 그림만 동양풍 (안개 낀 이끼 풀밭 · 돌길 · 꽃나무·단풍·소나무 · 바위 기둥 · 연꽃 연못 + 붉은 다리 · 석등·대나무)
+//   그림은 art/east-*.webp (지피티), 없으면 코드로 그린 임시 그림
+MAPS.east = Object.assign({}, MAPS.wide, {id: 'east', name: '동양풍 맵', theme: 'east', decorSeed: 20261121});
+window.MAGIC_MAPS = MAPS;
 })();

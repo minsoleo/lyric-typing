@@ -94,10 +94,10 @@ let net = null;                                    // 친구랑 연습 중이면
 const isAuth = () => !net || net.isHost();         // 허수아비를 계산하는 컴퓨터 (혼자면 나, 온라인이면 방장)
 // ⚔ 대결: match = {id, startAt, endAt, len, score} (서버 시계, ms)
 let match = null, matchId = null;
-// 대결 모드 (방장이 고름): 킬내기전은 숲 맵, 깃발쟁은 넓은 맵, 점령전은 성 맵
+// 대결 모드 (방장이 고름): 킬내기전은 숲 맵, 깃발쟁은 동양풍 맵, 점령전은 성 맵
 const MODES = {kill: {name: '⚔ 킬내기전', goal: '상대 팀을 많이 쓰러뜨리면 이겨요'}, flag: {name: '🚩 깃발쟁', goal: '깃발을 오래 들고 있으면 이겨요'},
   zone: {name: '🏳 점령전', goal: '구역 2곳을 먼저 완전 점령하면 이겨요'}};
-const MODE_MAP = {kill: 'forest', flag: 'wide', zone: 'castle'};
+const MODE_MAP = {kill: 'forest', flag: 'east', zone: 'castle'};
 let gmode = 'kill', obj = null, heldObj = null, objSaid = null;                     // obj: 방장이 계산한 깃발·점령 상태 (서버에서 받음)
 const mmode = () => (match && match.mode) || 'kill';
 // 준비(3·2·1) → 진행 → 끝 (점령전은 끝나는 시간이 없고, 방장이 승리를 쓰면 끝)
@@ -805,6 +805,11 @@ const inView = (x, y, pad) => x > cam.x - pad && x < cam.x + VW + pad && y > cam
 const DECOR_ART = {grass: h => h < 0.2 ? 0 : 1, flower: h => h < 0.33 ? 3 : h < 0.66 ? 4 : 5, mush: h => h > 0.5 ? 6 : 7, bush: h => h < 0.5 ? 2 : 8};
 const DECOR_SIZE = {grass: 26, flower: 26, mush: 30, bush: 46};
 const GROUND_DIM = 0.18;                                 // 풀밭을 얼마나 어둡게 누를지 (0이면 그림 그대로)
+// 맵 테마별 그림 이름 (🏯 동양풍 맵은 art/east-*.webp, 없으면 코드로 그린 임시 그림)
+const THEME_ART = {forest: {ground: 'grass', path: 'dirt', props: 'props', pond: 'pond', decor: 'decor', rocks: {big: 3, mid: 4, flat: 5}, pathColor: '#c98f5a'},
+  east: {ground: 'east-ground', path: 'east-path', props: 'east-props', pond: 'east-pond', decor: 'east-decor', rocks: {flat: 3, big: 4, mid: 5}, pathColor: '#9a9ca2'}};
+const mapArt = () => THEME_ART[MAP.theme] || THEME_ART.forest;
+const isEast = () => MAP.theme === 'east';
 const patterns = {};
 function tilePattern(id){
   if (patterns[id]) return patterns[id];
@@ -813,13 +818,13 @@ function tilePattern(id){
 }
 function drawGround(t){
   if (GRID){ drawCastle(); return; }                     // 🏰 성 맵
-  const grass = tilePattern('grass'), dirt = tilePattern('dirt');
+  const grass = tilePattern(mapArt().ground), dirt = tilePattern(mapArt().path);
   if (grass){                                            // 풀밭 그림 (art/grass.webp)을 타일처럼 깔고, 캐릭터가 잘 보이게 살짝 어둡게
     ctx.fillStyle = grass; ctx.fillRect(cam.x - 2, cam.y - 2, VW + 4, VH + 4);
     ctx.fillStyle = `rgba(0,28,12,${GROUND_DIM})`; ctx.fillRect(cam.x - 2, cam.y - 2, VW + 4, VH + 4);
   } else {                                               // 그림이 없으면 예전처럼 색으로
-    const g = ctx.createLinearGradient(0, 0, 0, WH);
-    g.addColorStop(0, '#2c6440'); g.addColorStop(1, '#1d4a2c');
+    const g = ctx.createLinearGradient(0, 0, 0, WH), e = isEast();
+    g.addColorStop(0, e ? '#2f5d57' : '#2c6440'); g.addColorStop(1, e ? '#1f4541' : '#1d4a2c');
     ctx.fillStyle = g; ctx.fillRect(0, 0, WW, WH);
     ctx.fillStyle = 'rgba(255,255,255,.025)';
     const x0 = Math.floor(cam.x / 80) * 80, y0 = Math.floor(cam.y / 80) * 80;
@@ -832,12 +837,16 @@ function drawGround(t){
     ctx.strokeStyle = 'rgba(35,50,15,.45)'; ctx.lineWidth = 90; ctx.stroke();
     ctx.strokeStyle = dirt; ctx.lineWidth = 78; ctx.stroke();
     ctx.strokeStyle = `rgba(0,28,12,${GROUND_DIM * 0.7})`; ctx.stroke();
+  } else if (isEast()){                                 // 🏯 임시 돌길: 회색 돌 + 가는 주황 줄무늬
+    ctx.strokeStyle = 'rgba(40,44,50,.55)'; ctx.lineWidth = 92; ctx.stroke();
+    ctx.strokeStyle = '#8f9399'; ctx.lineWidth = 78; ctx.stroke();
+    ctx.strokeStyle = 'rgba(230,140,60,.75)'; ctx.lineWidth = 4; ctx.setLineDash([34, 22]); ctx.stroke(); ctx.setLineDash([]);
   } else {
     ctx.strokeStyle = 'rgba(140,105,60,.45)'; ctx.lineWidth = 76; ctx.stroke();
     ctx.strokeStyle = 'rgba(190,150,95,.35)'; ctx.lineWidth = 50; ctx.stroke();
   }
   // 풀·꽃·버섯·덤불 (art/decor.webp가 있으면 그림으로, 바닥 쪽을 기준으로 세워 그림)
-  const decor = window.MagicArt && MagicArt.sheet && MagicArt.sheet('decor');
+  const decor = window.MagicArt && MagicArt.sheet && MagicArt.sheet(mapArt().decor);
   if (!lite) for (const d of DECOR){
     if (!inView(d.x, d.y, 40)) continue;
     if (decor && decor.length >= 9){
@@ -848,6 +857,7 @@ function drawGround(t){
       continue;
     }
     if (d.kind === 'grass' && grass) continue;           // 풀밭 그림에 이미 풀잎이 있음
+    if (isEast()){ drawEastDecor(d); continue; }         // 🏯 임시 장식: 푸른 풀 · 꽃잎 · 석등 · 회양목
     if (d.kind === 'grass'){
       ctx.strokeStyle = d.hue > 0.5 ? '#4f9a5c' : '#3f8a4f'; ctx.lineWidth = 3;
       ctx.beginPath(); ctx.moveTo(d.x - 6, d.y); ctx.lineTo(d.x - 9, d.y - 12); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x, d.y - 15); ctx.moveTo(d.x + 6, d.y); ctx.lineTo(d.x + 10, d.y - 11); ctx.stroke();
@@ -962,18 +972,37 @@ function drawCastleProp(o){
     ctx.beginPath(); ctx.moveTo(o.x + 4, top + 28); ctx.lineTo(o.x + o.w - 4, base - 6); ctx.moveTo(o.x + o.w - 4, top + 28); ctx.lineTo(o.x + 4, base - 6); ctx.stroke();
   }
 }
+// 🏯 동양풍 임시 장식 (art/east-decor.webp가 오기 전): 푸른 풀 · 꽃잎 더미 · 석등/이끼 돌 · 회양목
+function drawEastDecor(d){
+  if (d.kind === 'grass'){
+    ctx.strokeStyle = d.hue > 0.5 ? '#4f8f86' : '#3f7d74'; ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.moveTo(d.x - 6, d.y); ctx.lineTo(d.x - 9, d.y - 12); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x, d.y - 15); ctx.moveTo(d.x + 6, d.y); ctx.lineTo(d.x + 10, d.y - 11); ctx.stroke();
+  } else if (d.kind === 'flower'){
+    ctx.fillStyle = d.hue < 0.5 ? '#ffc2da' : d.hue < 0.8 ? '#ffd76a' : '#a9c4ff';
+    for (let i = 0; i < 5; i++){ const a = i * 1.3 + d.hue * 6; ctx.beginPath(); ctx.ellipse(d.x + Math.cos(a) * 7, d.y + Math.sin(a) * 4, 4, 2.4, a, 0, Math.PI * 2); ctx.fill(); }
+  } else if (d.kind === 'mush'){
+    if (d.hue > 0.5){                                    // 작은 석등
+      ctx.fillStyle = '#6f747c'; ctx.fillRect(d.x - 4, d.y - 12, 8, 12); ctx.fillRect(d.x - 9, d.y - 1, 18, 4);
+      ctx.fillStyle = '#8d939c'; ctx.fillRect(d.x - 8, d.y - 22, 16, 10);
+      ctx.fillStyle = '#ffd88a'; ctx.fillRect(d.x - 4, d.y - 19, 8, 5);
+      ctx.fillStyle = '#545961'; ctx.beginPath(); ctx.moveTo(d.x - 12, d.y - 22); ctx.lineTo(d.x, d.y - 31); ctx.lineTo(d.x + 12, d.y - 22); ctx.fill();
+    } else { ctx.fillStyle = '#7d838b'; ctx.beginPath(); ctx.ellipse(d.x, d.y - 4, 11, 7, 0, 0, Math.PI * 2); ctx.fill(); ctx.fillStyle = '#5f9a6a'; ctx.beginPath(); ctx.ellipse(d.x - 2, d.y - 8, 7, 3, 0, 0, Math.PI * 2); ctx.fill(); }
+  } else {                                               // 둥근 회양목
+    ctx.fillStyle = '#245a45'; circle(d.x, d.y - 8, 16); ctx.fillStyle = '#33755b'; circle(d.x - 5, d.y - 12, 9);
+  }
+}
 /* 나무·바위 그림 (art/trees-rocks.webp: 나무 3개 · 바위 3개). 부딪히는 칸(o.x, o.y, o.w, o.h)은 그대로, 그림만 그 위에 */
-const PROP = {tree: [0, 1, 2], rockBig: 3, rockMid: 4, rockFlat: 5};
 function propOf(o){
-  const sh = window.MagicArt && MagicArt.sheet ? MagicArt.sheet('props') : null;
+  const sh = window.MagicArt && MagicArt.sheet ? MagicArt.sheet(mapArt().props) : null, rk = mapArt().rocks;
   if (!sh || sh.length < 6 || (o.kind !== 'tree' && o.kind !== 'rock')) return null;   // 성 맵 물건(기둥·석상·상자)은 코드 그림
-  if (o.kind === 'tree') return sh[PROP.tree[Math.abs(Math.round(Math.min(o.x, WW - o.x - o.w) * 7 + o.y * 13)) % 3]];   // 자리마다 정해진 나무 모양 (거울 자리는 같은 나무)
-  return sh[o.w / o.h >= 1.8 ? PROP.rockFlat : o.w >= 130 ? PROP.rockBig : PROP.rockMid];
+  if (o.kind === 'tree') return sh[treeKind(o)];
+  return sh[o.w / o.h >= 1.8 ? rk.flat : o.w >= 130 ? rk.big : rk.mid];
 }
 // 바닥에 붙은 것(연못)은 먼저, 나무·바위는 캐릭터와 함께 아래쪽에 있는 것이 앞에 보이게(drawWorld에서) 그림
 function drawObstacles(){
   for (const o of OBSTACLES) if (o.kind === 'pond' && inView(o.x + o.w / 2, o.y + o.h / 2, 200)) drawObstacle(o);
 }
+const treeKind = o => Math.abs(Math.round(Math.min(o.x, WW - o.x - o.w) * 7 + o.y * 13)) % 3;   // 자리마다 정해진 나무 모양 0~2 (거울 자리는 같은 나무)
 function drawObstacle(o){
   if (o.kind === 'pillar' || o.kind === 'statue' || o.kind === 'crate'){ drawCastleProp(o); return; }
   {
@@ -989,7 +1018,7 @@ function drawObstacle(o){
       ctx.globalAlpha = 1;
       return;
     }
-    const pond = o.kind === 'pond' && window.MagicArt && MagicArt.sheet && MagicArt.sheet('pond');
+    const pond = o.kind === 'pond' && window.MagicArt && MagicArt.sheet && MagicArt.sheet(mapArt().pond);
     if (pond && pond[0]){                                // 연못 그림 (art/pond.webp): 물 부분이 부딪히는 칸에 맞게 조금 크게
       const img = pond[0].img, w = o.w * 1.55, h = w * img.height / img.width;
       ctx.drawImage(img, o.x + o.w / 2 - w / 2, o.y + o.h / 2 - h / 2, w, h);
@@ -1001,6 +1030,18 @@ function drawObstacle(o){
       ctx.fillStyle = '#3d94c9'; ctx.beginPath(); ctx.ellipse(o.x + o.w / 2, o.y + o.h / 2, o.w / 2 - 8, o.h / 2 - 10, 0, 0, Math.PI * 2); ctx.fill();
       ctx.fillStyle = '#5bbf6a'; circle(o.x + o.w * 0.72, o.y + o.h * 0.62, 16); circle(o.x + o.w * 0.25, o.y + o.h * 0.3, 12);   // 연잎
       ctx.strokeStyle = 'rgba(255,255,255,.35)'; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(o.x + o.w * 0.4, o.y + o.h * 0.5, 22, 0.2, 2.2); ctx.stroke();
+      if (isEast()){                                     // 🏯 임시 붉은 아치 다리 (금색 난간)
+        const cy = o.y + o.h / 2, x0 = o.x - 10, x1 = o.x + o.w + 10;
+        ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.fillRect(x0, cy + 6, x1 - x0, 30);
+        ctx.fillStyle = '#b8282f'; ctx.beginPath(); ctx.moveTo(x0, cy + 22); ctx.quadraticCurveTo((x0 + x1) / 2, cy - 30, x1, cy + 22); ctx.lineTo(x1, cy + 2); ctx.quadraticCurveTo((x0 + x1) / 2, cy - 50, x0, cy + 2); ctx.fill();
+        ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(x0, cy + 2); ctx.quadraticCurveTo((x0 + x1) / 2, cy - 50, x1, cy + 2); ctx.stroke();
+      }
+    } else if (o.kind === 'rock' && isEast()){            // 🏯 임시 바위 기둥: 층층이 깎인 회색 바위
+      ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(o.x + o.w / 2 + 6, o.y + o.h, o.w * 0.6, o.h * 0.3, 0, 0, Math.PI * 2); ctx.fill();
+      const tall = Math.min(150, o.w * 0.9);
+      for (let k = 0; k < 3; k++){ const w = o.w * (1 - k * 0.2), x = o.x + (o.w - w) / 2, y = o.y + o.h - (k + 1) * tall / 3;
+        ctx.fillStyle = k % 2 ? '#9aa0a8' : '#7f858e'; roundRect(x, y, w, tall / 3 + 6, 10); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,.18)'; roundRect(x + 6, y + 3, w * 0.5, 6, 3); ctx.fill(); }
     } else if (o.kind === 'rock'){
       ctx.fillStyle = 'rgba(0,0,0,.25)'; roundRect(o.x + 4, o.y + 8, o.w, o.h, 18); ctx.fill();
       ctx.fillStyle = '#80867f'; roundRect(o.x, o.y, o.w, o.h, 18); ctx.fill();
@@ -1009,10 +1050,12 @@ function drawObstacle(o){
     } else {
       const cx = o.x + o.w / 2, cy = o.y + o.h / 2, r = o.w * 0.68;
       ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(cx + 8, cy + 16, r, r * 0.8, 0, 0, Math.PI * 2); ctx.fill();
+      // 나무 색: 숲은 초록, 🏯 동양풍은 자리마다 분홍 꽃나무 · 주황 단풍 · 소나무
+      const leaf = isEast() ? [['#d9709c', '#f29cc0', '#ffd0e2'], ['#c45a22', '#e8843a', '#ffbf7a'], ['#1d5238', '#2e6b4a', '#4f8a64']][treeKind(o)] : ['#1f6e3b', '#2a8a4a', '#3fa85f'];
       ctx.fillStyle = '#5e4128'; ctx.fillRect(cx - 8, cy, 16, o.h * 0.55);
-      ctx.fillStyle = '#1f6e3b'; circle(cx, cy - 4, r);
-      ctx.fillStyle = '#2a8a4a'; circle(cx - r * 0.35, cy - r * 0.2, r * 0.6); circle(cx + r * 0.35, cy - r * 0.3, r * 0.55);
-      ctx.fillStyle = '#3fa85f'; circle(cx - r * 0.3, cy - r * 0.45, r * 0.32);
+      ctx.fillStyle = leaf[0]; circle(cx, cy - 4, r);
+      ctx.fillStyle = leaf[1]; circle(cx - r * 0.35, cy - r * 0.2, r * 0.6); circle(cx + r * 0.35, cy - r * 0.3, r * 0.55);
+      ctx.fillStyle = leaf[2]; circle(cx - r * 0.3, cy - r * 0.45, r * 0.32);
     }
   }
 }
@@ -1522,17 +1565,18 @@ const MM_W = 240, MM_RES = 2.5;                          // 작은 지도 가로
 function buildMinimap(){
   if (GRID) return buildCastleMinimap();
   const A = window.MagicArt;
-  if (!A || !A.tile || !A.tile('grass') || !A.sheet('props') || !A.sheet('pond')) return null;   // 그림이 다 오면 만듦
+  const th = mapArt();
+  if (!A || !A.tile || !A.tile(th.ground) || !A.sheet(th.props) || !A.sheet(th.pond)) return null;   // 그림이 다 오면 만듦 (그 전엔 색 점으로)
   const k = MM_W / WW * MM_RES, c = document.createElement('canvas');
   c.width = Math.round(WW * k); c.height = Math.round(WH * k);
   const g = c.getContext('2d'); g.imageSmoothingQuality = 'high';
-  const grass = g.createPattern(A.tile('grass'), 'repeat'); grass.setTransform(new DOMMatrix().scale(k * 1.6));   // 지도에선 풀 무늬를 조금 크게
+  const grass = g.createPattern(A.tile(th.ground), 'repeat'); grass.setTransform(new DOMMatrix().scale(k * 1.6));   // 지도에선 풀 무늬를 조금 크게
   g.fillStyle = grass; g.fillRect(0, 0, c.width, c.height);
   g.fillStyle = 'rgba(0,28,12,.28)'; g.fillRect(0, 0, c.width, c.height);
   g.save(); g.scale(k, k);
   g.lineCap = 'round'; tracePath(g);
-  g.strokeStyle = 'rgba(35,50,15,.6)'; g.lineWidth = 110; g.stroke(); g.strokeStyle = '#c98f5a'; g.lineWidth = 90; g.stroke();
-  const pond = (A.sheet('pond') || [])[0];
+  g.strokeStyle = 'rgba(35,50,15,.6)'; g.lineWidth = 110; g.stroke(); g.strokeStyle = th.pathColor; g.lineWidth = 90; g.stroke();
+  const pond = (A.sheet(th.pond) || [])[0];
   for (const o of OBSTACLES){
     const art = o.kind === 'pond' ? pond : propOf(o), cx = o.x + o.w / 2;
     if (!art){ g.fillStyle = o.kind === 'pond' ? '#3d94c9' : '#9fa69c'; g.fillRect(o.x, o.y, o.w, o.h); continue; }
@@ -1613,11 +1657,12 @@ function draw(){
 
 /* ---------- 🚩 깃발 · 🏳 점령 구역 그리기 ---------- */
 // 지금 맵에 보일 것: 온라인이면 방 모드, 혼자면 넓은 맵에서 둘 다 (구경용)
-const objMode = () => net ? (inMatch() ? mmode() : gmode) : (MZONES ? 'both' : null);
+const objMode = () => net ? (inMatch() ? mmode() : gmode) : (MAP.grid ? 'zone' : MFLAG ? 'flag' : null);   // 혼자: 성 맵은 구역, 깃발 맵은 깃발 (구경용)
 function drawObjectives(t){
   const om = objMode(); if (!om || om === 'kill') return;
   const live = inMatch() && obj;                       // 대결 중이면 진짜 상태, 아니면 흐리게 (구경용)
   if ((om === 'zone' || om === 'both') && MZONES) for (let i = 0; i < MZONES.length; i++) drawZone(MZONES[i], live && obj.zones ? obj.zones[i] : null, t, i);
+  if ((om === 'flag' || om === 'both') && MFLAG) drawAltar(MFLAG.x, MFLAG.y);   // 깃발 자리 돌 제단
   if ((om === 'flag' || om === 'both') && MFLAG && !(live && obj.flag)) drawFlag(MFLAG.x, MFLAG.y, null, t, 0.35);
   if (om === 'flag' && live && obj.flag && !obj.flag.by){            // 바닥에 떨어진 깃발: 빛나는 고리 + 둥실
     const f = obj.flag, k = 0.5 + Math.sin(t * 4) * 0.5;
@@ -1631,7 +1676,11 @@ function flagHolder(){
   const by = obj.flag.by, p = by === net.pid ? S.player : S.others.get(by);
   return p ? {x: p.x, y: p.y, team: obj.flag.tm || p.team} : null;
 }
-function drawHeldFlag(t){ const h = flagHolder(); if (h) drawFlag(h.x - 24, h.y + 8, h.team, t, 1, 140); }
+function drawHeldFlag(t){
+  const h = flagHolder(); if (!h) return;
+  ctx.strokeStyle = TEAMS[h.team].color; ctx.lineWidth = 5; ctx.beginPath(); ctx.ellipse(h.x, h.y + 18, 40, 16, 0, 0, Math.PI * 2); ctx.stroke();   // 발밑 고리 (든 팀 색)
+  drawFlag(h.x - 24, h.y + 8, h.team, t, 1, 140);
+}
 // 구역 원 (z: 점령 상태, 없으면 흐린 구경용)
 // 화면에 쓰는 구역 이름: 모두에게 같은 A(빨강 쪽)·B(가운데)·C(파랑 쪽)
 const zoneName = i => MZONES && MZONES[i] ? L.zoneLabel(MZONES[i].side, S.player.team) : ZNAME[i];
@@ -1665,16 +1714,42 @@ function drawZone(a, z, t, i){
 }
 const zoneGauge = L.zoneGauge;                     // 구역 고리에 보여 줄 게이지 (magic-logic.js)
 // 깃발: 막대 + 천 (team: 든 사람 팀 색, 없으면 흰색) · alpha: 흐리게
+// 🚩 깃발: 금색 테두리의 붉은 깃발 (빨강 팀과 헷갈리지 않게, 든 팀은 깃대 끝 리본과 발밑 고리를 팀 색으로)
+// art/east-flag.webp(0 깃발 · 1 돌 제단)가 있으면 그 그림으로
+const eastFlag = i => { const sh = window.MagicArt && MagicArt.sheet ? MagicArt.sheet('east-flag') : null; return sh && sh[i] ? sh[i] : null; };
 function drawFlag(x, y, team, t, alpha, height){
   if (!inView(x, y, 160)) return;
   const was = ctx.globalAlpha; ctx.globalAlpha = was * (alpha === undefined ? 1 : alpha);
-  const bob = team ? 0 : Math.sin(t * 3) * 4, top = y - (height || 84) + bob, wave = Math.sin(t * 6) * 5;
+  const bob = team ? 0 : Math.sin(t * 3) * 4, H = height || 84, top = y - H + bob, wave = Math.sin(t * 6) * 5;
   ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x, y + 4, 16, 6, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#5b3b1c'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y + bob); ctx.lineTo(x, top); ctx.stroke();
-  ctx.fillStyle = team ? TEAMS[team].color : '#ffffff'; ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 2;
-  ctx.beginPath(); ctx.moveTo(x + 2, top); ctx.quadraticCurveTo(x + 24, top + 4 + wave, x + 46, top + 10); ctx.quadraticCurveTo(x + 24, top + 18 - wave, x + 2, top + 30); ctx.closePath(); ctx.fill(); ctx.stroke();
-  ctx.fillStyle = '#ffd84a'; ctx.beginPath(); ctx.arc(x, top - 2, 5, 0, Math.PI * 2); ctx.fill();
+  const art = eastFlag(0);
+  if (art){                                              // 지피티 깃발 그림 (깃대 아래쪽이 x, y)
+    const h = H * 1.35, w = h * art.img.width / art.img.height;
+    ctx.drawImage(art.img, x - w * 0.2, y + bob - h, w, h);
+  } else {
+    ctx.strokeStyle = '#5b3b1c'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y + bob); ctx.lineTo(x, top); ctx.stroke();
+    ctx.fillStyle = '#c8202c'; ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 3;   // 붉은 바탕 + 금색 테두리
+    ctx.beginPath(); ctx.moveTo(x + 3, top + 2); ctx.quadraticCurveTo(x + 26, top + 6 + wave, x + 48, top + 4); ctx.lineTo(x + 46, top + 40 - wave * 0.5); ctx.quadraticCurveTo(x + 24, top + 44 - wave, x + 3, top + 40); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ffd84a'; ctx.beginPath(); ctx.arc(x + 25, top + 22, 6, 0, Math.PI * 2); ctx.fill();   // 금색 무늬
+    ctx.fillStyle = '#ffd84a'; ctx.fillRect(x + 44, top + 38 - wave * 0.5, 4, 10);                         // 술 장식
+    ctx.beginPath(); ctx.arc(x, top - 2, 5, 0, Math.PI * 2); ctx.fill();                                 // 깃대 끝
+  }
+  if (team){                                             // 든 팀: 깃대 끝 리본 (팀 색)
+    ctx.fillStyle = TEAMS[team].color; ctx.strokeStyle = 'rgba(0,0,0,.5)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x, top + 2); ctx.quadraticCurveTo(x - 16, top + 6 - wave, x - 30, top + 2 + wave); ctx.lineTo(x - 26, top + 12 + wave); ctx.quadraticCurveTo(x - 14, top + 14, x, top + 12); ctx.closePath(); ctx.fill(); ctx.stroke();
+  }
   ctx.globalAlpha = was;
+}
+// 깃발 자리의 둥근 돌 제단 (밟고 지나갈 수 있음, 장식만)
+function drawAltar(x, y){
+  if (!inView(x, y, 140)) return;
+  const art = eastFlag(1);
+  if (art){ const w = 170, h = w * art.img.height / art.img.width; ctx.drawImage(art.img, x - w / 2, y + 6 - h / 2, w, h); return; }
+  ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x + 4, y + 10, 78, 32, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#7d828b'; ctx.beginPath(); ctx.ellipse(x, y + 4, 76, 30, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#9aa0a8'; ctx.beginPath(); ctx.ellipse(x, y, 70, 26, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#d8a63a'; ctx.lineWidth = 3; ctx.beginPath(); ctx.ellipse(x, y, 58, 21, 0, 0, Math.PI * 2); ctx.stroke();
+  ctx.strokeStyle = '#b8282f'; ctx.lineWidth = 2; ctx.setLineDash([8, 8]); ctx.beginPath(); ctx.ellipse(x, y, 46, 16, 0, 0, Math.PI * 2); ctx.stroke(); ctx.setLineDash([]);
 }
 
 /* ---------- 친구 그리기 (온라인) ---------- */
@@ -1881,7 +1956,7 @@ function remapWorld(a){
 }
 // 🗺 혼자 연습에서 맵 고르기 (온라인에서는 방장이 고른 모드를 따라감)
 function renderMapBtn(){ const b = $('#mapBtn'); if (b) b.textContent = `🗺 ${MAP.name}`; }
-const SOLO_MAPS = ['forest', 'wide', 'castle'];       // 혼자 연습: 누를 때마다 숲 → 넓은 → 성
+const SOLO_MAPS = ['forest', 'east', 'castle'];       // 혼자 연습: 누를 때마다 숲 → 동양풍 → 성 (넓은 맵은 동양풍과 같은 배치라 뺌)
 $('#mapBtn').onclick = () => {
   if (net) return;
   setMap(SOLO_MAPS[(SOLO_MAPS.indexOf(MAP.id) + 1) % SOLO_MAPS.length]);

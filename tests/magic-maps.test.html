@@ -70,6 +70,11 @@ t('성 맵: A에서 아래 복도로 들어가는 길이 넉넉함 (가데온 �
   for (let y = 2800; y <= 3200; y += 10){ const q = L.floorMove(g, {x: 1500, y}, {x: 1700, y}, 26); if (Math.abs(q.x - 1700) < 1) n++; }
   return n * 10 >= 250;
 });
+t('동양풍 맵: 넓은 맵과 크기·배치가 똑같고 그림만 동양풍 (theme: east)', () => {
+  const E = MAGIC_MAPS.east, W = MAGIC_MAPS.wide, same = k => JSON.stringify(E[k]) === JSON.stringify(W[k]);
+  return !!E && E.id === 'east' && E.name === '동양풍 맵' && E.theme === 'east' && E.sym === 'x' && E.W === 4800 && E.H === 2400
+    && ['left', 'center', 'path', 'spawn', 'dummies', 'flag', 'zones'].every(same) && !E.grid;
+});
 t('다른 맵은 그대로 (숲·넓은 맵은 좌우 대칭, 격자 없음)', () => MAGIC_MAPS.forest.sym === 'x' && MAGIC_MAPS.wide.sym === 'x' && !MAGIC_MAPS.forest.grid && !MAGIC_MAPS.wide.grid);
 
 out.insertAdjacentHTML('afterbegin', `<h2 id="sum">${fail ? 'FAIL' : 'ALL PASS'} — ${pass} pass, ${fail} fail</h2>`);
