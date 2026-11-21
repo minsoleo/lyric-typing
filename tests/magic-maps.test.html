@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>magic-maps tests</title>
+<style>body{font:14px/1.5 monospace;padding:16px;background:#fff;color:#111}.p{color:#15803d}.f{color:#dc2626;font-weight:700}</style>
+</head>
+<body>
+<h1>숲속의 한바탕 맵 데이터 테스트</h1>
+<div id="out"></div>
+<script src="../magic-logic.js"></script>
+<script src="../magic-maps.js"></script>
+<script>
+const out = document.getElementById('out');
+let pass = 0, fail = 0;
+function t(name, fn){
+  let ok = false, msg = '';
+  try { ok = fn() === true; if (!ok) msg = ' (false)'; } catch (e) { msg = ' (' + e.message + ')'; }
+  ok ? pass++ : fail++;
+  out.insertAdjacentHTML('beforeend', `<div class="${ok ? 'p' : 'f'}">${ok ? 'PASS' : 'FAIL'} ${name}${msg}</div>`);
+}
+const L = window.MagicLogic || {};
+const C = (window.MAGIC_MAPS || {}).castle || {};
+const G = {rows: C.grid || [], cell: C.cell};
+const walk = (x, y) => L.cellAt(G, x, y) !== '#';
+const rot = o => Object.assign({}, o, {x: C.W - o.x - o.w, y: C.H - o.y - o.h});   // 180도
+const props = () => (C.left || []).concat((C.left || []).map(rot), C.center || []);
+const circle = (x, y, r) => { const pts = [[x, y]]; for (let i = 0; i < 16; i++){ const a = i / 16 * Math.PI * 2; pts.push([x + Math.cos(a) * r, y + Math.sin(a) * r]); } return pts; };
+
+t('성 맵: 6400×3800, 칸 200, 32×19 격자, 쓸 수 있는 글자만', () => C.W === 6400 && C.H === 3800 && C.cell === 200 && C.sym === 'xy'
+  && G.rows.length === 19 && G.rows.every(r => r.length === 32 && /^[#123ab]+$/.test(r)));
+t('성 맵: 180도 돌려도 똑같음', () => G.rows.every((row, r) => [...row].every((ch, c) => ch === G.rows[18 - r][31 - c])));
+t('성 맵: 계단 a·b가 2칸씩 (한 팀에 하나씩)', () => G.rows.join('').split('a').length - 1 === 2 && G.rows.join('').split('b').length - 1 === 2);
+t('성 맵: 출발 자리는 1층, 빨강·파랑이 180도 자리', () => L.cellAt(G, C.spawn.red.x, C.spawn.red.y) === '1' && C.spawn.blue.x === C.W - C.spawn.red.x && C.spawn.blue.y === C.H - C.spawn.red.y
+  && C.spawn.solo.x === C.spawn.red.x && C.spawn.solo.y === C.spawn.red.y);
+t('성 맵: 구역 Ⓐ·Ⓒ는 2층, Ⓑ는 3층 (원 전체가 한 층)', () => {
+  const lv = z => { const cs = circle(z.x, z.y, z.r).map(([x, y]) => L.cellAt(G, x, y)); return cs.every(c => c === cs[0]) ? cs[0] : null; };
+  return C.zones.length === 3 && lv(C.zones[0]) === '2' && lv(C.zones[1]) === '3' && lv(C.zones[2]) === '2'
+    && C.zones[0].side === 'red' && C.zones[1].side === 'mid' && C.zones[2].side === 'blue'
+    && C.zones[2].x === C.W - C.zones[0].x && C.zones[2].y === C.H - C.zones[0].y && C.zones[1].x === C.W / 2 && C.zones[1].y === C.H / 2;
+});
+t('성 맵: 허수아비 3개가 걸을 수 있는 칸', () => C.dummies.length === 3 && C.dummies.every(([x, y]) => walk(x, y)));
+t('성 맵: 장애물은 걸을 수 있는 한 층 위, 계단·구역과 안 겹침', () => props().every(o => {
+  const corners = [[o.x, o.y], [o.x + o.w, o.y], [o.x, o.y + o.h], [o.x + o.w, o.y + o.h]].map(([x, y]) => L.cellAt(G, x, y));
+  const sameFloor = corners.every(c => c === corners[0]) && /[123]/.test(corners[0]);
+  const offZones = C.zones.every(z => { const nx = Math.max(o.x, Math.min(z.x, o.x + o.w)), ny = Math.max(o.y, Math.min(z.y, o.y + o.h)); return Math.hypot(z.x - nx, z.y - ny) > z.r + 20; });
+  return sameFloor && offZones && ['pillar', 'statue', 'crate'].includes(o.kind);
+}) && props().length >= 8);
+t('성 맵: 빨강 출발에서 파랑 출발·세 구역·허수아비까지 길이 있음', () => {
+  const key = (r, c) => r * 100 + c, seen = new Set(), q = [[Math.floor(C.spawn.red.y / 200), Math.floor(C.spawn.red.x / 200)]];
+  seen.add(key(...q[0]));
+  while (q.length){
+    const [r, c] = q.shift();
+    for (const [dr, dc] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){
+      const nr = r + dr, nc = c + dc;
+      if (!G.rows[nr] || !G.rows[nr][nc] || seen.has(key(nr, nc)) || !L.canPass(G.rows[r][c], G.rows[nr][nc])) continue;
+      seen.add(key(nr, nc)); q.push([nr, nc]);
+    }
+  }
+  const reach = (x, y) => seen.has(key(Math.floor(y / 200), Math.floor(x / 200)));
+  return reach(C.spawn.blue.x, C.spawn.blue.y) && C.zones.every(z => reach(z.x, z.y)) && C.dummies.every(([x, y]) => reach(x, y));
+});
+t('다른 맵은 그대로 (숲·넓은 맵은 좌우 대칭, 격자 없음)', () => MAGIC_MAPS.forest.sym === 'x' && MAGIC_MAPS.wide.sym === 'x' && !MAGIC_MAPS.forest.grid && !MAGIC_MAPS.wide.grid);
+
+out.insertAdjacentHTML('afterbegin', `<h2 id="sum">${fail ? 'FAIL' : 'ALL PASS'} — ${pass} pass, ${fail} fail</h2>`);
+</script>
+</body>
+</html>
