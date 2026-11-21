@@ -66,7 +66,7 @@ t('floorMove: 막히면 벽 따라 미끄러짐', () => { const q = L.floorMove(
 t('floorMove: 계단으로는 올라감', () => { const q = L.floorMove(G, {x: 50, y: 50}, {x: 250, y: 50}, 20); return near(q.x, 250) && near(q.y, 50) && L.cellAt(G, q.x, q.y) === '2'; });
 t('floorMove: 한 번에 멀리 가도 낭떠러지를 안 뚫음', () => { const q = L.floorMove(G, {x: 250, y: 150}, {x: 50, y: 1150}, 20); return L.cellAt(G, q.x, q.y) === '2'; });
 t('floorMove: 가장자리에 걸친 자리에서도 빠져나옴', () => { const q = L.floorMove(G, {x: 195, y: 150}, {x: 195, y: 110}, 20); return near(q.y, 110); });
-t('cliffRects: 위가 성벽이거나 더 높은 칸이면 그 칸 위쪽 띠', () => { const g = {cell: 100, rows: ['2#', '12', '1a']}; const c = L.cliffRects(g, 30); return c.length === 2 && c.some(r => r.x === 0 && r.y === 100 && r.w === 100 && r.h === 30) && c.some(r => r.x === 100 && r.y === 100) && c.every(r => r.kind === 'cliff'); });
+t('floorMove: 높은 층 아래 성벽 면(g.face 띠)에는 몸이 안 들어감 — 한 번에 멀리 와도', () => { const g = {cell: 100, face: 30, rows: ['22', '11']}; const a = L.floorMove(g, {x: 50, y: 190}, {x: 50, y: 20}, 10), b = L.floorMove(g, {x: 50, y: 190}, {x: 50, y: 135}, 10); return a.y >= 138 && b.y >= 138 && L.spotAt(g, 50, 115) === '#' && L.spotAt(g, 50, 135) === '1' && L.spotAt(g, 50, 50) === '2'; });
 t('레이브 대기 시간은 원래대로, 궁극기 범위는 12초 유지', () => by('dealer').spells.map(s => s.cd).join() === '6,8,10,16,14' && by('dealer').ult.time === 12);
 t('가데온 검 이름: 강철 베기 · 검의 폭풍', () => by('tank').basic.name === '강철 베기' && by('tank').spells.some(s => s.name === '검의 폭풍'));
 t('findSpell: 다른 캐릭터 스킬은 못 씀', () => L.findSpell(all(by('tank')), '목 긋기') === null);

@@ -46,9 +46,14 @@ let MAP, WW, WH, OBSTACLES, WALLS, BLOCKERS, DECOR, SPAWN, mmBg = null;
 // 팀마다 같은 화면: VIEW = 내 화면이 원래 맵을 어떻게 뒤집었는지 (null | 'x' | 'xy'). 파랑 팀만 뒤집음.
 // 게임은 전부 '내 화면 좌표'로 돌고, 친구와 주고받을 때만 원래 좌표로 바꿈. 아래 M… 값은 내 화면 기준 자리
 let VIEW = null, MZONES = null, MFLAG = null, MDUMMIES = [], MPATH = [];
+// 🏰 성 맵: GRID = 층 격자 {rows, cell} (180도 대칭이라 파랑 팀 화면에서도 그대로). 없으면 null
+let GRID = null;
+const FACE_H = 60;                                         // 높은 층 아래쪽 성벽 면 띠 높이 (걸어서 못 들어감)
 const mirror = o => Object.assign({}, o, {x: WW - o.x - o.w});
-const tracePath = g => {                                   // 흙길: 곡선 조각들을 이어서
-  g.beginPath(); g.moveTo(MPATH[0][0], MPATH[0][1]);
+const rotate = o => Object.assign({}, o, {x: WW - o.x - o.w, y: WH - o.y - o.h});   // 180도 (성 맵)
+const tracePath = g => {                                   // 흙길: 곡선 조각들을 이어서 (성 맵은 흙길 없음)
+  g.beginPath(); if (!MPATH.length) return;
+  g.moveTo(MPATH[0][0], MPATH[0][1]);
   for (const q of MPATH) g.bezierCurveTo(q[2], q[3], q[4], q[5], q[6], q[7]);
 };
 // 꾸미기(풀·꽃·버섯·덤불): 부딪히지 않음. 매번 같은 자리에 나오게 정해진 난수 사용
@@ -65,10 +70,12 @@ function buildDecor(){
 function loadMap(id, view){
   MAP = MAPS[id] || MAPS.forest; WW = MAP.W; WH = MAP.H; VIEW = view || null;
   const fp = q => L.flipPt(q, VIEW, WW, WH);
-  OBSTACLES = MAP.left.concat(MAP.left.map(mirror), MAP.center);   // 원래 좌표로 만들고 (장식이 장애물을 피하게)
+  OBSTACLES = MAP.left.concat(MAP.left.map(MAP.sym === 'xy' ? rotate : mirror), MAP.center);   // 원래 좌표로 만들고 (장식이 장애물을 피하게)
   DECOR = buildDecor().map(d => Object.assign(d, fp(d)));
   OBSTACLES = OBSTACLES.map(o => L.flipRect(o, VIEW, WW, WH));      // 내 화면 기준으로 뒤집기
-  WALLS = OBSTACLES; BLOCKERS = OBSTACLES.filter(o => o.kind !== 'pond');
+  GRID = MAP.grid ? {rows: MAP.grid, cell: MAP.cell, face: FACE_H} : null;   // 성벽 면 띠도 걷기만 막음 (L.spotAt, 공격은 넘어감)
+  WALLS = OBSTACLES;
+  BLOCKERS = OBSTACLES.filter(o => o.kind !== 'pond');
   SPAWN = {}; for (const k in MAP.spawn) SPAWN[k] = fp(MAP.spawn[k]);
   MZONES = MAP.zones ? MAP.zones.map(z => Object.assign({}, z, fp(z))) : null;   // 번호(순서)는 원래 그대로
   MFLAG = MAP.flag ? fp(MAP.flag) : null;
@@ -87,10 +94,10 @@ let net = null;                                    // 친구랑 연습 중이면
 const isAuth = () => !net || net.isHost();         // 허수아비를 계산하는 컴퓨터 (혼자면 나, 온라인이면 방장)
 // ⚔ 대결: match = {id, startAt, endAt, len, score} (서버 시계, ms)
 let match = null, matchId = null;
-// 대결 모드 (방장이 고름): 킬내기전은 숲 맵, 깃발쟁·점령전은 넓은 맵
+// 대결 모드 (방장이 고름): 킬내기전은 숲 맵, 깃발쟁은 넓은 맵, 점령전은 성 맵
 const MODES = {kill: {name: '⚔ 킬내기전', goal: '상대 팀을 많이 쓰러뜨리면 이겨요'}, flag: {name: '🚩 깃발쟁', goal: '깃발을 오래 들고 있으면 이겨요'},
   zone: {name: '🏳 점령전', goal: '구역 2곳을 먼저 완전 점령하면 이겨요'}};
-const MODE_MAP = {kill: 'forest', flag: 'wide', zone: 'wide'};
+const MODE_MAP = {kill: 'forest', flag: 'wide', zone: 'castle'};
 let gmode = 'kill', obj = null, heldObj = null, objSaid = null;                     // obj: 방장이 계산한 깃발·점령 상태 (서버에서 받음)
 const mmode = () => (match && match.mode) || 'kill';
 // 준비(3·2·1) → 진행 → 끝 (점령전은 끝나는 시간이 없고, 방장이 승리를 쓰면 끝)
@@ -283,6 +290,8 @@ function rightClick(){
 }
 const busyLeft = t => S.busy ? Math.max(0, S.busy.until - t) : 0;
 // 바위벽 기둥은 아무도 지나갈 수 없음: 기둥과 겹치면 바깥으로 밀어냄
+// 🏰 성 맵: 같은 층·계단으로만 움직임 (낭떠러지·성벽은 못 넘음). 다른 맵은 그대로
+const levelMove = (from, to, r) => GRID ? L.floorMove(GRID, from, to, r) : to;
 function pushWalls(pos, r){
   let x = pos.x, y = pos.y;
   for (const w of S.walls) for (const q of w.pts){
@@ -394,7 +403,8 @@ function castSpell(sp, t, target){
       break;
     case 'leap': {
       const ux = (target.x - p.x) / (dist(target, p) || 1), uy = (target.y - p.y) / (dist(target, p) || 1), from = {x: p.x, y: p.y}, gap = target.r + p.r + 6;
-      const to = L.pushOut(L.clampToWorld({x: target.x + ux * gap, y: target.y + uy * gap}, p.r, WW, WH), p.r, WALLS);
+      let to = L.pushOut(L.clampToWorld({x: target.x + ux * gap, y: target.y + uy * gap}, p.r, WW, WH), p.r, WALLS);
+      if (GRID && L.spotAt(GRID, to.x, to.y) === '#') to = {x: target.x, y: target.y};   // 🏰 등 뒤가 성벽(면)이면 그 자리에
       p.x = to.x; p.y = to.y; p.target = null; p.face = {x: -ux, y: -uy};
       addFx({type: 'blink', x: r1(from.x), y: r1(from.y), t0: t, life: 0.45, color: sp.color}, true);
       addFx({type: 'cut', x: r1(target.x), y: r1(target.y), t0: t, life: 0.45, color: sp.color}, true);
@@ -627,12 +637,12 @@ function update(){
   if (!p.deadUntil && !locked()){
     const spd = p.speed * Math.max(0.2, 1 + L.effectSum(p.fx, 'speed', t));
     if (p.pull){                                         // 강철 사슬에 끌려감
-      const m = L.moveToward(p, p.pull, PULL_SPEED * dt), pos = pushWalls(m, p.r);
+      const m = L.moveToward(p, p.pull, PULL_SPEED * dt), pos = levelMove(p, pushWalls(m, p.r), p.r);
       p.x = pos.x; p.y = pos.y;
       if (m.arrived || Math.hypot(pos.x - m.x, pos.y - m.y) > 1) p.pull = null;   // 바위벽에 걸리면 멈춤
     } else if (p.dash){                                  // 돌진: 빠르게 미끄러지며 부딪힌 적에 피해
       const m = L.moveToward(p, p.dash.to, p.dash.speed * dt);
-      const pos = pushWalls(L.pushOut(m, p.r, WALLS), p.r);
+      const pos = levelMove(p, pushWalls(L.pushOut(m, p.r, WALLS), p.r), p.r);
       const blocked = Math.hypot(pos.x - m.x, pos.y - m.y) > 1;
       p.x = pos.x; p.y = pos.y;
       if (p.dash.dmg) for (const e of enemies()) if (!p.dash.hit.has(e) && dist(e, p) < e.r + p.r + (p.dash.wide || 8)){ p.dash.hit.add(e); dealHit(e, p.dash.dmg, t, {color: p.dash.color}); }
@@ -642,7 +652,7 @@ function update(){
       const m = L.moveToward(p, p.target, spd * dt);
       const dx = m.x - p.x, dy = m.y - p.y, len = Math.hypot(dx, dy);
       if (len > 0.01 && !p.flurry) p.face = {x: dx / len, y: dy / len};
-      const pos = pushWalls(L.pushOut(L.clampToWorld(m, p.r, WW, WH), p.r, WALLS), p.r);
+      const pos = levelMove(p, pushWalls(L.pushOut(L.clampToWorld(m, p.r, WW, WH), p.r, WALLS), p.r), p.r);
       if (Math.hypot(pos.x - p.x, pos.y - p.y) < spd * dt * 0.1 && !m.arrived) p.target = null;
       p.x = pos.x; p.y = pos.y;
       if (m.arrived) p.target = null;
@@ -755,12 +765,13 @@ function updateDummies(t, dt){
     if (d.deadUntil) continue;
     d.fx = L.pruneEffects(d.fx, t);
     if (d.pull){                                         // 강철 사슬에 끌려옴
-      const m = L.moveToward(d, d.pull, PULL_SPEED * dt), q = pushWalls(m, d.r);
+      const m = L.moveToward(d, d.pull, PULL_SPEED * dt), q = levelMove(d, pushWalls(m, d.r), d.r);
       d.x = q.x; d.y = q.y;
       if (m.arrived || Math.hypot(q.x - m.x, q.y - m.y) > 1){ d.pull = null; d.homeAt = t + 1.5; }
       continue;
     }
     const free = t >= d.frozenUntil, home = t >= d.homeAt, mult = Math.max(0.2, 1 + L.effectSum(d.fx, 'speed', t));
+    const was = {x: d.x, y: d.y};
     if (free && home){
       d.y += (d.baseY - d.y) * Math.min(1, dt * 3);
       if (S.dummyMode === 'move'){
@@ -769,6 +780,7 @@ function updateDummies(t, dt){
         if (d.x < d.baseX - 220) d.dir = 1;
       } else d.x += (d.baseX - d.x) * Math.min(1, dt * 3);
     }
+    if (GRID && !d.pull){ const q = levelMove(was, d, d.r); d.x = q.x; d.y = q.y; }   // 🏰 허수아비도 낭떠러지를 못 넘음
     if (S.walls.length){ const q = pushWalls(d, d.r); d.x = q.x; d.y = q.y; }   // 허수아비도 바위벽을 못 지나감
     // 반격 모드: 가장 가까운 사람에게 공격을 쏨
     if (S.dummyMode === 'attack' && free && t >= d.nextShot){
@@ -798,6 +810,7 @@ function tilePattern(id){
   return c ? (patterns[id] = ctx.createPattern(c, 'repeat')) : null;
 }
 function drawGround(t){
+  if (GRID){ drawCastle(); return; }                     // 🏰 성 맵
   const grass = tilePattern('grass'), dirt = tilePattern('dirt');
   if (grass){                                            // 풀밭 그림 (art/grass.webp)을 타일처럼 깔고, 캐릭터가 잘 보이게 살짝 어둡게
     ctx.fillStyle = grass; ctx.fillRect(cam.x - 2, cam.y - 2, VW + 4, VH + 4);
@@ -850,11 +863,103 @@ function drawGround(t){
   }
   ctx.strokeStyle = 'rgba(0,0,0,.4)'; ctx.lineWidth = 16; ctx.strokeRect(0, 0, WW, WH);
 }
+/* ---------- 🏰 성 맵 그리기 (임시 그림: 지피티 성 그림이 오면 바꿔 끼움) ----------
+   층이 높을수록 밝은 돌바닥, 높은 층 아래쪽엔 성벽 면(벽돌 띠), 계단은 가로 단, # 은 어두운 성벽 윗면 */
+const CASTLE = {floor: {'1': '#565b66', '2': '#6a707c', '3': '#848b98', a: '#6f7480', b: '#868c99'}, wallTop: '#2b2931', wallLine: 'rgba(255,255,255,.06)',
+  face: '#413c46', faceLine: 'rgba(0,0,0,.28)', mortar: 'rgba(0,0,0,.14)', lip: 'rgba(255,255,255,.22)'};
+const LV = {'1': 1, '2': 2, '3': 3, a: 1.5, b: 2.5, '#': 9};
+const higher = (up, me) => me !== '#' && !L.canPass(me, up) && LV[up] > LV[me];   // 위 칸이 더 높아서 이 칸 위쪽에 성벽 면이 보임
+function drawCastle(){
+  const g = GRID, C = g.cell, rows = g.rows;
+  const c0 = Math.max(0, Math.floor(cam.x / C)), c1 = Math.min(rows[0].length - 1, Math.floor((cam.x + VW) / C));
+  const r0 = Math.max(0, Math.floor(cam.y / C)), r1 = Math.min(rows.length - 1, Math.floor((cam.y + VH) / C));
+  const at = (r, c) => (rows[r] && rows[r][c]) || '#';
+  ctx.lineWidth = 2;
+  for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++){
+    const ch = rows[r][c], x = c * C, y = r * C;
+    if (ch === '#'){                                     // 성벽 윗면: 큰 돌 블록
+      ctx.fillStyle = CASTLE.wallTop; ctx.fillRect(x, y, C, C);
+      ctx.strokeStyle = CASTLE.wallLine; ctx.beginPath();
+      for (let k = 1; k < 4; k++){ ctx.moveTo(x, y + k * C / 4); ctx.lineTo(x + C, y + k * C / 4); }
+      for (let k = 0; k < 4; k++){ const off = k % 2 ? C / 4 : 0; for (let j = off; j < C; j += C / 2){ ctx.moveTo(x + j, y + k * C / 4); ctx.lineTo(x + j, y + (k + 1) * C / 4); } }
+      ctx.stroke();
+      continue;
+    }
+    ctx.fillStyle = CASTLE.floor[ch]; ctx.fillRect(x, y, C, C);
+    if (ch === 'a' || ch === 'b'){                       // 계단: 가로 단 8개 (위로 갈수록 밝게)
+      for (let k = 0; k < 8; k++){
+        const sy = y + k * C / 8;
+        ctx.fillStyle = `rgba(255,255,255,${0.1 + (7 - k) * 0.02})`; ctx.fillRect(x + 14, sy, C - 28, 5);
+        ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(x + 14, sy + C / 8 - 4, C - 28, 4);
+      }
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(x, y, 14, C); ctx.fillRect(x + C - 14, y, 14, C);   // 난간
+      continue;
+    }
+    ctx.strokeStyle = CASTLE.mortar; ctx.beginPath();     // 돌바닥 줄눈 (벽돌 쌓듯 엇갈리게)
+    for (let k = 0; k < 2; k++){ const yy = y + k * C / 2; ctx.moveTo(x, yy); ctx.lineTo(x + C, yy); const off = k ? C / 4 : 0; for (let j = off; j < C; j += C / 2){ ctx.moveTo(x + j, yy); ctx.lineTo(x + j, yy + C / 2); } }
+    ctx.stroke();
+  }
+  // 가장자리: 성벽 면(아래쪽) · 옆 낭떠러지 · 높은 층 뒤쪽 테두리
+  for (let r = r0; r <= r1; r++) for (let c = c0; c <= c1; c++){
+    const ch = rows[r][c], x = c * C, y = r * C;
+    if (ch === '#') continue;
+    const up = at(r - 1, c), left = at(r, c - 1), right = at(r, c + 1);
+    if (r > 0 && higher(up, ch)){                        // 성벽 면 (L.spotAt이 막는 자리와 같음)
+      ctx.fillStyle = up === '#' ? '#34303a' : CASTLE.face; ctx.fillRect(x, y, C, FACE_H);
+      ctx.strokeStyle = CASTLE.faceLine; ctx.beginPath();
+      for (let k = 1; k < 3; k++){ ctx.moveTo(x, y + k * FACE_H / 3); ctx.lineTo(x + C, y + k * FACE_H / 3); }
+      for (let k = 0; k < 3; k++){ const off = k % 2 ? 25 : 0; for (let j = off; j < C; j += 50){ ctx.moveTo(x + j, y + k * FACE_H / 3); ctx.lineTo(x + j, y + (k + 1) * FACE_H / 3); } }
+      ctx.stroke();
+      ctx.fillStyle = CASTLE.lip; ctx.fillRect(x, y - 3, C, 4);                       // 위층 가장자리 빛
+      const sh = ctx.createLinearGradient(0, y + FACE_H, 0, y + FACE_H + 22);           // 벽 아래 그림자
+      sh.addColorStop(0, 'rgba(0,0,0,.32)'); sh.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = sh; ctx.fillRect(x, y + FACE_H, C, 22);
+    }
+    if (r > 0 && up !== '#' && !L.canPass(ch, up) && LV[up] < LV[ch]){ ctx.fillStyle = CASTLE.lip; ctx.fillRect(x, y, C, 4); }   // 높은 층 뒤쪽 테두리
+    for (const [side, nb] of [[0, left], [1, right]]){   // 옆 낭떠러지: 낮은 쪽에 그림자, 높은 쪽에 밝은 테두리
+      if (nb === '#' || L.canPass(ch, nb)) continue;
+      const ex = side ? x + C : x;
+      if (LV[nb] > LV[ch]){ ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(side ? ex - 16 : ex, y, 16, C); }
+      else { ctx.fillStyle = CASTLE.lip; ctx.fillRect(side ? ex - 4 : ex, y, 4, C); }
+    }
+  }
+  // 출발 자리: 팀 색 깔개
+  for (const team of ['red', 'blue']){
+    const sp = SPAWN[team]; if (!sp || !inView(sp.x, sp.y, 260)) continue;
+    ctx.fillStyle = team === 'red' ? 'rgba(255,93,115,.16)' : 'rgba(95,158,255,.16)'; ctx.beginPath(); ctx.ellipse(sp.x, sp.y, 230, 150, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = team === 'red' ? 'rgba(255,93,115,.5)' : 'rgba(95,158,255,.5)'; ctx.lineWidth = 4; ctx.setLineDash([16, 12]); ctx.stroke(); ctx.setLineDash([]);
+  }
+}
+// 성 맵 물건 (임시 그림): 돌기둥 · 석상 · 나무 상자
+function drawCastleProp(o){
+  const cx = o.x + o.w / 2, base = o.y + o.h;
+  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(cx + 6, base - 2, o.w * 0.6, o.h * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+  if (o.kind === 'pillar'){                              // 돌기둥: 받침 · 기둥 · 머리
+    const w = o.w * 0.62, h = 150;
+    ctx.fillStyle = '#5d6370'; ctx.fillRect(o.x, base - 22, o.w, 22);
+    const g = ctx.createLinearGradient(cx - w / 2, 0, cx + w / 2, 0); g.addColorStop(0, '#9aa1ad'); g.addColorStop(0.45, '#c9ced6'); g.addColorStop(1, '#6f7581');
+    ctx.fillStyle = g; ctx.fillRect(cx - w / 2, base - 22 - h, w, h);
+    ctx.strokeStyle = 'rgba(0,0,0,.18)'; ctx.lineWidth = 2; ctx.beginPath(); for (let k = 1; k < 4; k++){ ctx.moveTo(cx - w / 2 + k * w / 4, base - 22 - h); ctx.lineTo(cx - w / 2 + k * w / 4, base - 22); } ctx.stroke();
+    ctx.fillStyle = '#7b818d'; ctx.fillRect(o.x - 4, base - 40 - h, o.w + 8, 20);
+  } else if (o.kind === 'statue'){                       // 석상: 받침 + 기사 모양
+    ctx.fillStyle = '#5d6370'; ctx.fillRect(o.x, base - 34, o.w, 34);
+    ctx.fillStyle = '#7d8390'; ctx.fillRect(o.x + 6, base - 40, o.w - 12, 8);
+    ctx.fillStyle = '#a3a9b4'; roundRect(cx - 18, base - 120, 36, 82, 12); ctx.fill();   // 몸
+    ctx.beginPath(); ctx.arc(cx, base - 132, 16, 0, Math.PI * 2); ctx.fill();            // 머리
+    ctx.fillStyle = '#8d939e'; ctx.fillRect(cx + 16, base - 150, 6, 110);               // 칼
+    ctx.fillStyle = '#c4c9d1'; ctx.fillRect(cx - 12, base - 112, 8, 40);
+  } else {                                               // 나무 상자
+    const top = base - o.h - 30;
+    ctx.fillStyle = '#7a5130'; ctx.fillRect(o.x, top + 24, o.w, o.h + 6);
+    ctx.fillStyle = '#9b6a3f'; ctx.fillRect(o.x, top, o.w, 26);
+    ctx.strokeStyle = '#4e321c'; ctx.lineWidth = 4; ctx.strokeRect(o.x + 2, top + 26, o.w - 4, o.h + 2);
+    ctx.beginPath(); ctx.moveTo(o.x + 4, top + 28); ctx.lineTo(o.x + o.w - 4, base - 6); ctx.moveTo(o.x + o.w - 4, top + 28); ctx.lineTo(o.x + 4, base - 6); ctx.stroke();
+  }
+}
 /* 나무·바위 그림 (art/trees-rocks.webp: 나무 3개 · 바위 3개). 부딪히는 칸(o.x, o.y, o.w, o.h)은 그대로, 그림만 그 위에 */
 const PROP = {tree: [0, 1, 2], rockBig: 3, rockMid: 4, rockFlat: 5};
 function propOf(o){
   const sh = window.MagicArt && MagicArt.sheet ? MagicArt.sheet('props') : null;
-  if (!sh || sh.length < 6) return null;
+  if (!sh || sh.length < 6 || (o.kind !== 'tree' && o.kind !== 'rock')) return null;   // 성 맵 물건(기둥·석상·상자)은 코드 그림
   if (o.kind === 'tree') return sh[PROP.tree[Math.abs(Math.round(Math.min(o.x, WW - o.x - o.w) * 7 + o.y * 13)) % 3]];   // 자리마다 정해진 나무 모양 (거울 자리는 같은 나무)
   return sh[o.w / o.h >= 1.8 ? PROP.rockFlat : o.w >= 130 ? PROP.rockBig : PROP.rockMid];
 }
@@ -863,6 +968,7 @@ function drawObstacles(){
   for (const o of OBSTACLES) if (o.kind === 'pond' && inView(o.x + o.w / 2, o.y + o.h / 2, 200)) drawObstacle(o);
 }
 function drawObstacle(o){
+  if (o.kind === 'pillar' || o.kind === 'statue' || o.kind === 'crate'){ drawCastleProp(o); return; }
   {
     const art = o.kind !== 'pond' && propOf(o);
     if (art){
@@ -1407,6 +1513,7 @@ function drawFloats(t){
 /* 작은 지도: 맵 그림(풀밭·흙길·연못·나무·바위)을 한 번 작게 그려 두고, 그 위에 사람·허수아비 점만 매번 그림 */
 const MM_W = 240, MM_RES = 2.5;                          // 작은 지도 가로 크기 · 선명하게 그릴 배율
 function buildMinimap(){
+  if (GRID) return buildCastleMinimap();
   const A = window.MagicArt;
   if (!A || !A.tile || !A.tile('grass') || !A.sheet('props') || !A.sheet('pond')) return null;   // 그림이 다 오면 만듦
   const k = MM_W / WW * MM_RES, c = document.createElement('canvas');
@@ -1427,6 +1534,16 @@ function buildMinimap(){
     g.drawImage(art.img, cx - w / 2, base - h, w, h);
   }
   g.restore();
+  return c;
+}
+// 🏰 성 맵 작은 지도: 칸마다 층 색 (계단은 노랗게), 물건은 작은 점
+function buildCastleMinimap(){
+  const k = MM_W / WW * MM_RES, c = document.createElement('canvas'), C = GRID.cell;
+  c.width = Math.round(WW * k); c.height = Math.round(WH * k);
+  const g = c.getContext('2d'); g.scale(k, k);
+  const col = {'#': '#1d1b22', '1': '#4d525d', '2': '#69707c', '3': '#8f97a5', a: '#d8b75a', b: '#d8b75a'};
+  GRID.rows.forEach((row, r) => [...row].forEach((ch, i) => { g.fillStyle = col[ch]; g.fillRect(i * C, r * C, C + 1, C + 1); }));
+  g.fillStyle = 'rgba(20,18,24,.9)'; for (const o of OBSTACLES) g.fillRect(o.x, o.y, o.w, o.h);
   return c;
 }
 function drawMinimap(){
@@ -1756,10 +1873,11 @@ function remapWorld(a){
   S.shots = []; S.fx = []; S.tint = null;                          // 날아가던 공격·짧은 효과는 정리
 }
 // 🗺 혼자 연습에서 맵 고르기 (온라인에서는 방장이 고른 모드를 따라감)
-function renderMapBtn(){ const b = $('#mapBtn'); if (b) b.textContent = MAP.id === 'wide' ? '🗺 넓은 맵' : '🗺 숲 맵'; }
+function renderMapBtn(){ const b = $('#mapBtn'); if (b) b.textContent = `🗺 ${MAP.name}`; }
+const SOLO_MAPS = ['forest', 'wide', 'castle'];       // 혼자 연습: 누를 때마다 숲 → 넓은 → 성
 $('#mapBtn').onclick = () => {
   if (net) return;
-  setMap(MAP.id === 'wide' ? 'forest' : 'wide');
+  setMap(SOLO_MAPS[(SOLO_MAPS.indexOf(MAP.id) + 1) % SOLO_MAPS.length]);
   try { localStorage.setItem('magic.map', MAP.id); } catch (e) {}
   castMsg(`🗺 ${MAP.name}으로 바꿨어요`, 'good'); focusSpell();
 };
