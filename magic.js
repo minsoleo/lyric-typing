@@ -2118,13 +2118,13 @@ function drawMatchHud(){
 }
 
 /* ---------- 시작 ---------- */
-// 초당 몇 장 그리는지 (화면 위에 표시, 30보다 낮으면 빨갛게)
+// FPS: 1초에 화면을 몇 번 그리는지 (화면 위에 표시, 30보다 낮으면 빨갛게)
 let fpsN = 0, fpsAt = performance.now();
 function countFps(){
   fpsN++;
   const t = performance.now(); if (t - fpsAt < 1000) return;
   const f = Math.round(fpsN * 1000 / (t - fpsAt)); fpsN = 0; fpsAt = t;
-  const el = $('#fpsTag'); el.textContent = `초당 ${f}장`; el.className = 'fps' + (f < 30 ? ' bad' : f < 50 ? ' mid' : '');
+  const el = $('#fpsTag'); el.textContent = `${f} FPS`; el.className = 'fps' + (f < 30 ? ' bad' : f < 50 ? ' mid' : '');
 }
 function renderLite(){ const b = $('#liteBtn'); b.classList.toggle('on', lite); b.textContent = lite ? '⚡ 가볍게 켜짐' : '⚡ 가볍게'; }
 $('#liteBtn').onclick = () => { lite = !lite; try { localStorage.setItem('magic.lite', lite ? '1' : '0'); } catch (e) {} renderLite(); fit(); focusSpell(); };
