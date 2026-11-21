@@ -13,6 +13,9 @@ const pond = (x, y, w, h) => ({x, y, w, h, kind: 'pond'});
 const pillar = (x, y, s = 70) => ({x, y, w: s, h: s, kind: 'pillar'});
 const statue = (x, y, s = 90) => ({x, y, w: s, h: s, kind: 'statue'});
 const crate = (x, y, w = 80, h = 80) => ({x, y, w, h, kind: 'crate'});
+const barrel = (x, y, s = 80) => ({x, y, w: s, h: s, kind: 'barrel'});     // 술통 더미
+const brazier = (x, y, s = 70) => ({x, y, w: s, h: s, kind: 'brazier'});   // 불 타는 돌 화로
+const rack = (x, y, w = 110, h = 50) => ({x, y, w, h, kind: 'rack'});       // 무기 거치대 (옆으로 넓고 얇음)
 
 const MAPS = {
   // 🌳 숲 맵: ⚔ 킬내기전 · 혼자 연습 기본
@@ -88,10 +91,10 @@ const MAPS = {
     // 장애물 절반 (나머지 절반은 게임이 180도 돌려서 만듦): 돌기둥 · 석상 · 나무 상자
     left: [
       pillar(2300, 1250), pillar(4030, 1250),          // B 광장 위쪽 기둥 2 (아래쪽 2개는 180도로)
-      pillar(2850, 1650),                              // B 가운데 가까이 (반대쪽 하나는 180도로)
+      brazier(2850, 1650),                             // B 가운데 가까이 불 화로 (반대쪽 하나는 180도로)
       crate(1800, 1150),                               // B 왼쪽 위 구석
-      statue(200, 2500), crate(1150, 1950),            // A 2층
-      crate(2000, 2920)                                // B로 가는 아래 복도
+      statue(200, 2500), barrel(960, 1900),            // A 2층: 기사 석상 · 술통
+      rack(2000, 2935)                                 // B로 가는 아래 복도: 무기 거치대
     ],
     center: [],
     path: [],

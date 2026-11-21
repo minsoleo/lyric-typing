@@ -49,7 +49,7 @@ t('성 맵: 장애물은 걸을 수 있는 한 층 위, 계단·구역과 안 �
   const corners = [[o.x, o.y], [o.x + o.w, o.y], [o.x, o.y + o.h], [o.x + o.w, o.y + o.h]].map(([x, y]) => L.cellAt(G, x, y));
   const sameFloor = corners.every(c => c === corners[0]) && /[123]/.test(corners[0]);
   const offZones = C.zones.every(z => { const nx = Math.max(o.x, Math.min(z.x, o.x + o.w)), ny = Math.max(o.y, Math.min(z.y, o.y + o.h)); return Math.hypot(z.x - nx, z.y - ny) > z.r + 20; });
-  return sameFloor && offZones && ['pillar', 'statue', 'crate'].includes(o.kind);
+  return sameFloor && offZones && ['pillar', 'statue', 'crate', 'barrel', 'brazier', 'rack'].includes(o.kind);
 }) && props().length >= 8);
 t('성 맵: 빨강 출발에서 파랑 출발·세 구역·허수아비까지 길이 있음', () => {
   const key = (r, c) => r * 100 + c, seen = new Set(), q = [[Math.floor(C.spawn.red.y / 200), Math.floor(C.spawn.red.x / 200)]];

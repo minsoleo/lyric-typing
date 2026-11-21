@@ -34,7 +34,9 @@ const SHEETS = {props: {src: 'art/trees-rocks.webp'},   // 나무 3 (위) · 바
                 'east-decor': {src: 'art/east-decor.webp', max: 160, tight: true}, 'east-flag': {src: 'art/east-flag.webp', max: 320, blobs: true, holes: true},   // 맨 왼쪽 덩어리 = 깃발
                 'east-altar': {src: 'art/east-altar.webp', max: 320, blobs: true},   // 맨 오른쪽 덩어리 = 돌 제단
                 'castle-stairs': {src: 'art/castle-stairs.webp', max: 700, blobs: true},          // 맨 왼쪽 덩어리 = 위로 오르는 계단 (앞뒤 계단)
-                'castle-stair-side': {src: 'art/castle-stair-side.webp', max: 1000, blobs: true}}; // 오른쪽으로 오르는 계단 (옆 계단)
+                'castle-stair-side': {src: 'art/castle-stair-side.webp', max: 1000, blobs: true}, // 오른쪽으로 오르는 계단 (옆 계단)
+                'castle-props': {src: 'art/castle-props.webp', max: 420, tight: true},     // 망루 · 기사 석상 · 상자 / 술통 · 화로 · 무기 거치대
+                'castle-banners': {src: 'art/castle-banners.webp', max: 420, tight: true}}; // 빨간 깃발 · 파란 깃발 · 성문
 // 빛 효과 (검은 배경, 가로·세로 칸이 고르게): 0 칼자국 1 폭발 2 치유 / 3 기절 별 4 빛의 창 5 빨간 구슬 / 6 순간 이동 7 섬광 8 마법진
 const GLOWS = {fx: {src: 'art/fx.webp', cols: 3, rows: 3, max: 300},
                areas: {src: 'art/areas.webp', cols: 2, rows: 1, max: 760},   // 바닥 범위: 0 레이브 궁극기(보라 시계) · 1 생명의 샘(초록)

@@ -940,6 +940,7 @@ function drawCastle(){
     }
   }
   drawStairArt();
+  drawWallDecor();
   // 출발 자리: 팀 색 깔개
   for (const team of ['red', 'blue']){
     const sp = SPAWN[team]; if (!sp || !inView(sp.x, sp.y, 260)) continue;
@@ -988,10 +989,55 @@ function drawStairArt(){
     ctx.restore();
   }
 }
-// 성 맵 물건 (임시 그림): 돌기둥 · 석상 · 나무 상자
+/* 성벽 장식 (art/castle-banners.webp: 0 빨간 깃발 · 1 파란 깃발 · 2 성문): 높은 성벽(#) 아래 성벽 면에 걸어 둠
+   성벽 면이 이어진 줄마다 가운데에 성문, 양옆으로 3칸마다 깃발. 깃발 색: 맵 왼쪽 절반 = 우리 팀, 오른쪽 절반 = 상대 팀
+   (팀마다 같은 화면이라 왼쪽이 늘 우리 쪽). 맨 위 맵 가장자리(상대 출발 위)도 성벽으로 침 */
+function wallSpots(){
+  if (GRID.wallSpots) return GRID.wallSpots;
+  const rows = GRID.rows, C = GRID.cell, out = [];
+  for (let r = 0; r < rows.length; r++){
+    let c = 0;
+    while (c < rows[r].length){
+      const isFace = x => rows[r][x] && rows[r][x] !== '#' && (r === 0 || rows[r - 1][x] === '#');
+      if (!isFace(c)){ c++; continue; }
+      let e = c; while (isFace(e + 1)) e++;
+      const mid = (c + e + 1) / 2, n = e - c + 1, y = r * C;
+      if (n >= 3) out.push({kind: 'gate', x: mid * C, y});
+      for (let x = c; x <= e; x++){ const d = Math.abs(x + 0.5 - mid); if (n >= 3 ? d > 1.2 && Math.round(d - 1.5) % 3 === 0 : x === c) out.push({kind: 'banner', x: (x + 0.5) * C, y}); }
+      c = e + 1;
+    }
+  }
+  return (GRID.wallSpots = out);
+}
+function drawWallDecor(){
+  const sh = window.MagicArt && MagicArt.sheet ? MagicArt.sheet('castle-banners') : null; if (!sh || sh.length < 3) return;
+  const mine = S.player.team === 'blue' ? 1 : 0;
+  for (const s of wallSpots()){
+    if (!inView(s.x, s.y, 300)) continue;
+    const bottom = s.y + FACE_H;                         // 성벽 면 아래쪽에 발을 딛고, 위로는 성벽 윗면에 걸쳐 그림
+    if (s.kind === 'gate'){ const im = sh[2].img, w = 260, h = w * im.height / im.width; ctx.drawImage(im, s.x - w / 2, bottom + 6 - h, w, h); }
+    else { const im = sh[s.x < WW / 2 ? mine : 1 - mine].img, h = 150, w = h * im.width / im.height; ctx.drawImage(im, s.x - w / 2, bottom + 14 - h, w, h); }
+  }
+}
+// 성 맵 물건 그림 (art/castle-props.webp 3x2): [그림 번호, 부딪히는 칸 폭의 몇 배로 그릴지, 뒤에 숨으면 반투명?]
+const CASTLE_PROP = {pillar: [0, 2.0, true], statue: [1, 1.35, true], crate: [2, 1.9], barrel: [3, 1.75], brazier: [4, 1.9], rack: [5, 1.45]};
 function drawCastleProp(o){
   const cx = o.x + o.w / 2, base = o.y + o.h;
   ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(cx + 6, base - 2, o.w * 0.6, o.h * 0.22, 0, 0, Math.PI * 2); ctx.fill();
+  const [i, k, tall] = CASTLE_PROP[o.kind], sh = window.MagicArt && MagicArt.sheet ? MagicArt.sheet('castle-props') : null, art = sh && sh.length >= 6 && sh[i];
+  if (art){
+    const w = o.w * k, h = w * art.img.height / art.img.width, b = base + 8, p = S.player;
+    const behind = tall && !p.deadUntil && p.y < b && p.y > b - h && Math.abs(p.x - cx) < w / 2;   // 망루·석상 뒤에 내가 있으면 반투명
+    if (behind) ctx.globalAlpha = 0.55;
+    ctx.drawImage(art.img, cx - w / 2, b - h, w, h);
+    ctx.globalAlpha = 1;
+    if (o.kind === 'brazier'){                           // 화로 불빛 일렁임
+      const t = performance.now() / 1000, gl = ctx.createRadialGradient(cx, b - h * 0.72, 4, cx, b - h * 0.72, 90);
+      gl.addColorStop(0, `rgba(255,170,60,${0.28 + Math.sin(t * 9) * 0.06 + Math.sin(t * 23) * 0.04})`); gl.addColorStop(1, 'rgba(255,140,40,0)');
+      ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = gl; ctx.beginPath(); ctx.arc(cx, b - h * 0.72, 90, 0, Math.PI * 2); ctx.fill(); ctx.globalCompositeOperation = 'source-over';
+    }
+    return;
+  }
   if (o.kind === 'pillar'){                              // 돌기둥: 받침 · 기둥 · 머리
     const w = o.w * 0.62, h = 150;
     ctx.fillStyle = '#5d6370'; ctx.fillRect(o.x, base - 22, o.w, 22);
@@ -1006,7 +1052,7 @@ function drawCastleProp(o){
     ctx.beginPath(); ctx.arc(cx, base - 132, 16, 0, Math.PI * 2); ctx.fill();            // 머리
     ctx.fillStyle = '#8d939e'; ctx.fillRect(cx + 16, base - 150, 6, 110);               // 칼
     ctx.fillStyle = '#c4c9d1'; ctx.fillRect(cx - 12, base - 112, 8, 40);
-  } else {                                               // 나무 상자
+  } else {                                               // 나무 상자 (술통·화로·거치대도 그림이 없으면 상자로)
     const top = base - o.h - 30;
     ctx.fillStyle = '#7a5130'; ctx.fillRect(o.x, top + 24, o.w, o.h + 6);
     ctx.fillStyle = '#9b6a3f'; ctx.fillRect(o.x, top, o.w, 26);
@@ -1047,7 +1093,7 @@ function drawObstacles(){
 const ROCK_EAST = 1.9;                                   // 동양풍 바위 기둥 그림 크기 (부딪히는 칸 폭의 몇 배, 숲 바위는 1.35)
 const treeKind = o => Math.abs(Math.round(Math.min(o.x, WW - o.x - o.w) * 7 + o.y * 13)) % 3;   // 자리마다 정해진 나무 모양 0~2 (거울 자리는 같은 나무)
 function drawObstacle(o){
-  if (o.kind === 'pillar' || o.kind === 'statue' || o.kind === 'crate'){ drawCastleProp(o); return; }
+  if (CASTLE_PROP[o.kind]){ drawCastleProp(o); return; }
   {
     const art = o.kind !== 'pond' && propOf(o);
     if (art){
