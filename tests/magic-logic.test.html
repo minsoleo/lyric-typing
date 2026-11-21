@@ -237,8 +237,8 @@ t('flipState·flipDummies·flipObj', () => {
   return s.x === 900 && s.fa[0] === -1 && s.hp === 9 && d[0][0] === 900 && d[0][2] === 30 && d[1][0] === 800 && o.flag.x === 900 && o.flag.by === 'p1' && o.score.red === 2 && o.mid === 'm1'
     && z.zones[0] === 1 && L.flipObj(null, 'x', 1000, 600) === null;
 });
-t('zoneLabel: 내 팀 기준 / 혼자면 팀 이름', () => L.zoneLabel('red', 'red') === '우리 쪽' && L.zoneLabel('red', 'blue') === '상대 쪽' && L.zoneLabel('mid', 'blue') === '가운데'
-  && L.zoneLabel('blue', 'solo') === '파랑 쪽' && L.zoneLabel('red', 'solo') === '빨강 쪽');
+t('zoneLabel: 구역 이름은 모두에게 같은 A·B·C (빨강 쪽 A · 가운데 B · 파랑 쪽 C)', () => L.zoneLabel('red') === 'A' && L.zoneLabel('mid') === 'B' && L.zoneLabel('blue') === 'C');
+t('레이브 궁극기는 우리 팀 모두에게 (ally: all)', () => by('dealer').ult.ally === 'all' && /우리 팀 모두/.test(by('dealer').ult.desc));
 t('reView: 옛 화면(맵 크기·기준) → 새 화면 자리', () => {
   const a = L.reView({x: 2500, y: 900}, {view: 'x', W: 3200, H: 1800}, {view: 'x', W: 4800, H: 2400});   // 숲 맵 파랑 화면 → 넓은 맵 파랑 화면 (원래 700)
   const b = L.reView({x: 700, y: 900}, {view: null, W: 3200, H: 1800}, {view: 'x', W: 3200, H: 1800});   // 빨강 → 파랑

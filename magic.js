@@ -351,6 +351,7 @@ function applyBuff(sp, t){
     const near = allies().filter(o => dist(o, p) < ALLY_RANGE).sort((a, b) => dist(a, p) - dist(b, p))[0];
     if (near) return buffAlly(near, sp, t);
   } else if (sp.ally === 'near') for (const o of allies()) if (dist(o, p) < NEAR_RANGE) buffAlly(o, sp, t);
+  else if (sp.ally === 'all') for (const o of allies()) buffAlly(o, sp, t);
   buffMe(sp.fx, sp.time, sp.id, sp.heal, sp.color, t);
 }
 // 걸린 효과를 글로: 🛡 받는 피해 −40% 처럼
@@ -427,6 +428,7 @@ function castSpell(sp, t, target){
       S.fields.push({id: sp.id, owner: 'me', x: p.x, y: p.y, r: sp.area, slow: sp.slow, t0: t, until: t + sp.time, next: t, color: sp.color});
       send({k: 'field', x: r1(p.x), y: r1(p.y), r: sp.area, tm: sp.time, c: sp.color});
       buffMe(sp.fx, sp.time, sp.id, 0, sp.color, t);
+      if (sp.ally === 'all') for (const o of allies()) buffAlly(o, sp, t);   // 레이브 궁극기: 우리 팀 모두 강해짐 (어디에 있든)
       addFx({type: 'ring', x: r1(p.x), y: r1(p.y), r: sp.area, t0: t, life: 0.8, color: sp.color}, true);
       S.tint = {until: t + sp.time, t0: t, color: '90,60,190'};
       break;
@@ -886,13 +888,18 @@ function drawCastle(){
       continue;
     }
     ctx.fillStyle = CASTLE.floor[ch]; ctx.fillRect(x, y, C, C);
-    if (ch === 'a' || ch === 'b'){                       // 계단: 가로 단 8개 (위로 갈수록 밝게)
+    if (ch === 'a' || ch === 'b'){                       // 계단: 단 8개 (높은 쪽으로 갈수록 밝게), 난간은 계단 바깥 가장자리에만
+      const L1 = at(r, c - 1), R1 = at(r, c + 1), U1 = at(r - 1, c), D1 = at(r + 1, c);
+      const side = L1 !== ch && R1 !== ch && L1 !== '#' && R1 !== '#' && LV[L1] !== LV[R1];   // 옆으로 오르는 계단 (왼쪽·오른쪽 층이 다름)
+      const upHigh = side ? LV[R1] > LV[L1] : !(LV[D1] > LV[U1]);                            // 높은 쪽: 오른쪽 / 위쪽
       for (let k = 0; k < 8; k++){
-        const sy = y + k * C / 8;
-        ctx.fillStyle = `rgba(255,255,255,${0.1 + (7 - k) * 0.02})`; ctx.fillRect(x + 14, sy, C - 28, 5);
-        ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(x + 14, sy + C / 8 - 4, C - 28, 4);
+        const step = upHigh ? 7 - k : k, light = `rgba(255,255,255,${0.1 + (7 - step) * 0.02})`;
+        if (side){ const sx = x + k * C / 8; ctx.fillStyle = light; ctx.fillRect(sx, y, 5, C); ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(sx + C / 8 - 4, y, 4, C); }
+        else { const sy = y + k * C / 8; ctx.fillStyle = light; ctx.fillRect(x, sy, C, 5); ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.fillRect(x, sy + C / 8 - 4, C, 4); }
       }
-      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.fillRect(x, y, 14, C); ctx.fillRect(x + C - 14, y, 14, C);   // 난간
+      ctx.fillStyle = 'rgba(0,0,0,.35)';                 // 난간
+      if (side){ if (U1 !== ch) ctx.fillRect(x, y, C, 14); if (D1 !== ch) ctx.fillRect(x, y + C - 14, C, 14); }
+      else { if (L1 !== ch) ctx.fillRect(x, y, 14, C); if (R1 !== ch) ctx.fillRect(x + C - 14, y, 14, C); }
       continue;
     }
     ctx.strokeStyle = CASTLE.mortar; ctx.beginPath();     // 돌바닥 줄눈 (벽돌 쌓듯 엇갈리게)
@@ -1626,7 +1633,7 @@ function flagHolder(){
 }
 function drawHeldFlag(t){ const h = flagHolder(); if (h) drawFlag(h.x - 24, h.y + 8, h.team, t, 1, 140); }
 // 구역 원 (z: 점령 상태, 없으면 흐린 구경용)
-// 화면에 쓰는 구역 이름: 팀이 있으면 우리 쪽/가운데/상대 쪽, 혼자면 빨강 쪽/가운데/파랑 쪽
+// 화면에 쓰는 구역 이름: 모두에게 같은 A(빨강 쪽)·B(가운데)·C(파랑 쪽)
 const zoneName = i => MZONES && MZONES[i] ? L.zoneLabel(MZONES[i].side, S.player.team) : ZNAME[i];
 function drawZone(a, z, t, i){
   if (!inView(a.x, a.y, a.r + 40)) return;
@@ -2035,7 +2042,7 @@ applyUnlimited();
    방장이 바뀌면 새 방장이 서버에서 받아 둔 obj부터 이어서 계산 */
 const FLAG_PICK = 60, OBJ_EVERY = 200;
 let ZONE_RATE = 100 / 40;                          // 🏳 1명이 구역에 서 있으면 40초에 0→100%
-const ZNAME = ['빨강 쪽', '가운데', '파랑 쪽'];       // 모두에게 같은 글로 가는 소식용 (원래 번호 순서). 화면 글씨는 zoneName(i) = 내 기준
+const ZNAME = ['A', 'B', 'C'];                     // 구역 이름: 빨강 쪽 A · 가운데 B · 파랑 쪽 C (모두에게 같은 이름, 소식도 같은 글)
 let objLast = performance.now() / 1000, lastRate = 0, goneSince = null;
 const LEFT_GRACE = 5;                              // 한 팀이 5초 동안 계속 비어야 남은 팀 승리 (잠깐 끊긴 인터넷은 봐줌)
 // 깃발·구역 계산에 쓰는 사람들 (나 + 친구들, 친구는 마지막으로 받은 위치)
@@ -2204,13 +2211,13 @@ function drawMatchHud(){
   ctx.strokeStyle = 'rgba(255,216,74,.6)'; ctx.lineWidth = 2; ctx.stroke();
   ctx.font = '800 13px "Malgun Gothic",sans-serif';
   const tl = mmode() === 'zone' ? ' 🔒' : '';
-  const [lt, rt] = L.scoreSides(S.player.team);                    // 우리 팀이 왼쪽 (구역 칸 '우리 쪽'과 같은 쪽)
+  const [lt, rt] = L.scoreSides(S.player.team);                    // 우리 팀이 왼쪽 (구역 칸도 우리 팀 쪽 구역이 왼쪽)
   ctx.fillStyle = TEAMS[lt].color; ctx.fillText(TEAMS[lt].name + tl, x + 52, y + 20);
   ctx.fillStyle = TEAMS[rt].color; ctx.fillText(TEAMS[rt].name + tl, x + w - 52, y + 20);
   ctx.font = '400 32px "Black Han Sans","Malgun Gothic",sans-serif';
   ctx.fillStyle = TEAMS[lt].color; ctx.fillText(String(score(lt)), x + 52, y + 54);
   ctx.fillStyle = TEAMS[rt].color; ctx.fillText(String(score(rt)), x + w - 52, y + 54);
-  if (mmode() === 'zone'){                              // 🏳 시간 대신 구역 3칸 (내 화면에서 왼쪽에 있는 구역부터 → 우리 쪽이 왼쪽)
+  if (mmode() === 'zone'){                              // 🏳 시간 대신 구역 3칸 (내 화면에서 왼쪽에 있는 구역부터 → 우리 팀 쪽 구역이 왼쪽)
     const zs = (obj && obj.zones) || [], order = MZONES ? [0, 1, 2].sort((a, b) => MZONES[a].x - MZONES[b].x) : [0, 1, 2];
     for (let k = 0; k < 3; k++){
       const i = order[k], z = zs[i] || L.newZone(), cx = VW / 2 + (k - 1) * 62, cy = y + 36, g = zoneGauge(z);

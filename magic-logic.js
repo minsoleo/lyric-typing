@@ -237,7 +237,8 @@
   const flipDummies = (arr, view, W, H) => !view || !arr ? arr : arr.map(a => { if (!a) return a; const q = flipPt({x: a[0], y: a[1]}, view, W, H), b = a.slice(); b[0] = q.x; b[1] = q.y; return b; });
   const flipObj = (o, view, W, H) => !view || !o || !o.flag ? o : Object.assign({}, o, {flag: withPt(o.flag, view, W, H)});
   // 구역 이름: 팀이 있으면 내 기준(우리 쪽/가운데/상대 쪽), 혼자면 팀 이름
-  const zoneLabel = (side, team) => side === 'mid' ? '가운데' : team === 'red' || team === 'blue' ? (side === team ? '우리 쪽' : '상대 쪽') : side === 'red' ? '빨강 쪽' : '파랑 쪽';
+  // 점령 구역 이름: 팀과 상관없이 모두에게 같은 A·B·C (빨강 쪽 A · 가운데 B · 파랑 쪽 C) — "A 먹자"가 두 팀 모두에게 같은 곳 (2026-11-21 민솔님 요청)
+  const zoneLabel = side => ({red: 'A', mid: 'B', blue: 'C'})[side] || '';
 
   // 내 화면 기준(또는 맵 크기)이 바뀔 때: 옛 화면 자리 → 원래 자리 → 새 화면 자리.  a, b = {view, W, H}
   const reView = (p, a, b) => flipPt(flipPt(p, a.view, a.W, a.H), b.view, b.W, b.H);
