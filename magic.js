@@ -1002,6 +1002,7 @@ function propOf(o){
 function drawObstacles(){
   for (const o of OBSTACLES) if (o.kind === 'pond' && inView(o.x + o.w / 2, o.y + o.h / 2, 200)) drawObstacle(o);
 }
+const ROCK_EAST = 1.9;                                   // 동양풍 바위 기둥 그림 크기 (부딪히는 칸 폭의 몇 배, 숲 바위는 1.35)
 const treeKind = o => Math.abs(Math.round(Math.min(o.x, WW - o.x - o.w) * 7 + o.y * 13)) % 3;   // 자리마다 정해진 나무 모양 0~2 (거울 자리는 같은 나무)
 function drawObstacle(o){
   if (o.kind === 'pillar' || o.kind === 'statue' || o.kind === 'crate'){ drawCastleProp(o); return; }
@@ -1009,7 +1010,7 @@ function drawObstacle(o){
     const art = o.kind !== 'pond' && propOf(o);
     if (art){
       const tree = o.kind === 'tree', cx = o.x + o.w / 2, base = o.y + o.h * (tree ? 0.95 : 1) + (tree ? 0 : 6);
-      const w = o.w * (tree ? 1.9 : 1.35), h = w * art.img.height / art.img.width;
+      const w = o.w * (tree ? 1.9 : isEast() ? ROCK_EAST : 1.35), h = w * art.img.height / art.img.width;   // 🏯 동양풍 바위 기둥은 더 크게
       ctx.fillStyle = 'rgba(0,0,0,.22)'; ctx.beginPath(); ctx.ellipse(cx + 6, base - 4, w * (tree ? 0.32 : 0.45), w * 0.1, 0, 0, Math.PI * 2); ctx.fill();
       // 나무 뒤에 내가 숨어 있으면 나무를 반투명하게 (내 모습이 보이게)
       const p = S.player, behind = tree && !p.deadUntil && p.y < base && p.y > base - h && Math.abs(p.x - cx) < w / 2;
@@ -1715,17 +1716,17 @@ function drawZone(a, z, t, i){
 const zoneGauge = L.zoneGauge;                     // 구역 고리에 보여 줄 게이지 (magic-logic.js)
 // 깃발: 막대 + 천 (team: 든 사람 팀 색, 없으면 흰색) · alpha: 흐리게
 // 🚩 깃발: 금색 테두리의 붉은 깃발 (빨강 팀과 헷갈리지 않게, 든 팀은 깃대 끝 리본과 발밑 고리를 팀 색으로)
-// art/east-flag.webp(0 깃발 · 1 돌 제단)가 있으면 그 그림으로
-const eastFlag = i => { const sh = window.MagicArt && MagicArt.sheet ? MagicArt.sheet('east-flag') : null; return sh && sh[i] ? sh[i] : null; };
+// art/east-flag.webp(맨 왼쪽 = 깃발) · art/east-altar.webp(맨 오른쪽 = 돌 제단)가 있으면 그 그림으로
+const artPiece = (id, last) => { const sh = window.MagicArt && MagicArt.sheet ? MagicArt.sheet(id) : null; return sh && sh.length ? sh[last ? sh.length - 1 : 0] : null; };
 function drawFlag(x, y, team, t, alpha, height){
   if (!inView(x, y, 160)) return;
   const was = ctx.globalAlpha; ctx.globalAlpha = was * (alpha === undefined ? 1 : alpha);
   const bob = team ? 0 : Math.sin(t * 3) * 4, H = height || 84, top = y - H + bob, wave = Math.sin(t * 6) * 5;
   ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x, y + 4, 16, 6, 0, 0, Math.PI * 2); ctx.fill();
-  const art = eastFlag(0);
+  const art = artPiece('east-flag');
   if (art){                                              // 지피티 깃발 그림 (깃대 아래쪽이 x, y)
     const h = H * 1.35, w = h * art.img.width / art.img.height;
-    ctx.drawImage(art.img, x - w * 0.2, y + bob - h, w, h);
+    ctx.drawImage(art.img, x - w * 0.16, y + bob - h, w, h);
   } else {
     ctx.strokeStyle = '#5b3b1c'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y + bob); ctx.lineTo(x, top); ctx.stroke();
     ctx.fillStyle = '#c8202c'; ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 3;   // 붉은 바탕 + 금색 테두리
@@ -1743,7 +1744,7 @@ function drawFlag(x, y, team, t, alpha, height){
 // 깃발 자리의 둥근 돌 제단 (밟고 지나갈 수 있음, 장식만)
 function drawAltar(x, y){
   if (!inView(x, y, 140)) return;
-  const art = eastFlag(1);
+  const art = artPiece('east-altar', true);
   if (art){ const w = 170, h = w * art.img.height / art.img.width; ctx.drawImage(art.img, x - w / 2, y + 6 - h / 2, w, h); return; }
   ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x + 4, y + 10, 78, 32, 0, 0, Math.PI * 2); ctx.fill();
   ctx.fillStyle = '#7d828b'; ctx.beginPath(); ctx.ellipse(x, y + 4, 76, 30, 0, 0, Math.PI * 2); ctx.fill();

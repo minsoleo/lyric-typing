@@ -31,7 +31,8 @@ const SHEETS = {props: {src: 'art/trees-rocks.webp'},   // 나무 3 (위) · 바
                 things: {src: 'art/things.webp', max: 200},     // 덩굴 화살 · 사슬 갈고리 · 바위 기둥
                 // 🏯 동양풍 맵: 나무 3(분홍 꽃·단풍·소나무) + 바위 기둥 3(납작·큰·중간) / 연못+다리 / 장식 3x3 / 깃발 + 돌 제단
                 'east-props': {src: 'art/east-props.webp', tight: true}, 'east-pond': {src: 'art/east-pond.webp', max: 900},
-                'east-decor': {src: 'art/east-decor.webp', max: 160, tight: true}, 'east-flag': {src: 'art/east-flag.webp', max: 320, tight: true}};
+                'east-decor': {src: 'art/east-decor.webp', max: 160, tight: true}, 'east-flag': {src: 'art/east-flag.webp', max: 320, blobs: true},   // 맨 왼쪽 덩어리 = 깃발
+                'east-altar': {src: 'art/east-altar.webp', max: 320, blobs: true}};   // 맨 오른쪽 덩어리 = 돌 제단
 // 빛 효과 (검은 배경, 가로·세로 칸이 고르게): 0 칼자국 1 폭발 2 치유 / 3 기절 별 4 빛의 창 5 빨간 구슬 / 6 순간 이동 7 섬광 8 마법진
 const GLOWS = {fx: {src: 'art/fx.webp', cols: 3, rows: 3, max: 300},
                areas: {src: 'art/areas.webp', cols: 2, rows: 1, max: 760},   // 바닥 범위: 0 레이브 궁극기(보라 시계) · 1 생명의 샘(초록)
@@ -153,7 +154,38 @@ function makeSheet(img, max, tight){
   }
   return parts;
 }
-const sheetReady = Promise.all(Object.entries(SHEETS).map(async ([id, f]) => { const img = await load(f.src); if (img) sheets[id] = makeSheet(img, f.max, f.tight); }));
+// 붙어 있는 덩어리끼리 나누기 (blobs: true): 물건끼리 가로·세로로 겹쳐서 빈 줄로는 못 나눌 때 (깃발 끝과 제단처럼)
+// 큰 덩어리만 왼쪽부터 순서대로, 다른 덩어리 픽셀은 지우고 잘라 냄
+function makeBlobs(img, max){
+  const s = removeBg(img), {w, h} = s, n = w * h, lab = new Int32Array(n), comps = [];
+  for (let i = 0; i < n; i++){
+    if (lab[i] || s.d[i * 4 + 3] <= 20) continue;
+    const id = comps.length + 1, st = [i], b = {id, x0: w, x1: -1, y0: h, y1: -1, n: 0};
+    lab[i] = id;
+    while (st.length){
+      const j = st.pop(), x = j % w, y = (j - x) / w;
+      b.n++; if (x < b.x0) b.x0 = x; if (x > b.x1) b.x1 = x; if (y < b.y0) b.y0 = y; if (y > b.y1) b.y1 = y;
+      for (const k of [x > 0 ? j - 1 : -1, x < w - 1 ? j + 1 : -1, y > 0 ? j - w : -1, y < h - 1 ? j + w : -1])
+        if (k >= 0 && !lab[k] && s.d[k * 4 + 3] > 20){ lab[k] = id; st.push(k); }
+    }
+    comps.push(b);
+  }
+  const big = Math.max(0, ...comps.map(b => b.n));
+  return comps.filter(b => b.n > big * 0.05).sort((a, b) => a.x0 - b.x0).map(b => {
+    const cw = b.x1 - b.x0 + 1, ch = b.y1 - b.y0 + 1, one = document.createElement('canvas'); one.width = cw; one.height = ch;
+    const g = one.getContext('2d'), im = g.createImageData(cw, ch);
+    for (let y = 0; y < ch; y++) for (let x = 0; x < cw; x++){
+      const j = (y + b.y0) * w + x + b.x0; if (lab[j] !== b.id) continue;
+      const o = (y * cw + x) * 4; for (let k = 0; k < 4; k++) im.data[o + k] = s.d[j * 4 + k];
+    }
+    g.putImageData(im, 0, 0);
+    const k = Math.min(1, (max || MAX) / Math.max(cw, ch)), out = document.createElement('canvas');
+    out.width = Math.max(1, Math.round(cw * k)); out.height = Math.max(1, Math.round(ch * k));
+    const og = out.getContext('2d'); og.imageSmoothingQuality = 'high'; og.drawImage(one, 0, 0, out.width, out.height);
+    return {img: out, ax: out.width / 2};
+  });
+}
+const sheetReady = Promise.all(Object.entries(SHEETS).map(async ([id, f]) => { const img = await load(f.src); if (img) sheets[id] = f.blobs ? makeBlobs(img, f.max) : makeSheet(img, f.max, f.tight); }));
 
 // 빛 효과 자르기: 칸을 고르게 나누고, 검은색은 투명하게 (밝을수록 진하게 보임 → 어느 바닥에서도 빛처럼)
 function makeGlow(img, cols, rows, max){
