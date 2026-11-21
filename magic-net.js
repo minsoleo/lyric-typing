@@ -1,7 +1,7 @@
 /* 숲속의 한바탕: 👫 친구랑 연습 — Firebase 방 연결만 맡는 파일
    rooms/<숫자 4자리> = {
      game: 'magic', createdAt, host(방장 pid), dmode(허수아비 모드),
-     st:  {pid: 각자 내 캐릭터 상태 (0.1초마다 덮어씀)},
+     st:  {pid: 각자 내 캐릭터 상태 (0.1초마다 덮어씀)} — 인터넷이 끊기면 서버가 off(끊긴 시각)를 적음 → NET_GRACE(15초) 안에 돌아오면 그대로, 넘으면 남은 사람이 지움
      dum: [허수아비 상태 — 방장만 씀],
      gmode: 대결 모드 'kill'(킬내기전) | 'flag'(깃발쟁) | 'zone'(점령전) — 방장이 고름, 맵도 이걸 따라감
      match: {id, mode, startAt, endAt(점령전은 없음), len, score: {red, blue}, over?, winner?} — ⚔ 대결 중일 때만 (시간은 서버 시계 기준)
@@ -31,7 +31,9 @@ function myPid(){
   return id;
 }
 const clean = o => JSON.parse(JSON.stringify(o));   // Firebase는 undefined를 못 받음
-const inUse = r => !!r && ((r.st && Object.keys(r.st).length > 0) || (r.players && Object.keys(r.players).length > 0));
+const L = () => window.MagicLogic;
+const srvNow = () => Date.now() + offset;
+const inUse = r => L().roomInUse(r, srvNow());          // 오래 끊긴 사람만 남은 방은 빈 방
 const netErr = e => (e && /permission|network|offline|disconnect/i.test(String(e.message || e))) ? new Error('서버에 연결하지 못했어요. 인터넷 연결을 확인해 주세요.') : e;
 
 async function create(name){
@@ -53,7 +55,7 @@ async function join(code, name){
   try { r = (await d.ref('rooms/' + code).once('value')).val(); } catch (e) { throw netErr(e); }
   if (!inUse(r)) throw new Error('그 코드의 방이 없어요. 숫자를 다시 확인해 주세요.');
   if (r.game !== 'magic') throw new Error('그건 판 뒤집기 방 코드예요. 숲속의 한바탕 방 코드를 넣어 주세요.');
-  if (Object.keys(r.st || {}).filter(k => k !== pid).length >= MAX) throw new Error(`방이 꽉 찼어요. (최대 ${MAX}명)`);
+  if (L().liveIds(r.st, srvNow()).filter(k => k !== pid).length >= MAX) throw new Error(`방이 꽉 찼어요. (최대 ${MAX}명)`);
   return connect(code, name, false);
 }
 
@@ -87,11 +89,18 @@ function connect(code, name, created){
   };
   const fire = (k, ...a) => { const f = conn.on[k]; if (f) try { f(...a); } catch (e) { console.error(e); } };
 
-  stRef.onDisconnect().remove();        // 창을 닫으면 자동으로 방에서 빠짐
+  // 인터넷이 끊기면(창을 닫거나 노트북 와이파이가 잠깐 끊김) 바로 지우지 않고 끊긴 시각만 적음 → 15초 안에 돌아오면 그대로 이어서 함
+  const markOff = () => stRef.onDisconnect().update({off: firebase.database.ServerValue.TIMESTAMP});
+  markOff();
   stRef.set({w: 1, n: name, j: joinedAt}).catch(() => {});   // 첫 상태를 보내기 전 자리 잡기 (w: 아직 준비 중)
 
   const stq = ref.child('st');
-  const onSt = s => { if (s.key === pid) return; states[s.key] = s.val(); if (!s.val().w) fire('state', s.key, s.val()); };
+  const onSt = s => {
+    if (s.key === pid) return;
+    const v = s.val(); states[s.key] = v;
+    if (v.off != null){ fire('lost', s.key); return; }   // 📶 연결이 끊긴 친구 (기다리는 중)
+    if (!v.w) fire('state', s.key, v);
+  };
   stq.on('child_added', onSt);
   stq.on('child_changed', onSt);
   stq.on('child_removed', s => { if (s.key === pid) return; delete states[s.key]; fire('leave', s.key); checkHost(); });
@@ -113,9 +122,9 @@ function connect(code, name, created){
   modeRef.on('value', s => fire('mode', s.val() || 'still'));
   dumRef.on('value', s => { if (host !== pid) fire('dummies', s.val()); });
 
-  // 인터넷이 잠깐 끊겼다 돌아오면 다시 자리 잡기
+  // 인터넷이 잠깐 끊겼다 돌아오면 다시 자리 잡기 (0.1초마다 보내는 내 상태가 off를 지움) + 화면에 알림
   const info = d.ref('.info/connected');
-  const onInfo = s => { if (s.val() && !closed) stRef.onDisconnect().remove(); };
+  const onInfo = s => { if (closed) return; if (s.val()) markOff(); fire('conn', !!s.val()); };
   info.on('value', onInfo);
 
   // 방장이 나가면: 남은 사람 중 가장 먼저 들어온 사람이 방장
@@ -127,21 +136,28 @@ function connect(code, name, created){
     ids.sort((a, b) => j(a) - j(b));
     if (ids[0] === pid){ const was = host; hostRef.transaction(cur => (!cur || cur === was) ? pid : undefined).catch(() => {}); }
   }
-  const timer = setInterval(checkHost, 2000);
+  // 15초 넘게 끊긴 사람은 방에서 지움 (그 사이 돌아왔으면 안 지움)
+  function sweep(){
+    if (closed) return;
+    for (const k of Object.keys(states)) if (L().netGone(states[k], srvNow()))
+      ref.child('st/' + k).transaction(cur => cur && L().netGone(cur, srvNow()) ? null : undefined).catch(() => {});
+  }
+  const timer = setInterval(() => { sweep(); checkHost(); }, 2000);
 
   async function leave(){
     if (closed) return;
     closed = true; clearInterval(timer);
     stq.off(); evq.off(); hostRef.off(); modeRef.off(); dumRef.off(); matchRef.off(); gmodeRef.off(); objRef.off(); info.off('value', onInfo);
     try {
-      await stRef.onDisconnect().cancel();
+      // 직접 나갈 때는 바로 지움. 창이 닫히며 지우기가 못 가도 연결이 끊기는 순간 서버가 지우게 먼저 걸어 둠
+      stRef.onDisconnect().remove().catch(() => {});
       await stRef.remove();
       if (host === pid){
         const rest = Object.keys(states).sort((a, b) => (states[a].j || 0) - (states[b].j || 0));
         if (rest.length) await hostRef.set(rest[0]);
       }
       const left = await ref.child('st').once('value');
-      if (!left.exists()) await ref.remove();      // 내가 마지막이면 방을 통째로 지움
+      if (!L().liveIds(left.val(), srvNow()).length) await ref.remove();      // 내가 마지막이면(오래 끊긴 사람만 남았어도) 방을 통째로 지움
     } catch (e) { console.error(e); }
   }
   return conn;

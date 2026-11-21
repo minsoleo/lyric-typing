@@ -42,6 +42,8 @@ button,.btn{font:inherit;color:var(--text);background:var(--panel2);border:1px s
 button:hover,.btn:hover{background:var(--hover)}
 button.on{background:var(--accent);border-color:var(--accent);color:var(--on-text);font-weight:800}
 #themeBtn{width:34px;height:34px;padding:0;border-radius:50%;font-size:16px}
+.fps{font:800 13px "Malgun Gothic",sans-serif;padding:4px 8px;border-radius:8px;background:rgba(0,0,0,.25);color:#bff7c8;min-width:72px;text-align:center}.fps.mid{color:#ffe08a}.fps.bad{color:#ff8a8a}#liteBtn.on{background:#ffd84a;color:#3a2a00;border-color:#ffd84a}
+.netwarn{position:absolute;left:50%;top:18%;transform:translateX(-50%);z-index:6;padding:12px 20px;border-radius:14px;background:rgba(40,12,8,.88);border:2px solid #ffb36b;color:#ffe2c2;font:800 18px "Malgun Gothic",sans-serif;text-align:center;pointer-events:none;box-shadow:0 8px 24px rgba(0,0,0,.4)}.netwarn small{display:block;margin-top:4px;font-weight:700;font-size:13px;opacity:.85}.netwarn[hidden]{display:none}
 [hidden]{display:none !important}
 
 /* 맵 */
@@ -181,12 +183,15 @@ button.go{background:var(--gold);border-color:var(--gold);color:var(--gold-text)
     <button id="leaveBtn" type="button">🚪 방 나가기</button>
   </div>
   <div class="row">
+    <span class="fps" id="fpsTag" title="1초에 화면을 몇 번 그리는지 (높을수록 부드러움, 30보다 낮으면 버벅임)">초당 –장</span>
+    <button id="liteBtn" type="button" title="그림을 조금 흐리게 그리고 바닥 장식을 빼서, 느린 컴퓨터에서 더 부드럽게">⚡ 가볍게</button>
     <button id="themeBtn" type="button"></button>
     <a class="btn" href="./">타자연습으로</a>
   </div>
 </header>
 <div class="stage" id="stage">
   <canvas id="cv" aria-label="숲속의 한바탕 연습판"></canvas>
+  <div class="netwarn" id="netWarn" hidden>📶 인터넷 연결이 끊겼어요… 다시 연결하는 중<small>15초 안에 돌아오면 그대로 이어서 해요</small></div>
   <div class="hint">🖱 왼쪽: 이동 · ⌨ 스킬 + Enter: 장전 · 🖱 오른쪽: 발사 (없으면 평타) · 🌟 궁극기는 긴 이름 · ♾ 무제한이면 대기 시간 없음 · Esc: 지우기</div>
 </div>
 <div class="bottom">
@@ -248,13 +253,13 @@ button.go{background:var(--gold);border-color:var(--gold);color:var(--gold-text)
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
 <!-- ★ 고친 뒤 올릴 때 아래 v=… 숫자를 바꾸면, 친구들 브라우저가 예전 파일을 쓰지 않고 새로 받아요 -->
-<script>window.MAGIC_V = '20261121a';</script>
-<script src="magic-spells.js?v=20261121a"></script>
-<script src="magic-logic.js?v=20261121a"></script>
-<script src="magic-net.js?v=20261121a"></script>
-<script src="magic-art.js?v=20261121a"></script>
-<script src="magic-maps.js?v=20261121a"></script>
+<script>window.MAGIC_V = '20261121c';</script>
+<script src="magic-spells.js?v=20261121c"></script>
+<script src="magic-logic.js?v=20261121c"></script>
+<script src="magic-net.js?v=20261121c"></script>
+<script src="magic-art.js?v=20261121c"></script>
+<script src="magic-maps.js?v=20261121c"></script>
 <!-- 🔊 소리는 잠시 빼 둠 (다시 넣을 때: magic-sounds.js · magic-sfx.js 스크립트와 #sfxBtn 버튼을 되살리기) -->
-<script src="magic.js?v=20261121a"></script>
+<script src="magic.js?v=20261121c"></script>
 </body>
 </html>

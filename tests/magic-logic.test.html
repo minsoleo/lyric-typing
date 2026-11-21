@@ -53,6 +53,10 @@ t('밸런스 패치 (2026-11-21, 친구랑 해 보고)', () => {
     && by('dealer').basic.dmg === 6 && sp('dealer', 'rush').dmg === 18 && sp('dealer', 'throat').dmg === 20 && fx('dealer', 'shadow', 'speed') === 0.6 && sp('dealer', 'oath').time === 3
     && sp('healer', 'sprint').healAll === 30 && sp('healer', 'spring').heal === 60 && sp('healer', 'bless').heal === 40;
 });
+// 📶 인터넷이 잠깐 끊긴 사람: 바로 '나갔어요'가 아니라 NET_GRACE초 기다림 (2026-11-21)
+t('netGone: 끊긴 지 15초 넘으면 나간 걸로', () => L.NET_GRACE === 15 && !L.netGone({off: 1000}, 1000 + 14000) && L.netGone({off: 1000}, 1000 + 15001) && !L.netGone({x: 1}, 99999999) && L.netGone(null, 0));
+t('liveIds: 오래 끊긴 사람은 빼고 셈', () => L.liveIds({a: {x: 1}, b: {off: 0}, c: {off: 50000}}, 60000).join() === 'a,c' && L.liveIds(null, 0).length === 0);
+t('roomInUse: 오래 끊긴 사람만 남은 방은 빈 방', () => !L.roomInUse(null, 0) && L.roomInUse({st: {a: {x: 1}}}, 0) && !L.roomInUse({st: {a: {off: 0}}}, 20000) && L.roomInUse({st: {a: {off: 0}, b: {x: 1}}}, 20000) && L.roomInUse({players: {p: 1}}, 0));
 t('레이브 대기 시간은 원래대로, 궁극기 범위는 12초 유지', () => by('dealer').spells.map(s => s.cd).join() === '6,8,10,16,14' && by('dealer').ult.time === 12);
 t('가데온 검 이름: 강철 베기 · 검의 폭풍', () => by('tank').basic.name === '강철 베기' && by('tank').spells.some(s => s.name === '검의 폭풍'));
 t('findSpell: 다른 캐릭터 스킬은 못 씀', () => L.findSpell(all(by('tank')), '목 긋기') === null);

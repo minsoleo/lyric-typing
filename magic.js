@@ -134,8 +134,9 @@ const others = () => [...S.others.values()];
 const isDown = e => e.kind === 'player' ? !!e.dead : !!e.deadUntil;
 const alive = () => inMatch() ? [] : S.dummies.filter(d => !d.deadUntil);   // 대결 중엔 허수아비 없음
 // 내 적: 허수아비 + 다른 팀 친구 / 내 아군: 같은 팀 친구 (나는 빼고)
-const enemies = () => alive().concat(others().filter(o => o.team !== S.player.team && !o.dead));
-const allies = () => others().filter(o => o.team === S.player.team && !o.dead);
+// 📶 연결이 끊긴 친구(o.lost)는 기다리는 동안 맞히거나 도와줄 수 없음
+const enemies = () => alive().concat(others().filter(o => o.team !== S.player.team && !o.dead && !o.lost));
+const allies = () => others().filter(o => o.team === S.player.team && !o.dead && !o.lost);
 const myName = () => net ? net.name : '나';
 const nameOf = pid => net && pid === net.pid ? net.name : (S.others.get(pid) || {}).name || '친구';
 
@@ -162,8 +163,12 @@ function addFeed(text, color){ S.feed.push({text, color: color || '#ffffff', t0:
 /* ---------- 캔버스 맞추기 ---------- */
 const cv = $('#cv'), ctx = cv.getContext('2d');
 let dpr = 1, scale = 1;
+// ⚡ 가볍게: 화면을 더 작은 해상도로 그리고(조금 흐려짐) 바닥 장식을 빼서, 느린 노트북에서도 부드럽게
+let lite = false;
+try { lite = localStorage.getItem('magic.lite') === '1'; } catch (e) {}
+const LITE_RES = 0.7;
 function fit(){
-  const st = $('#stage'); dpr = window.devicePixelRatio || 1;
+  const st = $('#stage'); dpr = lite ? LITE_RES : (window.devicePixelRatio || 1);
   const aw = st.clientWidth - 28, ah = st.clientHeight - 8;
   const w = Math.max(320, Math.min(aw, ah * VW / VH)), h = w * VH / VW;
   cv.style.width = w + 'px'; cv.style.height = h + 'px';
@@ -563,6 +568,7 @@ function onNetState(pid, st){
     S.others.set(pid, o);
     addFeed(`👋 ${st.n || '친구'} 님이 들어왔어요`, '#bff7c8');
   }
+  if (o.lost){ o.lost = false; addFeed(`📶 ${st.n || '친구'} 님이 다시 연결됐어요`, '#bff7c8'); }
   if (Math.hypot(st.x - o.x, st.y - o.y) > 400){ o.x = st.x; o.y = st.y; }   // 순간 이동·부활은 바로
   if (o.hp !== undefined && st.hp < o.hp - 0.5 && !(t - (o.hitAt === undefined ? -9 : o.hitAt) < 0.25)) o.hitAt = t;   // 친구가 맞으면 번쩍
   Object.assign(o, {tx: st.x, ty: st.y, name: st.n || '친구', team: st.tm === 'blue' ? 'blue' : 'red', cls: c, r: c.r, hp: st.hp, max: st.mx || c.hp,
@@ -817,7 +823,7 @@ function drawGround(t){
   }
   // 풀·꽃·버섯·덤불 (art/decor.webp가 있으면 그림으로, 바닥 쪽을 기준으로 세워 그림)
   const decor = window.MagicArt && MagicArt.sheet && MagicArt.sheet('decor');
-  for (const d of DECOR){
+  if (!lite) for (const d of DECOR){
     if (!inView(d.x, d.y, 40)) continue;
     if (decor && decor.length >= 9){
       if (d.kind === 'grass' && d.hue > 0.4) continue;    // 풀밭 그림에 풀잎이 있어서 풀포기는 조금만
@@ -1571,7 +1577,7 @@ function drawRemote(o, t){
   ctx.fillStyle = 'rgba(0,0,0,.28)'; ctx.beginPath(); ctx.ellipse(o.x, o.y + o.r + 2, o.r, 7, 0, 0, Math.PI * 2); ctx.fill();
   teamRing(o);
   if (L.takenMult(o.fx, t) < 1){ ctx.strokeStyle = 'rgba(95,225,255,.9)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(o.x, o.y, o.r + 10 + Math.sin(t * 8) * 2, 0, Math.PI * 2); ctx.stroke(); }
-  ctx.globalAlpha = hidden ? 0.32 : 1;
+  ctx.globalAlpha = hidden ? 0.32 : o.lost ? 0.4 : 1;   // 연결이 끊긴 친구는 흐리게
   drawHero(o, t, o.cls);
   ctx.globalAlpha = 1;
   if (o.charged){
@@ -1590,6 +1596,7 @@ function drawRemote(o, t){
     + (L.effectSum(o.fx, 'speed', t) < 0 ? '🐢' : '') + (L.effectSum(o.fx, 'atk', t) < 0 ? '💧' : '') + (hidden ? '👻' : '');
   if (icons){ ctx.font = '16px "Segoe UI Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.fillText(icons, o.x, top - 16); }
   nameTag(o, `${o.cls.icon} ${o.name}`);
+  if (o.lost){ ctx.font = '800 16px "Malgun Gothic","Segoe UI Emoji",sans-serif'; ctx.textAlign = 'center'; ctx.lineWidth = 4; ctx.strokeStyle = 'rgba(0,0,0,.7)'; ctx.strokeText('📶 연결 끊김… 기다리는 중', o.x, top - 38); ctx.fillStyle = '#ffd08a'; ctx.fillText('📶 연결 끊김… 기다리는 중', o.x, top - 38); }
 }
 function drawFeed(t){
   let y = 22;
@@ -1797,6 +1804,8 @@ function startNet(conn){
   net = conn;
   net.on.event = onNetEvent;
   net.on.state = onNetState;
+  net.on.lost = pid => { const o = S.others.get(pid); if (o && !o.lost){ o.lost = true; o.dash = null; addFeed(`📶 ${o.name} 님 인터넷이 끊겼어요… 15초 기다려요`, '#ffd08a'); } };
+  net.on.conn = onConn; connOnce = true; connLost = false;   // 방에 들어왔으면 지금은 연결된 상태 (첫 '연결됨' 신호는 이 줄보다 먼저 옴)
   net.on.leave = pid => { const o = S.others.get(pid); if (o) addFeed(`👋 ${o.name} 님이 나갔어요`, '#cfd6e6'); S.others.delete(pid); };
   net.on.dummies = onNetDummies;
   net.on.mode = m => showDummyMode(m);
@@ -1820,8 +1829,16 @@ function startNet(conn){
   addFeed(net.created ? `🏠 방을 만들었어요! 코드 ${net.code}` : `🏠 ${net.code} 방에 들어왔어요`, '#ffd84a');
   renderRoomBar(); refreshPick();
 }
+// 내 인터넷이 끊겼을 때: 화면에 알려 줌 (돌아오면 그대로 이어서 함)
+let connOnce = false, connLost = false;
+function onConn(c){
+  if (c){ if (connLost) castMsg('✅ 다시 연결됐어요! 그대로 이어서 해요', 'good'); connOnce = true; connLost = false; $('#netWarn').hidden = true; return; }
+  if (!connOnce || connLost) return;
+  connLost = true; $('#netWarn').hidden = false;
+}
 async function leaveNet(){
   if (!net) return;
+  connOnce = connLost = false; $('#netWarn').hidden = true;
   const n = net; net = null; match = null; matchId = null; $('#result').hidden = true; gmode = 'kill'; obj = null;
   let solo = 'forest'; try { const m = localStorage.getItem('magic.map'); if (m && MAPS[m]) solo = m; } catch (e) {}
   setMap(solo);                                       // 혼자 연습 때 고른 맵으로
@@ -2101,7 +2118,18 @@ function drawMatchHud(){
 }
 
 /* ---------- 시작 ---------- */
-function loop(){ update(); draw(); updateHud(); requestAnimationFrame(loop); }
+// 초당 몇 장 그리는지 (화면 위에 표시, 30보다 낮으면 빨갛게)
+let fpsN = 0, fpsAt = performance.now();
+function countFps(){
+  fpsN++;
+  const t = performance.now(); if (t - fpsAt < 1000) return;
+  const f = Math.round(fpsN * 1000 / (t - fpsAt)); fpsN = 0; fpsAt = t;
+  const el = $('#fpsTag'); el.textContent = `초당 ${f}장`; el.className = 'fps' + (f < 30 ? ' bad' : f < 50 ? ' mid' : '');
+}
+function renderLite(){ const b = $('#liteBtn'); b.classList.toggle('on', lite); b.textContent = lite ? '⚡ 가볍게 켜짐' : '⚡ 가볍게'; }
+$('#liteBtn').onclick = () => { lite = !lite; try { localStorage.setItem('magic.lite', lite ? '1' : '0'); } catch (e) {} renderLite(); fit(); focusSpell(); };
+renderLite();
+function loop(){ update(); draw(); updateHud(); countFps(); requestAnimationFrame(loop); }
 try { const m = localStorage.getItem('magic.map'); if (m && MAPS[m]) setMap(m); } catch (e) {}
 renderMapBtn();
 // 🔊 소리: 미리 불러 두고, 처음 클릭·키 누르기 때 켬 (브라우저 규칙)

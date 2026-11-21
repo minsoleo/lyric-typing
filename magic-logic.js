@@ -262,7 +262,14 @@
     return out;
   }
 
-  window.MagicLogic = {objSounds, SOUND_NEAR, SOUND_FAR, hearGain, reView, reViewVec, scoreSides, viewOf, flipPt, flipVec, flipAng, flipRect, flipEvent, flipState, flipDummies, flipObj, zoneLabel, breaksStealth, phaseKick, canAnnounce, aheadObj, nextHost, zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
+  // 📶 인터넷이 잠깐 끊긴 사람: 서버가 st에 off(끊긴 시각, 서버 시계)를 적어 둠 → NET_GRACE초 안에 돌아오면 그대로 이어서 함
+  const NET_GRACE = 15;
+  const netGone = (st, now) => !st || (st.off != null && now - st.off > NET_GRACE * 1000);
+  const liveIds = (st, now) => Object.keys(st || {}).filter(k => !netGone(st[k], now));
+  // 방이 쓰이는 중인가 (판 뒤집기 방은 players)
+  const roomInUse = (r, now) => !!r && (liveIds(r.st, now).length > 0 || (!!r.players && Object.keys(r.players).length > 0));
+
+  window.MagicLogic = {NET_GRACE, netGone, liveIds, roomInUse, objSounds, SOUND_NEAR, SOUND_FAR, hearGain, reView, reViewVec, scoreSides, viewOf, flipPt, flipVec, flipAng, flipRect, flipEvent, flipState, flipDummies, flipObj, zoneLabel, breaksStealth, phaseKick, canAnnounce, aheadObj, nextHost, zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
     addEffect, effectSum, takenMult, pruneEffects, removeTag, calcDamage, inArc, pickTarget, wallPoints, gainUlt, busyTime,
     flagRate, flagPickup, newZone, zoneStep, zoneWinner};
 })();
