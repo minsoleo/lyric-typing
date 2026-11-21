@@ -30,8 +30,8 @@ const SHEETS = {props: {src: 'art/trees-rocks.webp'},   // 나무 3 (위) · 바
                 'icons-healer': {src: 'art/icons-healer.webp', max: 128},
                 things: {src: 'art/things.webp', max: 200},     // 덩굴 화살 · 사슬 갈고리 · 바위 기둥
                 // 🏯 동양풍 맵: 나무 3(분홍 꽃·단풍·소나무) + 바위 기둥 3(납작·큰·중간) / 연못+다리 / 장식 3x3 / 깃발 + 돌 제단
-                'east-props': {src: 'art/east-props.webp'}, 'east-pond': {src: 'art/east-pond.webp', max: 900},
-                'east-decor': {src: 'art/east-decor.webp', max: 160}, 'east-flag': {src: 'art/east-flag.webp', max: 320}};
+                'east-props': {src: 'art/east-props.webp', tight: true}, 'east-pond': {src: 'art/east-pond.webp', max: 900},
+                'east-decor': {src: 'art/east-decor.webp', max: 160, tight: true}, 'east-flag': {src: 'art/east-flag.webp', max: 320, tight: true}};
 // 빛 효과 (검은 배경, 가로·세로 칸이 고르게): 0 칼자국 1 폭발 2 치유 / 3 기절 별 4 빛의 창 5 빨간 구슬 / 6 순간 이동 7 섬광 8 마법진
 const GLOWS = {fx: {src: 'art/fx.webp', cols: 3, rows: 3, max: 300},
                areas: {src: 'art/areas.webp', cols: 2, rows: 1, max: 760},   // 바닥 범위: 0 레이브 궁극기(보라 시계) · 1 생명의 샘(초록)
@@ -80,9 +80,9 @@ function removeBg(img, fixes){
   return {c, d, w, h};
 }
 const solid = (s, x, y) => s.d[(y * s.w + x) * 4 + 3] > 20;
-function bbox(s, x0, x1){
+function bbox(s, x0, x1, ya, yb){                       // ya~yb: 이 줄 안에서만 찾기 (없으면 그림 전체 높이)
   let y0 = s.h, y1 = -1, a = s.w, b = -1;
-  for (let y = 0; y < s.h; y++) for (let x = x0; x <= x1; x++) if (solid(s, x, y)){ if (y < y0) y0 = y; if (y > y1) y1 = y; if (x < a) a = x; if (x > b) b = x; }
+  for (let y = ya || 0; y <= (yb === undefined ? s.h - 1 : yb); y++) for (let x = x0; x <= x1; x++) if (solid(s, x, y)){ if (y < y0) y0 = y; if (y > y1) y1 = y; if (x < a) a = x; if (x > b) b = x; }
   return y1 < 0 ? null : {x0: a, x1: b, y0, y1};
 }
 // 머리 위치(위쪽 35%의 가운데) → 칸마다 다리가 달라도 몸이 흔들리지 않게 여기를 기준으로 맞춤
@@ -135,13 +135,14 @@ function segments(has, len, gap, min){
   }
   return out;
 }
-function makeSheet(img, max){
+// tight: 칸마다 자기 줄 안에서만 테두리를 찾음 (위·아래 줄 물건이 같은 칸 폭에 있어도 빈 곳이 안 생김)
+function makeSheet(img, max, tight){
   const s = removeBg(img), parts = [];
   const rowHas = y => { for (let x = 0; x < s.w; x += 2) if (solid(s, x, y)) return true; return false; };
   for (const [ya, yb] of segments(rowHas, s.h, 10, 30)){
     const colHas = x => { for (let y = ya; y <= yb; y += 2) if (solid(s, x, y)) return true; return false; };
     for (const [xa, xb] of segments(colHas, s.w, 10, 30)){
-      const box = bbox(s, xa, xb);
+      const box = tight ? bbox(s, xa, xb, ya, yb) : bbox(s, xa, xb);
       if (!box) continue;
       const b = {x0: box.x0, x1: box.x1, y0: Math.max(box.y0, ya), y1: Math.min(box.y1, yb)};
       const k = Math.min(1, (max || MAX) / Math.max(b.x1 - b.x0 + 1, b.y1 - b.y0 + 1));
@@ -152,7 +153,7 @@ function makeSheet(img, max){
   }
   return parts;
 }
-const sheetReady = Promise.all(Object.entries(SHEETS).map(async ([id, f]) => { const img = await load(f.src); if (img) sheets[id] = makeSheet(img, f.max); }));
+const sheetReady = Promise.all(Object.entries(SHEETS).map(async ([id, f]) => { const img = await load(f.src); if (img) sheets[id] = makeSheet(img, f.max, f.tight); }));
 
 // 빛 효과 자르기: 칸을 고르게 나누고, 검은색은 투명하게 (밝을수록 진하게 보임 → 어느 바닥에서도 빛처럼)
 function makeGlow(img, cols, rows, max){
