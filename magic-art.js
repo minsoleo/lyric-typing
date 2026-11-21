@@ -31,7 +31,7 @@ const SHEETS = {props: {src: 'art/trees-rocks.webp'},   // 나무 3 (위) · 바
                 things: {src: 'art/things.webp', max: 200},     // 덩굴 화살 · 사슬 갈고리 · 바위 기둥
                 // 🏯 동양풍 맵: 나무 3(분홍 꽃·단풍·소나무) + 바위 기둥 3(납작·큰·중간) / 연못+다리 / 장식 3x3 / 깃발 + 돌 제단
                 'east-props': {src: 'art/east-props.webp', tight: true}, 'east-pond': {src: 'art/east-pond.webp', max: 900},
-                'east-decor': {src: 'art/east-decor.webp', max: 160, tight: true}, 'east-flag': {src: 'art/east-flag.webp', max: 320, blobs: true},   // 맨 왼쪽 덩어리 = 깃발
+                'east-decor': {src: 'art/east-decor.webp', max: 160, tight: true}, 'east-flag': {src: 'art/east-flag.webp', max: 320, blobs: true, holes: true},   // 맨 왼쪽 덩어리 = 깃발
                 'east-altar': {src: 'art/east-altar.webp', max: 320, blobs: true}};   // 맨 오른쪽 덩어리 = 돌 제단
 // 빛 효과 (검은 배경, 가로·세로 칸이 고르게): 0 칼자국 1 폭발 2 치유 / 3 기절 별 4 빛의 창 5 빨간 구슬 / 6 순간 이동 7 섬광 8 마법진
 const GLOWS = {fx: {src: 'art/fx.webp', cols: 3, rows: 3, max: 300},
@@ -45,7 +45,8 @@ const stand = {}, walk = {}, tiles = {}, sheets = {}, glows = {};
 const load = src => new Promise(res => { const img = new Image(); img.onload = () => res(img); img.onerror = () => res(null); img.src = src + (window.MAGIC_V ? '?v=' + window.MAGIC_V : ''); });
 
 // 흰 배경을 지운 원본 크기 캔버스 + 픽셀 정보
-function removeBg(img, fixes){
+// holes: 테두리에 안 닿은 안쪽 흰색도 지움 (깃발 고리 구멍처럼 안이 비어 있는 그림만. 흰 갑옷·칼날이 있는 캐릭터 그림엔 쓰면 안 됨)
+function removeBg(img, fixes, holes){
   const w = img.naturalWidth, h = img.naturalHeight;
   const c = document.createElement('canvas'); c.width = w; c.height = h;
   const g = c.getContext('2d', {willReadFrequently: true});
@@ -59,6 +60,7 @@ function removeBg(img, fixes){
   }
   const whiteish = i => { const r = d[i * 4], gg = d[i * 4 + 1], b = d[i * 4 + 2], mn = Math.min(r, gg, b); return mn > 222 && Math.max(r, gg, b) - mn < 26; };
   const clear = new Uint8Array(n), stack = [];
+  if (holes) for (let i = 0; i < n; i++) stack.push(i);
   for (let x = 0; x < w; x++) stack.push(x, x + (h - 1) * w);
   for (let y = 0; y < h; y++) stack.push(y * w, y * w + w - 1);
   while (stack.length){                                    // 가장자리에서 이어진 흰색만 지움
@@ -156,8 +158,8 @@ function makeSheet(img, max, tight){
 }
 // 붙어 있는 덩어리끼리 나누기 (blobs: true): 물건끼리 가로·세로로 겹쳐서 빈 줄로는 못 나눌 때 (깃발 끝과 제단처럼)
 // 큰 덩어리만 왼쪽부터 순서대로, 다른 덩어리 픽셀은 지우고 잘라 냄
-function makeBlobs(img, max){
-  const s = removeBg(img), {w, h} = s, n = w * h, lab = new Int32Array(n), comps = [];
+function makeBlobs(img, max, holes){
+  const s = removeBg(img, null, holes), {w, h} = s, n = w * h, lab = new Int32Array(n), comps = [];
   for (let i = 0; i < n; i++){
     if (lab[i] || s.d[i * 4 + 3] <= 20) continue;
     const id = comps.length + 1, st = [i], b = {id, x0: w, x1: -1, y0: h, y1: -1, n: 0};
@@ -185,7 +187,7 @@ function makeBlobs(img, max){
     return {img: out, ax: out.width / 2};
   });
 }
-const sheetReady = Promise.all(Object.entries(SHEETS).map(async ([id, f]) => { const img = await load(f.src); if (img) sheets[id] = f.blobs ? makeBlobs(img, f.max) : makeSheet(img, f.max, f.tight); }));
+const sheetReady = Promise.all(Object.entries(SHEETS).map(async ([id, f]) => { const img = await load(f.src); if (img) sheets[id] = f.blobs ? makeBlobs(img, f.max, f.holes) : makeSheet(img, f.max, f.tight); }));
 
 // 빛 효과 자르기: 칸을 고르게 나누고, 검은색은 투명하게 (밝을수록 진하게 보임 → 어느 바닥에서도 빛처럼)
 function makeGlow(img, cols, rows, max){

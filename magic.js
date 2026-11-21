@@ -1718,6 +1718,15 @@ const zoneGauge = L.zoneGauge;                     // 구역 고리에 보여 �
 // 🚩 깃발: 금색 테두리의 붉은 깃발 (빨강 팀과 헷갈리지 않게, 든 팀은 깃대 끝 리본과 발밑 고리를 팀 색으로)
 // art/east-flag.webp(맨 왼쪽 = 깃발) · art/east-altar.webp(맨 오른쪽 = 돌 제단)가 있으면 그 그림으로
 const artPiece = (id, last) => { const sh = window.MagicArt && MagicArt.sheet ? MagicArt.sheet(id) : null; return sh && sh.length ? sh[last ? sh.length - 1 : 0] : null; };
+// 깃발 그림에서 깃대의 가로 위치(0~1): 그림 맨 아래 15% 줄에 남은 픽셀(= 깃대 끝)의 가운데
+function poleOf(img){
+  try {
+    const w = img.width, h = img.height, d = img.getContext('2d').getImageData(0, 0, w, h).data;
+    let sx = 0, n = 0;
+    for (let y = Math.floor(h * 0.85); y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 120){ sx += x; n++; }
+    return n ? sx / n / w : 0.15;
+  } catch (e) { return 0.15; }
+}
 function drawFlag(x, y, team, t, alpha, height){
   if (!inView(x, y, 160)) return;
   const was = ctx.globalAlpha; ctx.globalAlpha = was * (alpha === undefined ? 1 : alpha);
@@ -1726,7 +1735,8 @@ function drawFlag(x, y, team, t, alpha, height){
   const art = artPiece('east-flag');
   if (art){                                              // 지피티 깃발 그림 (깃대 아래쪽이 x, y)
     const h = H * 1.35, w = h * art.img.width / art.img.height;
-    ctx.drawImage(art.img, x - w * 0.16, y + bob - h, w, h);
+    if (art.pole === undefined) art.pole = poleOf(art.img);   // 그림에서 깃대가 가로 어디쯤인지 (한 번만 잼)
+    ctx.drawImage(art.img, x - w * art.pole, y + bob - h, w, h);
   } else {
     ctx.strokeStyle = '#5b3b1c'; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.beginPath(); ctx.moveTo(x, y + bob); ctx.lineTo(x, top); ctx.stroke();
     ctx.fillStyle = '#c8202c'; ctx.strokeStyle = '#ffd84a'; ctx.lineWidth = 3;   // 붉은 바탕 + 금색 테두리
