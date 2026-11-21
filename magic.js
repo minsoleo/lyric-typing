@@ -966,11 +966,13 @@ function drawCastle(){
 }
 /* 계단 그림 (지피티): art/castle-stairs.webp(위로 오르는 계단) · art/castle-stair-side.webp(옆으로 오르는 계단)
    걷는 자리(계단 칸) + 양옆 난간(RAIL, 걷기를 막음) + 앞뒤 끝 기둥(POST) 자리에 딱 맞춰 그림. 높은 쪽이 반대면 뒤집음.
-   옆 계단 그림이 세로로 긴 그림이 아니면(아직 안 왔으면) 위로 오르는 계단 그림을 90도 돌려서 씀 */
+   맵의 계단 길이를 그림 모양에 맞춤 (2026-11-21): 위아래 계단 2칸×2칸 ≈ 정사각형 그림, 옆 계단 3칸 길이 — 옆 계단 그림은 가로로 더 길어서
+   양 끝 기둥(SIDE_CAP)은 그대로 두고 가운데 단만 줄임 */
+const SIDE_CAP = [0.11, 0.89];
 const stairGroups = () => GRID.stairs || (GRID.stairs = L.stairGroups(GRID));
 const stairArt = () => artPiece('castle-stairs');
 function drawStairArt(){
-  const up = stairArt(), sd = artPiece('castle-stair-side'), sideOk = sd && sd.img.height > sd.img.width;
+  const up = stairArt(), sd = artPiece('castle-stair-side');
   if (!up) return;
   for (const s of stairGroups()){
     const cx = s.x + s.w / 2, cy = s.y + s.h / 2;
@@ -981,8 +983,12 @@ function drawStairArt(){
       ctx.drawImage(up.img, -w / 2, -h / 2, w, h);
     } else {                                             // 옆 계단: 높은 쪽이 오른쪽 (반대면 좌우 뒤집기)
       const w = s.w + 2 * POST, h = s.h + 2 * RAIL; if (s.flip) ctx.scale(-1, 1);
-      if (sideOk) ctx.drawImage(sd.img, -w / 2, -h / 2, w, h);
-      else { ctx.rotate(Math.PI / 2); ctx.drawImage(up.img, -h / 2, -w / 2, h, w); }   // 위쪽(높은 쪽)이 오른쪽으로 가게 돌림
+      if (sd){
+        const im = sd.img, k = h / im.height, a = SIDE_CAP[0] * im.width, b = SIDE_CAP[1] * im.width, capL = a * k, capR = (im.width - b) * k, x0 = -w / 2;
+        ctx.drawImage(im, 0, 0, a, im.height, x0, -h / 2, capL, h);
+        ctx.drawImage(im, a, 0, b - a, im.height, x0 + capL, -h / 2, w - capL - capR, h);
+        ctx.drawImage(im, b, 0, im.width - b, im.height, x0 + w - capR, -h / 2, capR, h);
+      } else { ctx.rotate(Math.PI / 2); ctx.drawImage(up.img, -h / 2, -w / 2, h, w); }   // 옆 계단 그림이 없으면 위 계단 그림을 돌려서
     }
     ctx.restore();
   }

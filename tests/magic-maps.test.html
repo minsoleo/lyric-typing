@@ -30,12 +30,13 @@ const circle = (x, y, r) => { const pts = [[x, y]]; for (let i = 0; i < 16; i++)
 t('성 맵: 6400×3800, 칸 200, 32×19 격자, 쓸 수 있는 글자만', () => C.W === 6400 && C.H === 3800 && C.cell === 200 && C.sym === 'xy'
   && G.rows.length === 19 && G.rows.every(r => r.length === 32 && /^[#123ab]+$/.test(r)));
 t('성 맵: 180도 돌려도 똑같음', () => G.rows.every((row, r) => [...row].every((ch, c) => ch === G.rows[18 - r][31 - c])));
-t('성 맵: 계단은 2칸 폭 — 출발→Ⓐ 계단 a 팀마다 1곳, Ⓑ로 가는 계단 b 팀마다 2곳(아래 복도 · Ⓑ 왼쪽 옆)', () => {
+t('성 맵: 계단은 2칸 폭 — 출발→Ⓐ 계단 a 팀마다 1곳, Ⓑ로 가는 계단 b 팀마다 2곳(아래 복도 · Ⓑ 왼쪽 옆). 위아래 계단은 2칸 길이(정사각형), 옆 계단은 3칸 길이 (계단 그림 모양에 맞춤)', () => {
   const n = ch => G.rows.join('').split(ch).length - 1;
   const groups = ch => { const seen = new Set(); let k = 0; G.rows.forEach((row, r) => [...row].forEach((x, c) => { if (x !== ch || seen.has(r * 100 + c)) return; k++; const st = [[r, c]]; while (st.length){ const [y, z] = st.pop(); if (seen.has(y * 100 + z) || !G.rows[y] || G.rows[y][z] !== ch) continue; seen.add(y * 100 + z); st.push([y + 1, z], [y - 1, z], [y, z + 1], [y, z - 1]); } })); return k; };
-  return n('a') === 4 && n('b') === 8 && groups('a') === 2 && groups('b') === 4;
+  const sg = L.stairGroups(G), ns = sg.filter(q => !q.side), sd = sg.filter(q => q.side);
+  return n('a') === 8 && n('b') === 20 && groups('a') === 2 && groups('b') === 4 && ns.length === 4 && ns.every(q => q.w === 400 && q.h === 400) && sd.length === 2 && sd.every(q => q.w === 600 && q.h === 400);
 });
-t('성 맵: Ⓑ가 있는 3층이 가장 큰 층 (2층을 다 합친 것보다 넓음)', () => { const n = ch => G.rows.join('').split(ch).length - 1; return n('3') > n('2') + n('a') + n('b') && n('3') > n('1'); });
+t('성 맵: Ⓑ가 있는 3층이 가장 큰 층 (2층 바닥을 다 합친 것보다 넓음, 계단은 층이 아님)', () => { const n = ch => G.rows.join('').split(ch).length - 1; return n('3') > n('2') && n('3') > n('1'); });
 t('성 맵: 출발 자리는 1층, 빨강·파랑이 180도 자리', () => L.cellAt(G, C.spawn.red.x, C.spawn.red.y) === '1' && C.spawn.blue.x === C.W - C.spawn.red.x && C.spawn.blue.y === C.H - C.spawn.red.y
   && C.spawn.solo.x === C.spawn.red.x && C.spawn.solo.y === C.spawn.red.y);
 t('성 맵: 구역 Ⓐ·Ⓒ는 2층, Ⓑ는 3층 (원 전체가 한 층)', () => {
