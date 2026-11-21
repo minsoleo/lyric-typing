@@ -290,26 +290,6 @@
   }
   // from → to로 움직이되 낭떠러지·성벽·성벽 면은 못 넘음. 칸의 1/5씩 나눠 검사(빠른 돌진도 못 뚫음), 막히면 가로·세로로 미끄러짐.
   // 몸(반지름 r의 0.8)도 다른 층·성벽 면에 걸치지 않게. 이미 걸쳐 있으면(순간 이동 등) 칸만 보고 빠져나오게 함
-  // 계단 덩어리: {ch, x, y, w, h, side(옆으로 오르는 계단), flip(높은 쪽이 아래·왼쪽)}
-  function stairGroups(g){
-    const rows = g.rows, C = g.cell, seen = {}, out = [], at = (r, c) => (rows[r] && rows[r][c]) || '#', LV = Object.assign({'#': 9}, LEVEL);
-    for (let r = 0; r < rows.length; r++) for (let c = 0; c < rows[r].length; c++){
-      const ch = rows[r][c]; if ((ch !== 'a' && ch !== 'b') || seen[r + ',' + c]) continue;
-      const st = [[r, c]], b = {r0: r, r1: r, c0: c, c1: c}; seen[r + ',' + c] = 1;
-      while (st.length){
-        const [y, x] = st.pop(); b.r0 = Math.min(b.r0, y); b.r1 = Math.max(b.r1, y); b.c0 = Math.min(b.c0, x); b.c1 = Math.max(b.c1, x);
-        for (const [dy, dx] of [[1, 0], [-1, 0], [0, 1], [0, -1]]){ const k = (y + dy) + ',' + (x + dx); if (at(y + dy, x + dx) === ch && !seen[k]){ seen[k] = 1; st.push([y + dy, x + dx]); } }
-      }
-      const L1 = at(b.r0, b.c0 - 1), R1 = at(b.r0, b.c1 + 1), U1 = at(b.r0 - 1, b.c0), D1 = at(b.r1 + 1, b.c0);
-      const side = L1 !== '#' && R1 !== '#' && LV[L1] !== LV[R1];
-      out.push({ch, x: b.c0 * C, y: b.r0 * C, w: (b.c1 - b.c0 + 1) * C, h: (b.r1 - b.r0 + 1) * C, side, flip: side ? LV[L1] > LV[R1] : LV[D1] > LV[U1]});
-    }
-    return out;
-  }
-  // 계단 난간: 계단 밖 양옆(옆 계단은 위·아래)에 두께 rail, 계단 앞뒤로 post만큼 더 긴 막힌 칸 (걷기만 막고 공격은 지나감)
-  const stairRails = (g, rail, post) => [].concat(...stairGroups(g).map(s => s.side
-    ? [{x: s.x - post, y: s.y - rail, w: s.w + 2 * post, h: rail, kind: 'rail'}, {x: s.x - post, y: s.y + s.h, w: s.w + 2 * post, h: rail, kind: 'rail'}]
-    : [{x: s.x - rail, y: s.y - post, w: rail, h: s.h + 2 * post, kind: 'rail'}, {x: s.x + s.w, y: s.y - post, w: rail, h: s.h + 2 * post, kind: 'rail'}]));
   function floorMove(g, from, to, r){
     if (cellAt(g, from.x, from.y) === '#') return {x: to.x, y: to.y};
     const k = r * 0.8, offs = [[k, 0], [-k, 0], [0, k], [0, -k]];
@@ -326,7 +306,7 @@
     return p;
   }
 
-  window.MagicLogic = {cellAt, canPass, spotAt, floorMove, stairGroups, stairRails, NET_GRACE, netGone, liveIds, roomInUse, objSounds, SOUND_NEAR, SOUND_FAR, hearGain, reView, reViewVec, scoreSides, viewOf, flipPt, flipVec, flipAng, flipRect, flipEvent, flipState, flipDummies, flipObj, zoneLabel, breaksStealth, phaseKick, canAnnounce, aheadObj, nextHost, zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
+  window.MagicLogic = {cellAt, canPass, spotAt, floorMove, NET_GRACE, netGone, liveIds, roomInUse, objSounds, SOUND_NEAR, SOUND_FAR, hearGain, reView, reViewVec, scoreSides, viewOf, flipPt, flipVec, flipAng, flipRect, flipEvent, flipState, flipDummies, flipObj, zoneLabel, breaksStealth, phaseKick, canAnnounce, aheadObj, nextHost, zoneGauge, activePeople, teamGone, norm, findSpell, cooldownLeft, moveToward, clampReach, pushOut, pointInRects, applyDamage, clampToWorld, camFollow,
     addEffect, effectSum, takenMult, pruneEffects, removeTag, calcDamage, inArc, pickTarget, wallPoints, gainUlt, busyTime,
     flagRate, flagPickup, newZone, zoneStep, zoneWinner};
 })();

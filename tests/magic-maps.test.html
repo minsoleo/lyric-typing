@@ -70,14 +70,6 @@ t('성 맵: A에서 아래 복도로 들어가는 길이 넉넉함 (가데온 �
   for (let y = 2800; y <= 3200; y += 10){ const q = L.floorMove(g, {x: 1500, y}, {x: 1700, y}, 26); if (Math.abs(q.x - 1700) < 1) n++; }
   return n * 10 >= 250;
 });
-t('성 맵: 계단 난간이 구역·출발·허수아비·장애물과 안 겹치고, 계단 끝(오르내리는 곳)은 열려 있음', () => {
-  const rails = L.stairRails(G, 36, 30), hit = (o, x, y, m) => x > o.x - m && x < o.x + o.w + m && y > o.y - m && y < o.y + o.h + m;
-  const over = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
-  const ends = L.stairGroups(G).flatMap(q => q.side ? [[q.x - 20, q.y + q.h / 2], [q.x + q.w + 20, q.y + q.h / 2]] : [[q.x + q.w / 2, q.y - 20], [q.x + q.w / 2, q.y + q.h + 20]]);
-  return rails.length === 12 && rails.every(o => C.zones.every(z => !hit(o, z.x, z.y, z.r + 20)) && ![C.spawn.red, C.spawn.blue].some(p => hit(o, p.x, p.y, 120))
-    && C.dummies.every(([x, y]) => !hit(o, x, y, 60)) && props().every(p => !over(o, p)))
-    && ends.every(([x, y]) => rails.every(o => !hit(o, x, y, 0)));
-});
 t('동양풍 맵: 넓은 맵과 크기·배치가 똑같고 그림만 동양풍 (theme: east)', () => {
   const E = MAGIC_MAPS.east, W = MAGIC_MAPS.wide, same = k => JSON.stringify(E[k]) === JSON.stringify(W[k]);
   return !!E && E.id === 'east' && E.name === '동양풍 맵' && E.theme === 'east' && E.sym === 'x' && E.W === 4800 && E.H === 2400
